@@ -134,10 +134,12 @@ cd backend
 python ../scripts/init_db.py
 ```
 
-That script creates the database if it is missing, runs `alembic upgrade head`, and
-prints the applied revision. It is idempotent, and it never takes a password on the
-command line (which would put the credential in your shell history). Equivalent by
-hand:
+That script checks whether the target database is already reachable and only creates
+it if not — which matters for managed PostgreSQL (Neon, Supabase, RDS), where the
+database is pre-provisioned and the application role usually cannot `CREATE DATABASE`
+at all. It then runs `alembic upgrade head` and prints the applied revision. It is
+idempotent, and it never takes a password on the command line (which would put the
+credential in your shell history). Equivalent by hand:
 
 ```bash
 createdb autoresearch        # or: CREATE DATABASE autoresearch;
@@ -174,6 +176,16 @@ mypy app            # types
 The suite needs **no running PostgreSQL**: it uses a throwaway SQLite database with
 foreign keys enforced, applies the real Alembic migration to it, and separately checks
 that the same schema compiles for the PostgreSQL dialect.
+
+That is not a substitute for a live run, and the project has learned not to treat it
+as one — see the stage 5 entry in DEVELOPMENT_LOG.md. The schema is verified against
+PostgreSQL 18.6 (Neon): 17 tables, 40 check constraints, 13 unique constraints, 26
+foreign keys, and zero pending differences against the models.
+
+**A note if you use a serverless provider:** Neon suspends idle compute, so the first
+connection after a pause can take over a second. `/api/health/ready` measures and
+reports that latency; set your probe timeout above it, or the instance will look
+unready while it is merely waking up.
 
 ### Frontend
 

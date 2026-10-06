@@ -72,7 +72,7 @@ pytest ; ruff check . ; mypy app
 
 ### Tests performed
 
-**366 backend tests, all passing** (85 new).
+**370 backend tests, all passing** (89 new).
 
 | File | Tests | Covers |
 |---|---|---|
@@ -108,15 +108,16 @@ every table, and up→down→up works.
 
 | Check | Result |
 |---|---|
-| `pytest` | **366 passed** in 56s |
+| `pytest` | **370 passed** in 62s |
 | `ruff check .` | All checks passed |
 | `mypy app` | Success: no issues found in 49 source files |
-| `alembic upgrade head` | 17 tables + `alembic_version`; revision `eeba0c5c5e04` |
+| `alembic upgrade head` | 17 tables + `alembic_version`; revision `253b523fd670` |
 | migration vs. models | **0 pending differences** |
 | `alembic downgrade base` | every table removed |
 | up → down → up | works |
 | `scripts/init_db.py` | succeeds, idempotent, refuses the `CHANGEME` placeholder |
-| live health checks | 11/11 healthy path; 503-with-reason against real PostgreSQL |
+| live health checks | 11/11 healthy path; 503-with-reason when unreachable |
+| **live PostgreSQL 18.6 (Neon)** | **migration applied; 12/12 repository checks; readiness 200** |
 | frontend | unchanged — 67 tests still passing |
 
 ### Decisions made
@@ -211,12 +212,63 @@ every table, and up→down→up works.
    verified by building a **clean Python 3.11 venv from `requirements-dev.txt` alone**
    and running the whole suite in it: 368 passed, ruff and mypy clean.
 
-8. **PostgreSQL 18 is running here but I do not have the password.** `pg_hba.conf` uses
-   `scram-sha-256` for every connection, including local, so there is no way around it —
-   and changing that file is a security decision that is not mine to make. **The live
-   authenticated run is therefore still outstanding**; `scripts/init_db.py` makes it one
-   command once the password is in `.env`. What *was* verified against the real server:
-   the readiness endpoint reaching it, being refused, and reporting that correctly.
+8. **Two bugs that only a live PostgreSQL could find** (found after the first commit of
+   this stage, when the user supplied a Neon connection string):
+
+   **`str(url)` masks the password.** `init_db.py` built its admin connection with
+   `str(admin_url)`, and SQLAlchemy's `URL.__str__` renders the password as `***` by
+   default. The script was therefore authenticating with three literal asterisks, and
+   reported `password authentication failed` — a failure indistinguishable from a wrong
+   password, which sends you looking in entirely the wrong place. Fixed with
+   `render_as_string(hide_password=False)`.
+
+   **Two tables shared a constraint name.** `report_section` and `claim` both declared
+   `UniqueConstraint(..., name="position_unique_per_report")`. An **explicit** name
+   bypasses the metadata naming convention entirely — SQLAlchemy only generates one when
+   none is given — so both asked for the same name. SQLite accepts that; PostgreSQL
+   scopes constraint names per schema and rejected the second part-way through
+   `alembic upgrade head`. Every unique constraint is now `uq_<table>_...`, the migration
+   was regenerated, and **two new tests assert that no two constraints or indexes
+   anywhere in the schema share a name** — so the next one is caught with no database at
+   all. PostgreSQL's transactional DDL rolled the failed migration back completely,
+   leaving nothing to clean up.
+
+   The lesson worth keeping: the suite passed on SQLite *and* the DDL compiled correctly
+   for the PostgreSQL dialect, and the schema still failed to deploy. Dialect compilation
+   is a useful check, not a substitute for applying the migration.
+
+9. **`init_db.py` assumed it could create the database.** It connected to the `postgres`
+   maintenance database first and tried `CREATE DATABASE`. Managed providers pre-provision
+   the database and the application role usually cannot create one, so that order fails
+   against every hosted PostgreSQL for no reason. It now tries the target first and only
+   falls back to the maintenance database when the target is unreachable.
+
+### Verified against live PostgreSQL
+
+Run against **PostgreSQL 18.6 on Neon** (`ap-southeast-1`, pooled endpoint,
+`sslmode=require&channel_binding=require`):
+
+| Check | Result |
+|---|---|
+| `scripts/init_db.py` | succeeded; detected the database as reachable and skipped creation |
+| `alembic upgrade head` | applied revision `253b523fd670` |
+| tables | **18** (17 + `alembic_version`) |
+| check constraints | **40** |
+| unique constraints | **13** |
+| foreign keys | **26** |
+| column types | native `uuid`, `timestamp with time zone` |
+| migration vs. models | **0 pending differences** |
+| rows | **0** — the schema shipped empty |
+| repository layer against PostgreSQL | **12/12** — inserts across all seven entity types, enum stored as its *value* (`search_grounded`), a fabricated citation accepted with a NULL source, PostgreSQL **rejecting** a fabricated citation that names a source and a `supported` verdict with no evidence, and a full traversal of the evidence chain |
+| transaction rollback | the whole exercise ran in a transaction that was rolled back; the database was left empty |
+| `GET /api/health` | 200 |
+| `GET /api/health/ready` | **200**, `healthy: true`, latency reported, password redacted from `target` |
+| `GET /api/health/database` | 200, agrees with readiness |
+
+One operational note: readiness measured **1.6 s** on the first request. Neon suspends
+idle compute, so the first connection after a pause pays a cold start. The latency is in
+the response, so a probe timeout can be set above it — otherwise an instance looks
+unready while it is merely waking up.
 
 ### Not implemented
 
@@ -230,6 +282,9 @@ the frontend's submit button stays disabled; no background job execution; no cac
 And **no rows**: a test asserts the migration creates none.
 
 ### Next stage
+
+Nothing from this stage is left outstanding — the live PostgreSQL run that was pending
+at first commit is done.
 
 **Stage 6 — the research API and the model-only pipeline.** `POST /api/v1/research`,
 `GET /api/v1/research/{id}` and `GET /api/v1/research` over the service layer built

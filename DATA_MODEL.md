@@ -6,9 +6,9 @@ This document explains what each entity is **for** and why it exists separately
 from its neighbours. The tables are in `backend/app/models/`, the schemas in
 `backend/app/schemas/`.
 
-> **Status:** the schema is complete and tested. No external APIs are implemented,
-> no migrations are generated yet, and **no rows ship with the project** — see
-> [No seed data](#no-seed-data).
+> **Status:** the schema is complete, migrated, and verified against a live
+> PostgreSQL 18.6. No external APIs are implemented, and **no rows ship with the
+> project** — see [No seed data](#no-seed-data).
 
 ---
 
@@ -450,17 +450,33 @@ fail to deploy — so it is closed two ways:
    `TIMESTAMP WITH TIME ZONE`, `VARCHAR`-backed enums, and that every constraint has
    a name Alembic can reference.
 
-PostgreSQL was running on the development machine while this was written, but its
-credentials were not available, so a live round-trip could not be performed. DDL
-compilation is the strongest check possible without them.
+**Verified against a live PostgreSQL 18.6** (Neon, `ap-southeast-1`): `alembic
+upgrade head` applied cleanly, producing 17 tables, 40 check constraints, 13 unique
+constraints and 26 foreign keys, with native `uuid` and `timestamptz` columns and
+zero pending differences against the models. The repository layer was then exercised
+against it — inserts, the check constraints rejecting a fabricated citation that
+names a source and a supported verdict with no evidence, and a full traversal of the
+evidence chain — inside a transaction that was rolled back, leaving the database
+empty.
+
+**Those compilation checks are not a substitute for a live run.** An earlier version
+of this schema passed every SQLite test *and* compiled correctly for the PostgreSQL
+dialect, then failed part-way through `alembic upgrade head` on the real server:
+`report_section` and `claim` both declared a unique constraint named
+`position_unique_per_report`, and constraint names are schema-scoped in PostgreSQL.
+An explicit `name=` bypasses the metadata naming convention entirely — SQLAlchemy
+only generates one when none is given — so both tables asked for the same name. All
+unique constraints are now `uq_<table>_...`, and a test asserts that no two
+constraints or indexes anywhere in the schema share a name.
 
 ---
 
 ## What is not here yet
 
-- **Migrations.** No Alembic. The schema is created from metadata in tests. The
-  first migration comes with the run-lifecycle endpoints.
-- **Repositories / services.** No queries beyond what the tests traverse.
+- ~~Migrations~~ — **done.** Alembic is initialised with one revision creating all
+  17 tables, verified up, down and up again, and applied to a live PostgreSQL.
+- ~~Repositories / services~~ — **done.** 15 repositories and `ResearchService`;
+  see `app/repositories/README.md`.
 - **API endpoints.** No route exposes any of this. `app/schemas/` defines the
   contract; nothing serves it.
 - **External APIs.** No OpenAI, Tavily, Semantic Scholar, ChromaDB or embedding
