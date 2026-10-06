@@ -108,11 +108,25 @@ class TestCredentialStatus:
         assert status["chromadb"] is True
 
     def test_missing_credentials_names_the_env_vars(self):
-        s = Settings(OPENAI_API_KEY="sk-replace-me", TAVILY_API_KEY="tvly-real-key")
+        s = Settings(
+            OPENAI_API_KEY="sk-replace-me",
+            TAVILY_API_KEY="tvly-real-key",
+            DATABASE_URL="postgresql://u:realpassword@h:5432/d",
+        )
         assert s.missing_credentials == ["OPENAI_API_KEY"]
 
+    def test_an_unset_database_url_is_listed_too(self):
+        """DATABASE_URL is a credential like any other: a CHANGEME placeholder is
+        not a configured database, for the same reason sk-replace-me is not a key."""
+        s = Settings(OPENAI_API_KEY="sk-real", TAVILY_API_KEY="tvly-real", _env_file=None)
+        assert s.missing_credentials == ["DATABASE_URL"]
+
     def test_nothing_missing_when_all_are_set(self):
-        s = Settings(OPENAI_API_KEY="sk-real", TAVILY_API_KEY="tvly-real")
+        s = Settings(
+            OPENAI_API_KEY="sk-real",
+            TAVILY_API_KEY="tvly-real",
+            DATABASE_URL="postgresql://u:realpassword@h:5432/d",
+        )
         assert s.missing_credentials == []
 
     def test_the_two_views_never_disagree(self):

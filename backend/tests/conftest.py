@@ -13,11 +13,10 @@ from collections.abc import Iterator
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
-from app.db.session import enable_sqlite_foreign_keys
+from app.db.session import build_engine
 from app.main import create_app
 from app.models import Base
 
@@ -75,24 +74,28 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def db_engine():
-    """A throwaway in-memory database with the real schema.
+def db_engine(tmp_path):
+    """A throwaway database with the real schema.
 
-    SQLite rather than PostgreSQL so the suite needs no running server, with
-    foreign key enforcement switched on -- SQLite ignores foreign keys by default,
-    and without the pragma these tests would pass against constraints PostgreSQL
-    would reject. The schema would look correct and be wrong.
+    SQLite rather than PostgreSQL so the suite needs no running server, built through
+    the application's own `build_engine` so the real construction path is exercised
+    rather than bypassed -- which also switches on foreign key enforcement. SQLite
+    ignores foreign keys by default, and without that pragma these tests would pass
+    against constraints PostgreSQL would reject: the schema would look correct and be
+    wrong.
+
+    **File-backed, not :memory:**, so a genuinely separate connection can observe
+    what this one has and has not committed. An in-memory database is private to its
+    connection, which would make every transaction test vacuous.
 
     `tests/integration/test_schema_portability.py` separately checks that the same
     metadata compiles for the PostgreSQL dialect.
     """
-    engine = create_engine("sqlite://")
-    enable_sqlite_foreign_keys(engine)
+    engine = build_engine(Settings(DATABASE_URL=f"sqlite:///{tmp_path / 'test.db'}"))
     Base.metadata.create_all(engine)
     try:
         yield engine
     finally:
-        Base.metadata.drop_all(engine)
         engine.dispose()
 
 
@@ -106,3 +109,45 @@ def db(db_engine) -> Iterator[Session]:
     factory = sessionmaker(bind=db_engine, expire_on_commit=False, autoflush=False)
     with factory() as session:
         yield session
+
+
+@pytest.fixture
+def db_settings(tmp_path) -> Settings:
+    """Settings pointing at a throwaway file-backed SQLite database.
+
+    A file rather than :memory: because Alembic opens its own connection, and an
+    in-memory database is private to the connection that created it.
+    """
+    return Settings(
+        APP_ENV="test",
+        DEBUG=True,
+        LOG_LEVEL="WARNING",
+        DATABASE_URL=f"sqlite:///{tmp_path / 'test.db'}",
+    )
+
+
+@pytest.fixture
+def service_session(db_engine) -> Iterator[Session]:
+    """A session wired into the module-level factory the service layer uses.
+
+    `unit_of_work()` and the repositories reach for `get_session_factory()`, so a test
+    that wants them to use the throwaway database has to point that factory at it.
+    Restored afterwards, so one test cannot leak its engine into the next.
+    """
+    from app.db import session as session_module
+
+    factory = sessionmaker(bind=db_engine, expire_on_commit=False, autoflush=False)
+    session_module.get_session_factory.cache_clear()
+    session_module.get_engine.cache_clear()
+    original_factory = session_module.get_session_factory
+    original_engine = session_module.get_engine
+    session_module.get_session_factory = lambda: factory  # type: ignore[assignment]
+    session_module.get_engine = lambda: db_engine  # type: ignore[assignment]
+    try:
+        with factory() as session:
+            yield session
+    finally:
+        session_module.get_session_factory = original_factory  # type: ignore[assignment]
+        session_module.get_engine = original_engine  # type: ignore[assignment]
+        session_module.get_session_factory.cache_clear()
+        session_module.get_engine.cache_clear()

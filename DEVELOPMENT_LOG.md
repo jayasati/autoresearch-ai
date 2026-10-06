@@ -5,6 +5,231 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 5 — PostgreSQL persistence — 2026-10-06
+
+**Goal:** a working persistence layer — configuration, sessions, migrations,
+repositories, services, transaction handling and database health checking. No
+retrieval, no LLM calls.
+
+### What was implemented
+
+| Requirement | How |
+|---|---|
+| 1. Config through `DATABASE_URL` | one URL, never split into host/user/password; `postgres://` and `postgresql://` rewritten to pin psycopg |
+| 2. Connection/session management | lazy engine, pool sizing, pre-ping, bounded connect, `get_db` dependency, `unit_of_work` |
+| 3. Models for the core entities | from stage 4, unchanged |
+| 4. Alembic | initialised; `env.py` reads `DATABASE_URL` through `Settings`, not `alembic.ini` |
+| 5. Initial migration | one revision, all 17 tables, 40 check constraints, with a working downgrade |
+| 6. Repository/service abstraction | 15 repositories + `ResearchService`; repositories never commit |
+| 7. No hardcoded credentials | `CHANGEME` placeholder, no URL in `alembic.ini`, and a test that scans the tree |
+| 8. Transaction handling | `unit_of_work` commits once; nesting joins rather than committing early |
+| Database health checking | `/api/health/ready` and `/api/health/database`, kept separate from liveness |
+
+### Files added
+
+- `app/db/session.py` — rewritten: `build_engine`, pool configuration, `get_db`,
+  `unit_of_work`, `check_connection`, `require_database`, `reset_engine`
+- `app/repositories/` — `base.py`, `research.py`, `evidence.py`, `evaluation.py`,
+  `__init__.py`, `README.md` (15 repositories)
+- `app/services/research_service.py` — use cases and the transaction boundary
+- `alembic.ini`, `migrations/env.py`, `migrations/script.py.mako`,
+  `migrations/README.md`
+- `migrations/versions/20261006_1530_eeba0c5c5e04_initial_schema.py`
+- `scripts/init_db.py` — create the database and upgrade to head, idempotent
+- `tests/integration/test_persistence.py` (54), `test_migrations.py` (11),
+  `test_database_health.py` (20)
+
+### Files changed
+
+- `app/core/config.py` — `DATABASE_URL` normalisation, pool settings,
+  `DB_CONNECT_TIMEOUT`, `database_url_safe`, `database_backend`,
+  `database_credentials_look_unset`; `integration_status["postgres"]` now reflects
+  whether a real credential is set
+- `app/api/routes/health.py` — added readiness and database endpoints
+- `app/schemas/common.py` — `ServiceDependency`, `ReadinessResponse`
+- `tests/conftest.py` — `db_engine` now file-backed and built through `build_engine`;
+  added `db_settings` and `service_session`
+- `pyproject.toml` — ruff per-file ignores for generated migrations
+- `.env.example`, `README.md`, `ARCHITECTURE.md`, `docs/api/README.md`,
+  `app/services/README.md`
+
+### Commands used
+
+```bash
+cd backend
+./.venv/Scripts/python.exe -m pip install "alembic>=1.13" "psycopg[binary]>=3.2"
+
+alembic init -t generic migrations
+DATABASE_URL="sqlite:///<tmp>/autogen.db" alembic revision --autogenerate -m "initial schema"
+DATABASE_URL="sqlite:///<tmp>/mig.db" alembic upgrade head
+DATABASE_URL="sqlite:///<tmp>/mig.db" alembic current
+DATABASE_URL="sqlite:///<tmp>/mig.db" alembic downgrade base
+DATABASE_URL="sqlite:///<tmp>/mig.db" alembic upgrade head      # round trip
+
+python ../scripts/init_db.py
+pytest ; ruff check . ; mypy app
+```
+
+### Tests performed
+
+**366 backend tests, all passing** (85 new).
+
+| File | Tests | Covers |
+|---|---|---|
+| `test_persistence.py` | 54 | connection, create research, create source, create claim, create verification result, retrieve relationships, transaction handling |
+| `test_database_health.py` | 20 | liveness with the database down, readiness 200/503, redaction, no hardcoded credentials |
+| `test_migrations.py` | 11 | upgrade, downgrade, round trip, revision stamping, constraints preserved, no seed rows, **migration matches the models** |
+
+The six required test areas, named:
+
+| Required | Where |
+|---|---|
+| database connection | `TestDatabaseConnection` — 6 tests, including that an unreachable database is *reported* rather than raised, and that the error never leaks the password |
+| create research | `TestCreateResearch` + `TestStatusTransitions` — 18 tests |
+| create source | `TestCreateSource` — 7 tests, including deduplication and re-fetch handling |
+| create claim | `TestCreateClaim` — 6 tests, including the four citation outcomes |
+| create verification result | `TestCreateVerificationResult` — 6 tests, including the downgrade rule |
+| retrieve relationships | `TestRetrieveRelationships` — 7 tests, all three chains |
+
+**Migrations were run**, in both directions, and verified three ways: the schema
+matches the models (`compare_metadata` returns an empty diff), the downgrade removes
+every table, and up→down→up works.
+
+**Live HTTP checks**, against a real uvicorn server:
+
+- With a reachable database: **11/11** — liveness 200, readiness 200, latency
+  measured, all three health paths in the OpenAPI schema.
+- Against the **real PostgreSQL 18 service** on this machine: readiness correctly
+  returned **503** with the server's own message (`password authentication failed for
+  user "postgres"`), the password redacted from `target`, and **liveness still 200** —
+  which is the whole point of separating the two.
+
+### Result
+
+| Check | Result |
+|---|---|
+| `pytest` | **366 passed** in 56s |
+| `ruff check .` | All checks passed |
+| `mypy app` | Success: no issues found in 49 source files |
+| `alembic upgrade head` | 17 tables + `alembic_version`; revision `eeba0c5c5e04` |
+| migration vs. models | **0 pending differences** |
+| `alembic downgrade base` | every table removed |
+| up → down → up | works |
+| `scripts/init_db.py` | succeeds, idempotent, refuses the `CHANGEME` placeholder |
+| live health checks | 11/11 healthy path; 503-with-reason against real PostgreSQL |
+| frontend | unchanged — 67 tests still passing |
+
+### Decisions made
+
+1. **One `DATABASE_URL`, never split into parts.** A single URL is what psql, Alembic
+   and every hosting platform already understand; splitting it into host/user/password
+   settings would create four places a credential could leak instead of one.
+
+2. **`postgres://` and `postgresql://` are rewritten to pin psycopg.** Those are the
+   forms hosting dashboards hand out, and SQLAlchemy's default driver for them is
+   psycopg2 — which this project does not install. The failure would be a confusing
+   `ImportError` at first connection instead of a clear configuration error.
+
+3. **The default URL contains `CHANGEME`.** A fresh checkout must fail to connect
+   rather than silently reach a real database, and `capabilities` reports
+   `postgres: false` while the placeholder is present — the same rule already applied
+   to `sk-replace-me`.
+
+4. **No URL in `alembic.ini`.** That file is committed, so a URL there is a credential
+   in version control. `env.py` reads it through `Settings`, which also guarantees
+   migrations and the service cannot disagree about which database they mean.
+
+5. **Repositories never commit.** The transaction belongs to whoever opened the unit of
+   work. A research run is a connected graph — report, claims, evidence, citations,
+   verdicts — and committing it in pieces means a mid-way failure leaves a run whose
+   claim set is silently incomplete. Every metric over it would then be wrong in a way
+   that looks like a finding rather than a bug.
+
+6. **`unit_of_work(session)` joins rather than opening a second transaction.** So a
+   service method is safe standalone *or* as one step of a larger operation, and in the
+   second case it cannot commit work the caller may still abandon. A test asserts it.
+
+7. **Liveness and readiness are different endpoints.** `/api/health` does no I/O;
+   `/api/health/ready` runs `SELECT 1`. A liveness probe that failed on a slow database
+   would make the orchestrator restart a healthy process — fixing nothing and removing
+   capacity exactly when the system is struggling. Readiness failing instead removes
+   the instance from the load balancer, and it recovers by itself.
+
+8. **A 503 from readiness still returns the full body**, including the reason and which
+   database was checked (password redacted). A probe that says only "not ready" forces
+   whoever is paged to go and find out why.
+
+9. **Status transitions are validated in the service.** A completed run cannot return to
+   `retrieving`, which would produce a second report for one run and break the
+   one-report-per-run invariant from the far side. Re-running a topic creates a new run,
+   which is what keeps a benchmark reproducible rather than editable.
+
+10. **A bounded connect timeout.** Without one, an unreachable host can block until the
+    OS gives up — hanging the readiness probe, the one request that must always answer
+    promptly. Found because a test hung.
+
+### Issues found
+
+1. **`autoflush=False` was a mistake.** I had set it for "explicit ordering". With it
+   off, a query in the same unit of work does not see rows added but not yet flushed,
+   so a repository read can silently miss a write the same operation just made — a
+   stale read that looks like a missing row. Caught by a failing test; switched to
+   SQLAlchemy's default.
+
+2. **A test hung for over seven minutes.** Two causes, both real bugs rather than test
+   artefacts: the engine had no `connect_timeout`, so connecting to a dead host blocked
+   (which would hang the readiness endpoint in production); and the credential scan used
+   `rglob("*")`, which descends into `node_modules`. Fixed with `DB_CONNECT_TIMEOUT` and
+   `os.walk` with pruning.
+
+3. **`/api/health/database` bypassed its own test.** It did
+   `from app.db.session import get_engine` and called it, so patching the module
+   attribute had no effect — and the endpoint resolved the engine differently from
+   `/api/health/ready`. Collapsed to one resolution path.
+
+4. **The health response labelled a SQLite connection `postgresql`.** A hardcoded
+   dependency name. Now derived from the URL — a small lie, but told at exactly the
+   moment someone is diagnosing a misconfigured environment.
+
+5. **An in-memory SQLite database cannot support the transaction tests.** A second
+   connection sees its own empty database, which would make every "is this committed
+   yet" assertion vacuous. The test engine is now file-backed and built through
+   `build_engine`, so the real construction path is exercised too.
+
+6. **Monkeypatching `migrations.env` broke the test collection.** Importing that module
+   outside a migration run fails, because `alembic.context` is only populated while one
+   is in progress. Patching `app.core.config.get_settings` is enough, since Alembic
+   re-imports `env.py` on every run.
+
+7. **PostgreSQL 18 is running here but I do not have the password.** `pg_hba.conf` uses
+   `scram-sha-256` for every connection, including local, so there is no way around it —
+   and changing that file is a security decision that is not mine to make. **The live
+   authenticated run is therefore still outstanding**; `scripts/init_db.py` makes it one
+   command once the password is in `.env`. What *was* verified against the real server:
+   the readiness endpoint reaching it, being refused, and reporting that correctly.
+
+### Not implemented
+
+**AI functionality is NOT implemented yet.** No OpenAI calls, no prompts, no planning,
+no retrieval, no embeddings, no vector store, no claim extraction, no verification
+logic, no citation validation, no conflict detection, no metric computation, no
+benchmark execution.
+
+Also absent: **no research API endpoints** — `POST /api/v1/research` does not exist, so
+the frontend's submit button stays disabled; no background job execution; no caching.
+And **no rows**: a test asserts the migration creates none.
+
+### Next stage
+
+**Stage 6 — the research API and the model-only pipeline.** `POST /api/v1/research`,
+`GET /api/v1/research/{id}` and `GET /api/v1/research` over the service layer built
+here; then the OpenAI client wrapper with retry, timeout and `llm_call_log` writing,
+versioned prompts, and `pipelines/model_only.py` end to end. **Done when** a topic
+produces a stored report using no external sources — the baseline the other two modes
+must beat — and the New Research form's submit button is enabled.
+
+---
+
 ## Stage 4 — Core data models — 2026-10-06
 
 **Goal:** the complete data model — SQLAlchemy tables and Pydantic schemas — with
@@ -716,26 +941,20 @@ benchmark, and no research UI. Every one of these has a directory and a
 Each stage ends with something runnable and testable. No stage depends on a
 later one.
 
-Stages 1–4 are done; see the entries above. Two reorderings so far: the frontend
-arrived before the data model, and the data model landed without its endpoints, which
-moved to stage 5.
+Stages 1–5 are done; see the entries above. Two reorderings so far: the frontend
+arrived before the data model, and the data model's endpoints moved out of stage 4 —
+stage 5 became persistence (migrations, repositories, services, health), and the API
+moved to stage 6.
 
-### Stage 5 — Run lifecycle and the first migration
-- Alembic initialised against the real PostgreSQL; first migration
-- `POST /api/v1/research` creates a run row; `GET /api/v1/research/{id}` reads it
-- `RunStatus` transitions persisted and exposed
-- Repositories/services over the stage-4 models
-- A readiness endpoint that does verify the database, alongside the existing
-  liveness check
-- **Done when:** a run can be created and polled through the API, and the New
-  Research form's submit button can be enabled — that is the acceptance test.
-
-### Stage 6 — Model-only pipeline (the baseline)
+### Stage 6 — Research API and the model-only pipeline (the baseline)
+- `POST /api/v1/research`, `GET /api/v1/research/{id}`, `GET /api/v1/research`
+  over the stage-5 service layer
 - OpenAI client wrapper with retry, timeout, and `llm_call_log` writing
 - `prompts/planner.md`, `prompts/synthesizer.md` (versioned)
 - `pipelines/model_only.py` end to end
-- **Done when:** a topic produces a stored report using no external sources.
-  This is the baseline the other two modes must beat.
+- **Done when:** a topic produces a stored report using no external sources — the
+  baseline the other two modes must beat — and the New Research form's submit button
+  is enabled.
 
 ### Stage 7 — Retrieval
 - Tavily web search; Semantic Scholar academic search

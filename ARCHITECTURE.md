@@ -38,7 +38,9 @@ the whole project reports on.
 +---------------------------v----------------------------------+
 |  app/api/v1/            FastAPI routes - thin, no logic       |
 +--------------------------------------------------------------+
-|  app/services/          use cases, transactions               |
+|  app/services/          use cases, ONE transaction each       |
++--------------------------------------------------------------+
+|  app/repositories/      queries; never commit                 |
 +--------------------------------------------------------------+
 |  app/pipelines/         model_only | hybrid | search_grounded |
 +--------------------------------------------------------------+
@@ -112,6 +114,17 @@ boundary so the frontend can show a live timeline instead of a spinner.
 shared vocabulary (`ResearchMode`, `RunStatus`, `VerificationVerdict`,
 `CitationStatus`, `ConflictType`). Defining these enums first means the database,
 the API and the React UI cannot drift apart.
+
+### `app/repositories/` + `app/services/` *(implemented)*
+
+Repositories own queries, one entity type each, and **never commit**. Services own
+the transaction: each public method is one atomic operation that either completes and
+commits or leaves the database untouched.
+
+The split exists because a research run produces a connected graph — report, claims,
+evidence, citations, verdicts. Committing it in pieces means a mid-way failure leaves
+a run whose claim set is silently incomplete, and every metric over it is then wrong
+in a way that looks like a finding. See DATA_MODEL.md and `app/repositories/README.md`.
 
 ### `app/agents/` *(planned)*
 

@@ -23,9 +23,52 @@ derived from it, so a prefix can never be half-renamed.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/` | name, version, environment, stage, and where to find docs/health |
-| GET | `/api/health` | liveness — no database, no network, no credentials needed |
+| GET | `/api/health` | **liveness** — no database, no network, no credentials needed |
+| GET | `/api/health/ready` | **readiness** — verifies the database; 503 when it is down |
+| GET | `/api/health/database` | database connectivity alone, for a targeted alert |
 | GET | `/api/v1/system/ping` | trivial reachability check |
 | GET | `/api/v1/system/capabilities` | which integrations are configured, which credentials are still missing by name, and which stages have landed |
+
+### Liveness and readiness are different checks
+
+Conflating them is a real operational mistake.
+
+**Liveness** (`/api/health`) answers "is this process working?" It does no I/O. A
+liveness probe that fails because the database is slow makes the orchestrator restart
+a perfectly healthy process — which fixes nothing and removes capacity exactly when
+the system is already struggling.
+
+**Readiness** (`/api/health/ready`) answers "can this process serve traffic?" It runs
+`SELECT 1`. A failing readiness probe takes the instance out of the load balancer
+without killing it, so it recovers on its own when the dependency does.
+
+A 503 from readiness still returns the **full body**, because a probe that says only
+"not ready" forces whoever is paged to go and find out why:
+
+```json
+{
+  "status": "not_ready",
+  "version": "0.1.0",
+  "environment": "development",
+  "dependencies": [
+    {
+      "name": "postgresql",
+      "healthy": false,
+      "latency_ms": 213.2,
+      "detail": "connection failed: ... password authentication failed for user \"postgres\"",
+      "target": "postgresql+psycopg://postgres:***@localhost:5432/autoresearch"
+    }
+  ]
+}
+```
+
+`target` shows **which** database the instance is pointed at, with the password
+removed — that is most of the diagnosis when a deployment is misconfigured. `name`
+reflects the URL actually configured, so a SQLite connection is not labelled
+`postgresql`.
+
+Note that `capabilities` reporting `postgres: true` means *configured*, not
+*reachable*. Readiness is the endpoint that answers reachability.
 
 ### A placeholder is not a credential
 

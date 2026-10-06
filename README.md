@@ -4,11 +4,13 @@ An evidence-grounded agentic research system. Give it a research topic; it
 produces a research report where **every claim is traceable to a real source**,
 and it measures how well it did.
 
-> **Status: Stage 3 of 9 — foundations only.**
+> **Status: Stage 5 of 10 — foundations and persistence.**
 > The backend serves configuration, logging, error handling, versioned routing and
-> health. The frontend routes six pages and reads real system status. **No research
-> functionality exists.** See [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for exactly
-> what is and is not done, stage by stage.
+> health; the full data model is implemented and migrated; the frontend routes six
+> pages and reads real system status. **No research functionality exists** — no LLM
+> calls, no retrieval. See [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for exactly what
+> is and is not done, stage by stage, and [DATA_MODEL.md](DATA_MODEL.md) for the
+> schema.
 
 ---
 
@@ -88,9 +90,9 @@ reached the backend. **No research functionality.**
 
 - **Python 3.11** — required, see the note below
 - **Node.js 18+**
-- PostgreSQL — *not needed until stage 4*
-- An OpenAI key — *not needed until stage 5*
-- Tavily / Semantic Scholar keys — *not needed until stage 6*
+- **PostgreSQL 14+** — needed now, for persistence
+- An OpenAI key — *not needed until stage 6*
+- Tavily / Semantic Scholar keys — *not needed until stage 7*
 
 > **⚠️ Python version:** use **3.11**. `torch` / `sentence-transformers` /
 > `chromadb` do not reliably ship wheels for 3.14, so a 3.14 venv will fail or
@@ -112,8 +114,40 @@ source .venv/Scripts/activate      # Windows Git Bash
 # source .venv/bin/activate        # macOS / Linux
 
 pip install -r requirements-dev.txt
-cp ../.env.example ../.env         # safe to leave the placeholder keys for now
+pip install -r requirements.txt    # adds the PostgreSQL driver
+cp ../.env.example ../.env
+```
 
+### Database
+
+Edit `.env` and replace `CHANGEME` in `DATABASE_URL` with your PostgreSQL password:
+
+```
+DATABASE_URL=postgresql+psycopg://postgres:<your password>@localhost:5432/autoresearch
+```
+
+`CHANGEME` is deliberate — a fresh checkout must fail to connect rather than silently
+reach a real database. Then create the database and apply the migration:
+
+```bash
+cd backend
+python ../scripts/init_db.py
+```
+
+That script creates the database if it is missing, runs `alembic upgrade head`, and
+prints the applied revision. It is idempotent, and it never takes a password on the
+command line (which would put the credential in your shell history). Equivalent by
+hand:
+
+```bash
+createdb autoresearch        # or: CREATE DATABASE autoresearch;
+alembic upgrade head
+```
+
+### Start the backend
+
+```bash
+cd backend
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -122,7 +156,8 @@ Verify:
 | URL | Expected |
 |---|---|
 | http://localhost:8000/ | name, version, environment, stage, where to find docs and health |
-| http://localhost:8000/api/health | `{"status":"ok","version":"0.1.0","environment":"development"}` |
+| http://localhost:8000/api/health | liveness: `{"status":"ok",...}` — works with the database down |
+| http://localhost:8000/api/health/ready | readiness: verifies the database; 503 with the reason if it is unreachable |
 | http://localhost:8000/docs | interactive OpenAPI page |
 | http://localhost:8000/api/v1/system/capabilities | which integrations are configured |
 | http://localhost:8000/nope | the error envelope, with a `request_id` |
@@ -131,9 +166,14 @@ Run the tests:
 
 ```bash
 cd backend
-pytest              # test suite
+pytest              # 366 tests
 ruff check .        # lint
+mypy app            # types
 ```
+
+The suite needs **no running PostgreSQL**: it uses a throwaway SQLite database with
+foreign keys enforced, applies the real Alembic migration to it, and separately checks
+that the same schema compiles for the PostgreSQL dialect.
 
 ### Frontend
 
@@ -175,9 +215,9 @@ origin and CORS never applies in development. For a deployed build, set
 
 ## Next stage
 
-Stage 4 is the data model and the run lifecycle: SQLAlchemy models, Alembic
-migrations, and `POST /api/v1/research` so a run can actually be created and
-polled. See the [roadmap in DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md#roadmap).
+Stage 6 is the research API and the model-only pipeline: `POST /api/v1/research` over
+the existing service layer, then the first real OpenAI calls. See the
+[roadmap in DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md#roadmap).
 
 ---
 
