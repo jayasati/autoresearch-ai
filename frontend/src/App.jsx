@@ -1,52 +1,29 @@
-import { useEffect, useState } from 'react'
-import { getHealth } from './api/client.js'
-
 /**
- * Stage 1 shell: proves the frontend builds and can reach the backend.
- * Research UI (topic input, run timeline, report view, claim inspector,
- * benchmark dashboard) lands in later stages under src/features/.
+ * Route definitions.
+ *
+ * Built from `NAV_ROUTES` rather than listed again here, so a page cannot end up
+ * routable but missing from the sidebar, or listed but broken.
+ *
+ * The router itself is mounted in `main.jsx`, not here: tests wrap `<App />` in a
+ * MemoryRouter to drive navigation, which a BrowserRouter inside App would
+ * prevent.
  */
+
+import { Route, Routes } from 'react-router-dom'
+
+import AppLayout from './components/layout/AppLayout.jsx'
+import NotFoundPage from './pages/NotFoundPage.jsx'
+import { NAV_ROUTES } from './routes.js'
+
 export default function App() {
-  const [health, setHealth] = useState({ state: 'loading' })
-
-  useEffect(() => {
-    getHealth()
-      .then((data) => setHealth({ state: 'ok', data }))
-      .catch((err) => setHealth({ state: 'error', message: String(err) }))
-  }, [])
-
   return (
-    <main className="shell">
-      <h1>AutoResearch AI</h1>
-      <p className="tagline">Evidence-grounded agentic research system</p>
-
-      <section className="card">
-        <h2>Backend connection</h2>
-        {health.state === 'loading' && <p>Checking…</p>}
-        {health.state === 'ok' && (
-          <p className="ok">
-            Connected — v{health.data.version} ({health.data.environment})
-          </p>
-        )}
-        {health.state === 'error' && (
-          <p className="err">
-            Not reachable. Start the backend on port 8000.
-            <br />
-            <code>{health.message}</code>
-          </p>
-        )}
-      </section>
-
-      <section className="card">
-        <h2>Not implemented yet</h2>
-        <ul>
-          <li>Topic submission &amp; run orchestration</li>
-          <li>Retrieval (web / academic / RAG)</li>
-          <li>Claim extraction &amp; verification</li>
-          <li>Citation validation &amp; conflict detection</li>
-          <li>Metrics &amp; benchmark comparison</li>
-        </ul>
-      </section>
-    </main>
+    <Routes>
+      <Route element={<AppLayout />}>
+        {NAV_ROUTES.map(({ path, element: Page }) => (
+          <Route key={path} path={path} element={<Page />} />
+        ))}
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
   )
 }
