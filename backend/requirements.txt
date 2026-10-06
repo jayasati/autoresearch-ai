@@ -2,20 +2,15 @@
 #
 # Layered so that each stage installs only what it needs:
 #
-#   requirements-base.txt   foundation: HTTP, config, validation, ORM (stages 1-4)
-#   this file               + PostgreSQL driver and foundation model (stage 5)
-#   requirements-ml.txt     + embeddings, vector store, retrieval    (stage 6)
+#   requirements-base.txt   foundation: HTTP, config, validation, database (1-5)
+#   this file               + the foundation model (OpenAI)            (stage 6)
+#   requirements-ml.txt     + embeddings, vector store, retrieval     (stage 7)
 #   requirements-dev.txt    + test and lint tooling
 #
 # Lower bounds only. Run `pip freeze > requirements.lock.txt` once the
 # environment is working, and commit that for reproducibility.
 
 -r requirements-base.txt
-
-# --- PostgreSQL driver and migrations ---
-# SQLAlchemy itself lives in requirements-base.txt.
-psycopg[binary]>=3.2
-alembic>=1.13
 
 # --- Foundation model ---
 openai>=1.50

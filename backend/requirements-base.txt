@@ -15,11 +15,22 @@ pydantic>=2.9
 pydantic-settings>=2.6
 python-dotenv>=1.0
 
-# --- ORM ---
-# The model layer itself, so it belongs in the foundation. The PostgreSQL driver
-# does not: SQLite needs no driver, which is what lets the test suite run with
-# nothing installed beyond this file.
+# --- Database ---
+# The model layer, its migration tool, and the PostgreSQL driver. All three are
+# foundation, not extras:
+#
+#   sqlalchemy  is the model layer itself
+#   alembic     owns the schema; the test suite applies the real migration
+#   psycopg     is the driver for the project's actual database, and the tests
+#               exercise the PostgreSQL code path deliberately (an unreachable
+#               server, URL normalisation, DDL compilation)
+#
+# An earlier split put alembic and psycopg one layer up, on the theory that SQLite
+# needs no driver. CI caught it: the foundation install could not even collect the
+# migration tests. Both belong here.
 sqlalchemy>=2.0.35
+alembic>=1.13
+psycopg[binary]>=3.2
 
 # --- HTTP client (Semantic Scholar, page fetching) ---
 httpx>=0.27

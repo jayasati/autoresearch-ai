@@ -201,7 +201,17 @@ every table, and up→down→up works.
    is in progress. Patching `app.core.config.get_settings` is enough, since Alembic
    re-imports `env.py` on every run.
 
-7. **PostgreSQL 18 is running here but I do not have the password.** `pg_hba.conf` uses
+7. **CI caught a layering mistake the local environment hid.** `alembic` and
+   `psycopg` were in `requirements.txt`, one layer above the `requirements-base.txt`
+   that `requirements-dev.txt` installs — but the test suite needs both: it applies
+   the real migration, and it exercises the PostgreSQL code path deliberately
+   (unreachable server, URL normalisation, DDL compilation). My own virtualenv had
+   them installed from earlier commands, so the suite passed locally and failed to
+   even *collect* in CI. Both moved into the foundation layer, and the fix was then
+   verified by building a **clean Python 3.11 venv from `requirements-dev.txt` alone**
+   and running the whole suite in it: 368 passed, ruff and mypy clean.
+
+8. **PostgreSQL 18 is running here but I do not have the password.** `pg_hba.conf` uses
    `scram-sha-256` for every connection, including local, so there is no way around it —
    and changing that file is a security decision that is not mine to make. **The live
    authenticated run is therefore still outstanding**; `scripts/init_db.py` makes it one
