@@ -15,6 +15,7 @@ from pydantic import Field, model_validator
 
 from app.core.constants import EvidenceDepth, SourceType
 from app.schemas.base import IdentifiedModel, WriteModel
+from app.utils.urls import source_fingerprint
 
 
 class SourceCreate(WriteModel):
@@ -71,14 +72,17 @@ class SourceCreate(WriteModel):
     def fingerprint(self) -> str | None:
         """Identity hash: DOI first, then canonical URL, then external id.
 
-        DOI wins because it is the most stable identifier a paper has -- the same
-        paper reachable at three URLs is still one source.
+        Delegates to `app.utils.urls.source_fingerprint`, which is also what the
+        retrieval service uses. That shared definition is the point: if retrieval
+        deduplicated candidates one way and persistence deduplicated rows another,
+        the same page found by two runs would become two source rows, and every
+        per-source metric would be computed over a split identity.
         """
-        basis = self.doi or self.canonical_url or self.url or self.external_id
-        if basis is None:
-            return None
-        normalized = basis.strip().lower().rstrip("/")
-        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+        return source_fingerprint(
+            doi=self.doi,
+            url=self.canonical_url or self.url,
+            external_id=self.external_id,
+        )
 
 
 class SourceRead(IdentifiedModel):

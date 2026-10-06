@@ -210,9 +210,27 @@ class TestSourceCreate:
         )
         assert a.fingerprint == b.fingerprint
 
-    def test_url_fingerprints_ignore_case_and_a_trailing_slash(self):
-        a = SourceCreate(source_type=SourceType.WEB, url="https://Example.invalid/Page/")
+    def test_url_fingerprints_ignore_host_case_and_a_trailing_slash(self):
+        """Scheme and host are case-insensitive by RFC 3986; a trailing slash is not
+        part of a document's identity."""
+        a = SourceCreate(source_type=SourceType.WEB, url="https://Example.invalid/page/")
         b = SourceCreate(source_type=SourceType.WEB, url="https://example.invalid/page")
+        assert a.fingerprint == b.fingerprint
+
+    def test_url_fingerprints_respect_path_case(self):
+        """Paths *are* case-sensitive on most servers, so /Page and /page can be two
+        different documents. Merging them would undercount sources and could attribute
+        a claim to the wrong page."""
+        a = SourceCreate(source_type=SourceType.WEB, url="https://example.invalid/Page")
+        b = SourceCreate(source_type=SourceType.WEB, url="https://example.invalid/page")
+        assert a.fingerprint != b.fingerprint
+
+    def test_url_fingerprints_ignore_tracking_parameters(self):
+        """Shared with the retrieval service, so a candidate and a stored row agree."""
+        a = SourceCreate(
+            source_type=SourceType.WEB, url="https://example.invalid/page?utm_source=x"
+        )
+        b = SourceCreate(source_type=SourceType.WEB, url="https://www.example.invalid/page")
         assert a.fingerprint == b.fingerprint
 
     def test_rejects_an_implausible_publication_year(self):
