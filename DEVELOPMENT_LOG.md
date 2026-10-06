@@ -5,6 +5,240 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 4 — Core data models — 2026-10-06
+
+**Goal:** the complete data model — SQLAlchemy tables and Pydantic schemas — with
+stable IDs, logical relationships, the three required traceability chains, and
+validation tests. No external APIs.
+
+**[DATA_MODEL.md](DATA_MODEL.md) is the deliverable document**; it explains every
+entity and the reasoning behind each separation. This entry records the work.
+
+### What was implemented
+
+**17 tables, 40 check constraints, 44 exported schemas.**
+
+| Requested entity | Table | Schemas |
+|---|---|---|
+| Research | `research_run` | `ResearchRunRead`, `ResearchRunSummary` |
+| ResearchRequest | — (API DTO) | `ResearchRequest` |
+| ResearchResponse | — (API DTO) | `ResearchResponse` |
+| Source | `source` + `research_source` | `SourceCreate`, `SourceRead`, `ResearchSourceRead` |
+| Document | `document` | `DocumentCreate`, `DocumentRead` |
+| DocumentChunk | `document_chunk` | `DocumentChunkCreate`, `DocumentChunkRead` |
+| Claim | `claim` | `ClaimCreate`, `ClaimRead` |
+| Evidence | `evidence` | `EvidenceCreate`, `EvidenceRead` |
+| Citation | `citation` | `CitationCreate`, `CitationRead` |
+| VerificationResult | `verification_result` | `VerificationResultCreate/Read` |
+| Conflict | `conflict` | `ConflictCreate`, `ConflictRead` |
+| EvaluationResult | `evaluation_result` | `EvaluationResultCreate/Read` |
+
+**Five tables beyond the requested list**, each with a specific reason:
+
+| Added | Why |
+|---|---|
+| `report` + `report_section` | **required by the specified chain** Research → Report → Claim |
+| `run_configuration` | **required by the specified chain** Research run → Configuration → Metrics; content-addressed so "same configuration" is joinable |
+| `research_source` | `source` is global and deduplicated across runs, but the query, rank and evidence depth are per-run |
+| `document` | a source is a thing in the world; a document is one extraction of its text at one moment. Without it, a re-fetched page that changed cannot be represented |
+| `subquestion`, `llm_call_log` | both already promised in ARCHITECTURE.md §5; coverage needs the plan, cost needs the call log |
+
+### Files added
+
+- `app/db/base.py` — declarative base, constraint naming convention,
+  `UUIDPrimaryKey`, `Timestamped`, `enum_column()`
+- `app/db/session.py` — lazy engine, session factory, `get_db` dependency,
+  `session_scope()`, SQLite foreign-key pragma
+- `app/models/` — `research.py`, `source.py`, `report.py`, `evidence.py`,
+  `evaluation.py`, `observability.py`, and an `__init__.py` that registers all of it
+- `app/schemas/` — `base.py`, `research.py`, `source.py`, `evidence.py`,
+  `evaluation.py`, `trace.py`, and an `__init__.py` exporting 44 names
+- `tests/unit/test_schema_validation.py` (79), `tests/unit/test_trace_schemas.py`
+  (21), `tests/unit/test_db_session.py` (7)
+- `tests/integration/test_traceability.py` (13),
+  `tests/integration/test_constraints.py` (37),
+  `tests/integration/test_schema_portability.py` (45),
+  `tests/integration/builders.py`
+- `DATA_MODEL.md`
+
+### Files changed
+
+- `app/core/constants.py` — added `EvidenceRelation`, `EvidenceDepth`,
+  `PipelineStage`, `MetricKey` (with `is_ratio`)
+- `tests/conftest.py` — `db_engine` and `db` fixtures over in-memory SQLite
+- `requirements-base.txt` / `requirements.txt` — SQLAlchemy moved into the
+  foundation layer; the PostgreSQL *driver* stays in the layer above
+- `ARCHITECTURE.md` §5 — rewritten to match what was actually built, noting the four
+  departures from the original sketch; header no longer claims to be a stage-1 doc
+- `app/models/README.md`, `app/db/README.md`, `app/schemas/README.md`
+
+### Commands used
+
+```bash
+cd backend
+./.venv/Scripts/python.exe -m pip install "sqlalchemy>=2.0.35" "psycopg[binary]>=3.2"
+./.venv/Scripts/python.exe -m pytest
+./.venv/Scripts/python.exe -m pytest --cov=app --cov-report=term
+./.venv/Scripts/python.exe -m ruff check . --fix
+./.venv/Scripts/python.exe -m mypy app
+```
+
+### Tests performed
+
+**282 backend tests, all passing. 97% statement coverage of `app/`.**
+
+| File | Tests | Covers |
+|---|---|---|
+| `test_schema_validation.py` | 79 | request validation, configuration/mode agreement, fingerprints, source identity, spans, the four citation outcomes, the verdict downgrade rule, metric arithmetic |
+| `test_schema_portability.py` | 45 | PostgreSQL DDL compiles for all 17 tables; native UUID; timezone-aware timestamps; VARCHAR enums; every constraint named; every FK has an `ON DELETE`; no seed data |
+| `test_constraints.py` | 37 | ids stable across persist, uniqueness, spans, citation/verdict integrity, cascades, RESTRICT on configuration, enum values stored not names |
+| `test_trace_schemas.py` | 21 | the three chains as types, including chains that must be refused |
+| `test_traceability.py` | 13 | all three chains **traversed** end to end against a real schema |
+| `test_db_session.py` | 7 | credential redaction, lazy engine, boot without a database |
+| earlier suites | 80 | endpoints, errors, config, middleware — unchanged |
+
+Traceability tests *walk* the graph by following relationships rather than asserting
+on the ids they just set. Traversal is the only thing that proves a chain is
+navigable in the direction a user needs it.
+
+### Result
+
+| Check | Result |
+|---|---|
+| `pytest` | **282 passed** in 2.0s |
+| coverage of `app/` | **97%** (1352 statements, 43 missed) |
+| `ruff check .` | All checks passed |
+| `mypy app` | Success: no issues found in 43 source files |
+| PostgreSQL DDL compilation | all 17 tables, all indexes |
+| SQLite schema creation | 17 tables, foreign keys enforced |
+| frontend | unchanged — 67 tests still passing |
+
+### Decisions made
+
+1. **UUIDv4 assigned at construction, not at INSERT.** So a verification pass can
+   build a whole claim/evidence/citation graph in memory with cross-references and
+   persist it in one transaction. See *Issues found* — this did not work on the first
+   attempt.
+
+2. **Identity (UUID) is separate from equality (fingerprint).** The UUID says which
+   row; the SHA-256 fingerprint says whether two things are the same. Configurations,
+   sources and documents all carry one.
+
+3. **Prompt versions are inside the configuration fingerprint.** Changing a prompt
+   changes the output, so it must make two runs non-comparable. A parametrised test
+   asserts that changing any single field — including a prompt version — changes the
+   hash.
+
+4. **`citation.source_id` is nullable, and a constraint enforces why.** A fabricated
+   citation points at a source that does not exist, so there is no row to reference.
+   `(status = 'fabricated') = (source_id IS NULL)` makes "fabricated" a structural
+   fact rather than a label someone remembered to set.
+
+5. **Citation and evidence are separate tables.** Evidence is what we found; a
+   citation is what the model said. The gap between them is the project's main
+   result, and one table could not represent a citation with no evidence behind it.
+
+6. **The verifier mitigation is in the schema.** ARCHITECTURE.md §7 promised "a
+   verdict without a quote is `not_enough_evidence`". That is now a check constraint
+   *and* a Pydantic validator — implemented as a **downgrade, not a rejection**,
+   because the verifier's overclaim is itself data. `downgraded=True` is recorded, so
+   "how often did the verifier overclaim" is measurable instead of lost.
+
+7. **Metrics are stored long, with their numerator and denominator.** "Claim support
+   rate: 0.80" is not reportable alone — over five claims it is weak, over five
+   hundred it is strong. A validator rejects a value that does not equal
+   `numerator / denominator`, and a zero denominator is refused: a run that produced
+   no claims has an *undefined* support rate, and storing `0.0` would make it look
+   maximally unreliable.
+
+8. **`metrics_version` is part of the metric's uniqueness key.** If a definition
+   changes the old numbers are not wrong, they measured something else. Both versions
+   coexist so the change is visible.
+
+9. **Conflicts link two `evidence` rows, not two sources.** "These two papers
+   disagree" is not actionable; "these two passages disagree about this claim" names
+   the claim, both passages and both sources, so the UI can show the disagreement.
+
+10. **`evidence.relation` is per passage, not per claim.** A claim can have
+    supporting *and* contradicting evidence at once — exactly the input conflict
+    detection needs. A boolean on the claim would erase it.
+
+11. **The three chains are explicit response models**, with validators that make a
+    broken chain impossible to serialise: a fabricated citation that resolves to a
+    source, a decisive passage absent from the evidence list, or a trace mixing two
+    metric versions are all rejected.
+
+12. **Invariants are enforced twice, deliberately.** Pydantic covers HTTP; database
+    constraints cover scripts, migrations and `psql`. A rule living only in the API
+    layer is a rule the next data-loading script will break.
+
+### Issues found
+
+1. **`default=uuid.uuid4` does not assign the id at construction.** It is an
+   *insert-time* default, so `obj.id` was `None` until flush — defeating the reason I
+   had documented for choosing UUIDs at all. Two of my own tests caught it. Fixed
+   with an `init` event listener on the declarative base, keeping the column default
+   as a safety net for bulk inserts and migrations.
+
+2. **SQLAlchemy stores an enum's member *name*, not its value, by default.** The
+   database would have held `MODEL_ONLY` while the API, frontend and benchmark tables
+   all say `model_only`, so every raw SQL query and export would have disagreed with
+   the API. Fixed with `values_callable` in `enum_column()`; a test asserts the stored
+   string directly.
+
+3. **PostgreSQL is running on this machine but its password is unknown to me.** I did
+   not guess at the credentials. Instead the schema is verified by compiling the DDL
+   for the PostgreSQL dialect — which proves native `UUID`, `TIMESTAMP WITH TIME
+   ZONE` and named constraints all render correctly — and by running against SQLite
+   **with `PRAGMA foreign_keys=ON`**, since SQLite otherwise ignores foreign keys and
+   the tests would pass against constraints PostgreSQL would reject.
+   **A live round-trip is still unverified.**
+
+4. **Circular imports between model modules.** `research.py` importing `source.py`
+   while `source.py` imported `research.py` broke at import time. Fixed by moving
+   `enum_column()` into `app/db/base.py` and letting `app/models/__init__.py` register
+   every module once — SQLAlchemy resolves string relationship targets from its own
+   registry, so trailing imports were never needed.
+
+5. **Two of my own error messages were ordered unhelpfully.** A web source with no
+   URL reported the generic "requires at least one of url, doi or external_id" when
+   the specific "web sources require a url" was available. Reordered.
+
+6. **Six lint findings and three type errors** on first run — unsorted imports, a
+   deprecated `timezone.utc` alias, a blind `pytest.raises(Exception)`, and optional
+   offsets mypy could not narrow. All fixed rather than suppressed.
+
+### Not implemented
+
+**AI functionality is NOT implemented yet.** No OpenAI calls, no prompts, no
+planning, no retrieval, no embeddings, no vector store, no claim extraction, no
+verification, no citation validation, no conflict detection, no metric computation,
+no benchmark execution.
+
+Also absent at this stage, deliberately: **no Alembic migrations** (the schema is
+created from metadata in tests), **no repositories or services**, **no API endpoints
+exposing any of this**, and **no rows of any kind**. A test asserts that creating the
+schema leaves all 17 tables empty.
+
+### No fake records
+
+Nothing in the project inserts data. Tests build throwaway rows in an in-memory
+database and discard them; their values are deliberately non-plausible — topics read
+`<topic under test>`, claims read `<claim 0 under test>`, and URLs use
+`example.invalid`, a TLD reserved by RFC 2606 that can never resolve. If any of it
+escaped into a screenshot it would be unmistakable.
+
+### Next stage
+
+**Stage 5 — run lifecycle endpoints and the first migration.** Alembic initialised
+against the real PostgreSQL (needs the database password); `POST /api/v1/research`
+and `GET /api/v1/research/{id}` persisting `RunStatus` transitions; a readiness
+endpoint that verifies the database alongside the existing liveness check. The
+acceptance test is still the same concrete one: **the New Research form's submit
+button gets enabled.**
+
+---
+
 ## Stage 3 — Frontend foundation — 2026-10-06
 
 **Goal:** a clean, navigable React interface with all six pages routed, a proper
@@ -482,27 +716,28 @@ benchmark, and no research UI. Every one of these has a directory and a
 Each stage ends with something runnable and testable. No stage depends on a
 later one.
 
-Stages 1–3 are done; see the entries above. The frontend arrived before the data
-model, so everything from the data model onward shifted by one.
+Stages 1–4 are done; see the entries above. Two reorderings so far: the frontend
+arrived before the data model, and the data model landed without its endpoints, which
+moved to stage 5.
 
-### Stage 4 — Data model and run lifecycle
-- SQLAlchemy models for the tables in ARCHITECTURE.md §5
-- Alembic initialised; first migration
+### Stage 5 — Run lifecycle and the first migration
+- Alembic initialised against the real PostgreSQL; first migration
 - `POST /api/v1/research` creates a run row; `GET /api/v1/research/{id}` reads it
 - `RunStatus` transitions persisted and exposed
+- Repositories/services over the stage-4 models
 - A readiness endpoint that does verify the database, alongside the existing
   liveness check
 - **Done when:** a run can be created and polled through the API, and the New
   Research form's submit button can be enabled — that is the acceptance test.
 
-### Stage 5 — Model-only pipeline (the baseline)
+### Stage 6 — Model-only pipeline (the baseline)
 - OpenAI client wrapper with retry, timeout, and `llm_call_log` writing
 - `prompts/planner.md`, `prompts/synthesizer.md` (versioned)
 - `pipelines/model_only.py` end to end
 - **Done when:** a topic produces a stored report using no external sources.
   This is the baseline the other two modes must beat.
 
-### Stage 6 — Retrieval
+### Stage 7 — Retrieval
 - Tavily web search; Semantic Scholar academic search
 - Fetcher (clean text extraction), chunker with character offsets
 - Sentence Transformers embedder, ChromaDB store, top-k RAG retrieval
@@ -512,20 +747,20 @@ model, so everything from the data model onward shifted by one.
 - **Done when:** reports cite real, retrievable sources and every chunk can be
   traced to a character span in its source.
 
-### Stage 7 — Evidence layer
+### Stage 8 — Evidence layer
 - Claim extraction, evidence linking, per-claim verification
 - Citation validation (valid / broken / misattributed / fabricated)
 - Conflict detection, traceability serialization
 - **Done when:** a report comes back annotated — every claim carries a verdict
   and a quoted supporting span, or an explicit "no evidence".
 
-### Stage 8 — Evaluation and benchmark
+### Stage 9 — Evaluation and benchmark
 - Metrics module; benchmark harness over a committed topic set
 - Comparison tables across the three modes
 - **Done when:** running the benchmark regenerates the comparison table from
   scratch, and the numbers support (or refute) the project's hypothesis.
 
-### Stage 9 — Wire the UI to real data, harden, write up
+### Stage 10 — Wire the UI to real data, harden, write up
 - Replace each placeholder with the real view: run timeline, report with inline
   citations, claim inspector with evidence drill-down, benchmark dashboard
 - Background job execution, caching, retry on partial failure

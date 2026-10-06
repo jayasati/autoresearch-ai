@@ -1,7 +1,7 @@
 # AutoResearch AI — Architecture
 
-> Stage 1 document. It describes the **intended** design. Modules marked
-> *planned* do not exist yet; the directories that will hold them do.
+> Living document. Sections marked *implemented* reflect code that exists;
+> *planned* ones describe design intent for a stage not yet built.
 
 ---
 
@@ -153,24 +153,46 @@ because the benchmark's validity depends on the differences between modes being
 
 ---
 
-## 5. Data model sketch *(stage 3)*
+## 5. Data model *(implemented)*
+
+Seventeen tables. **[DATA_MODEL.md](DATA_MODEL.md) is the authoritative reference** —
+it explains every entity and the reasoning behind each separation. The sketch below
+is the shape only.
 
 ```
-research_run --+-- subquestion
-               +-- source ------- document_chunk
-               +-- report ------- report_section
-               +-- claim ------+-- claim_evidence --> document_chunk
-               |               +-- citation --------> source
-               +-- conflict -------> (source, source)
-               +-- run_metric
-               +-- llm_call_log            (cost + reproducibility audit)
-
-benchmark_run ----> many research_run   (one per mode, same topic)
+benchmark_run ──< research_run >── run_configuration   (content-addressed settings)
+                       |
+                       +──< subquestion                (the plan; coverage needs it)
+                       +──< research_source >── source ──< document ──< document_chunk
+                       +──< llm_call_log                                      ^
+                       +──< evaluation_result                                 |
+                       +──< conflict >─ evidence, evidence                    |
+                       +─── report ──< report_section                         |
+                                 |          ^                                 |
+                                 +──< claim ─+                                |
+                                       +──< evidence ─────────────────────────+
+                                       +──< citation >── source
+                                       +─── verification_result
 ```
 
-`llm_call_log` is not an afterthought: it records model, prompt version, tokens
-and cost per call, which is what makes a benchmark result defensible and a bill
-explainable.
+Four points that differ from the original sketch, each for a reason recorded in
+DATA_MODEL.md:
+
+- **`document` was added** between source and chunk. A source is a thing in the
+  world; a document is one extraction of its text at one moment. Without that, a
+  re-fetched page that now says something different cannot be represented, and a
+  claim verified against the old text loses its ground.
+- **`run_configuration` was added** as its own content-addressed table. The
+  benchmark's validity rests on "these two runs differed only in the thing under
+  test", and a fingerprint makes that a fact you join on rather than a claim.
+- **`research_source` was added** as an association table, because `source` is
+  global (deduplicated across runs) while retrieval facts — the query, the rank, the
+  evidence depth — are per-run.
+- **`run_metric` became `evaluation_result`**, stored long with the numerator and
+  denominator behind every ratio.
+
+`llm_call_log` remains as promised: model, prompt version, tokens and cost per call,
+which is what makes a benchmark result defensible and a bill explainable.
 
 ---
 
