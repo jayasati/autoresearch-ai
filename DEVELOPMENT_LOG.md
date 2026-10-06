@@ -5,6 +5,191 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 2 — Backend foundation — 2026-10-06
+
+**Goal:** a complete, correct application foundation — configuration, logging,
+correlation, error handling, versioned routing, health — with a real test suite.
+Still no research functionality.
+
+### What was implemented
+
+| Requirement | How |
+|---|---|
+| FastAPI application | `create_app()` factory + module-level `app`; a factory so tests can build isolated instances |
+| CORS for the React frontend | origins from `CORS_ORIGINS`; `X-Request-ID` / `X-Response-Time-ms` in `expose_headers` so browser JS can actually read them |
+| `GET /` | service info: name, version, environment, build stage, and links to docs / health / API version |
+| `GET /api/health` | liveness; does no I/O, so it cannot fail because an upstream is slow |
+| API versioning structure | `/api/health` unversioned, `/api/v1/...` versioned; a future `/api/v2` mounts as a sibling router |
+| Central configuration | one `Settings` class; only `API_PREFIX` is settable, version paths are derived from it |
+| Environment variable loading | pydantic-settings over `.env`, case-insensitive, unknown keys ignored |
+| Proper error handling | exception hierarchy + four handlers producing one uniform envelope |
+| Logging configuration | one root handler, request id on every line, uvicorn's loggers folded into the same format |
+
+### Files added
+
+- `app/core/exceptions.py` — `AppError` hierarchy: `BadRequestError`,
+  `ValidationError`, `NotFoundError`, `ConflictError`, `ConfigurationError`,
+  `ExternalServiceError`, `RateLimitError`, `BudgetExceededError`
+- `app/core/errors.py` — four handlers (`AppError`, `RequestValidationError`,
+  `StarletteHTTPException`, catch-all `Exception`) and the shared envelope
+- `app/core/middleware.py` — `RequestContextMiddleware`: correlation id + timing
+- `app/utils/request_context.py` — the request-id `ContextVar`
+- `app/schemas/common.py` — `ErrorResponse`, `ErrorDetail`, `HealthResponse`,
+  `ServiceInfoResponse`
+- `app/api/router.py` — the `/api` router, where versioning is expressed
+- `app/api/routes/health.py` — the unversioned health route
+- `requirements-base.txt`, `requirements-ml.txt` — dependency layering
+- `tests/conftest.py`, `tests/test_endpoints.py`, `tests/test_errors.py`,
+  `tests/test_config.py`, `tests/test_middleware.py`
+
+### Files changed
+
+- `app/main.py` — rewritten: lifespan, CORS, middleware, handler registration,
+  `GET /`, startup credential warning
+- `app/core/config.py` — `API_PREFIX` replaces `API_V1_PREFIX` as the *setting*;
+  added derived `API_V1_PREFIX`, `HEALTH_URL`, `is_production`,
+  `integration_status`, `missing_credentials`
+- `app/core/logging.py` — rewritten: request-id filter, uvicorn logger alignment
+- `app/api/v1/router.py` — export renamed to `router`, now mounted at `/v1`
+- `app/api/v1/routes/system.py` — capabilities reads `Settings.integration_status`
+- `requirements.txt`, `requirements-dev.txt` — layered on `requirements-base.txt`
+- `frontend/src/api/client.js` — `/api/health`; added `ApiError` parsing the envelope
+- `frontend/src/App.jsx` — health field renamed `env` → `environment`
+- `frontend/vite.config.js` — dropped the now-redundant `/health` proxy entry
+- `.env.example`, `README.md`, `docs/api/README.md`, `.github/workflows/ci.yml`
+- `tests/test_health.py` — **deleted**, replaced by `tests/test_endpoints.py`
+
+### Commands used
+
+```bash
+# Virtual environment rebuilt on Python 3.11 (was 3.14)
+cd backend
+py -3.11 -m venv .venv
+./.venv/Scripts/python.exe -m pip install -r requirements-dev.txt
+
+# Verification
+./.venv/Scripts/python.exe -m pytest
+./.venv/Scripts/python.exe -m pytest --cov=app --cov-report=term-missing
+./.venv/Scripts/python.exe -m ruff check .
+./.venv/Scripts/python.exe -m mypy app
+./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+
+cd ../frontend && npm run build
+```
+
+### Tests performed
+
+**80 automated tests, all passing, 100% statement coverage of `app/`.**
+
+| Module | Tests | Covers |
+|---|---|---|
+| `test_endpoints.py` | 14 | `GET /`, `GET /api/health`, system routes, OpenAPI schema, `/docs` |
+| `test_errors.py` | 25 | exception hierarchy, all four handlers, request-id resolution, no leakage when `DEBUG=false` |
+| `test_config.py` | 24 | defaults, env loading, validation rejection, derived paths, credential status, caching |
+| `test_middleware.py` | 17 | request-id generation and propagation, timing header, logging config, CORS |
+
+Plus **22 live checks against a real uvicorn server** — started programmatically,
+exercised over HTTP with `httpx`, shut down — covering every endpoint, both error
+envelopes, the correlation headers, CORS preflight and rejection, and
+`/docs` + `/openapi.json`.
+
+### Result
+
+| Check | Result |
+|---|---|
+| `pytest` | **80 passed** in 0.68s |
+| coverage of `app/` | **100%** (335 statements, 0 missed) |
+| `ruff check .` | All checks passed |
+| `mypy app` | Success: no issues found in 29 source files |
+| uvicorn startup | clean; logs the stage, CORS origins, and which credentials are missing |
+| live HTTP checks | **22/22 passed** |
+| `npm run build` | built in 7.4s |
+
+### Decisions made
+
+1. **Health is unversioned, at `/api/health`.** Health is a property of the
+   process, not of the API contract. Putting it under `/v1` would mean container
+   probes and monitoring need updating whenever the API version bumps — a cost
+   paid forever for no benefit. The bare `/health` from stage 1 was removed rather
+   than kept as an alias, so there is exactly one canonical path.
+
+2. **Health does no I/O.** A liveness check that can fail because the database is
+   slow triggers restarts that fix nothing. A *readiness* check that does verify
+   dependencies arrives in stage 3, when there is a database to verify.
+
+3. **Application code raises `AppError`, never `HTTPException`.** Retrieval,
+   evidence and evaluation can then signal failure without importing FastAPI or
+   choosing a status code; one module does that translation.
+
+4. **`external_service_error` (502) is distinct from `internal_error` (500).** A
+   run that failed because Tavily was down is not the same result as a run that
+   failed because our logic is wrong, and the benchmark must not conflate them.
+
+5. **Every error carries a stable `code`.** The frontend switches on `code`, never
+   on `message`, so wording can improve without breaking the UI.
+
+6. **Correlation ids are honoured, not overwritten.** An inbound `X-Request-ID`
+   passes through, so a trace can be followed from the frontend into the backend,
+   and every log line a request emits carries the same id.
+
+7. **Requirements are layered.** `requirements-base.txt` (foundation) →
+   `requirements.txt` (+ database, OpenAI) → `requirements-ml.txt` (+ torch,
+   ChromaDB), with `requirements-dev.txt` on the base. Forced by a real problem
+   (see *Issues found*), and worth it: `pip install -r requirements-dev.txt` now
+   finishes in seconds instead of stalling for minutes on a dependency graph that
+   nothing in stages 1–3 uses.
+
+8. **Only `API_PREFIX` is configurable.** `API_V1_PREFIX` and `HEALTH_URL` are
+   derived from it, so a prefix can never end up half-renamed.
+
+### Issues found
+
+1. **`pip install -r requirements-dev.txt` stalled.** The stage-1 file pulled
+   `sentence-transformers` → `torch` (~2.5 GB) and then sat in pip's dependency
+   backtracking for minutes. Nothing in stages 1–3 imports any of it. **Fixed** by
+   splitting requirements into layers; the ML layer installs at stage 4.
+   *Consequence:* whether torch and chromadb actually resolve on 3.11 is now
+   untested — still a stage-4 risk, no longer verified early.
+
+2. **Unhandled exceptions reported `request_id: "-"`.** Starlette's
+   `ServerErrorMiddleware` sits *outside* application middleware, so by the time
+   the catch-all handler ran, the `ContextVar` holding the id had already been
+   reset — meaning precisely the errors that most need correlating arrived with no
+   id. **Fixed** by resolving the id from `request.state` first, with the context
+   variable as fallback. Covered by a named regression test.
+
+3. **`capabilities` reported `openai: true` for a placeholder key.**
+   `.env.example` ships `sk-replace-me`, a non-empty string, so a `bool()` check
+   passed it. The startup warning checked for the placeholder and the endpoint did
+   not — the two disagreed. Found by reading the live server's actual output, not
+   by a test. **Fixed** by defining "configured" once, in
+   `Settings._is_real_credential`, and having both read it.
+
+4. **Python version.** The venv was rebuilt on **3.11.9** (was 3.14.4), matching
+   the `requires-python = ">=3.11,<3.14"` pin. CI now uses 3.11 as well.
+
+5. **Two lint findings** on the first run — an unused import and `Depends()` in a
+   default argument — fixed by switching to the `Annotated` dependency idiom.
+
+### Not implemented
+
+**AI functionality is NOT implemented yet.** No OpenAI calls, no prompts, no
+planning, no retrieval, no embeddings, no vector store, no claim extraction, no
+verification, no citation validation, no conflict detection, no metrics, no
+benchmark. No database tables, no migrations, no research endpoints, no
+authentication, no background jobs. `capabilities.implemented` is `[]`, and the
+`GET /` response says so in its `stage` field.
+
+### Next stage
+
+**Stage 3 — data model and run lifecycle.** SQLAlchemy models for the tables in
+ARCHITECTURE.md §5; Alembic initialised with a first migration; `POST /api/v1/research`
+and `GET /api/v1/research/{id}` persisting `RunStatus` transitions; a readiness
+endpoint that does verify the database. Done when a run can be created and polled
+through the API with no research actually happening.
+
+---
+
 ## Stage 1 — Project scaffolding — 2026-10-06
 
 **Goal:** a clean, navigable skeleton for the whole system, with the

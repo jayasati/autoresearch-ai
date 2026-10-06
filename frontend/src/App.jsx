@@ -25,7 +25,7 @@ export default function App() {
         {health.state === 'loading' && <p>Checking…</p>}
         {health.state === 'ok' && (
           <p className="ok">
-            Connected — v{health.data.version} ({health.data.env})
+            Connected — v{health.data.version} ({health.data.environment})
           </p>
         )}
         {health.state === 'error' && (

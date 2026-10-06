@@ -11,16 +11,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - name: Install (stage-1 subset -- no ML deps yet)
+          python-version: "3.11"
+      - name: Install foundation layer
+        working-directory: backend
         run: |
           python -m pip install --upgrade pip
-          pip install fastapi uvicorn pydantic pydantic-settings httpx pytest ruff
+          pip install -r requirements-dev.txt
       - name: Lint
-        run: ruff check backend
+        working-directory: backend
+        run: ruff check .
+      - name: Type check
+        working-directory: backend
+        run: mypy app
       - name: Test
         working-directory: backend
-        run: pytest
+        run: pytest --cov=app --cov-report=term
 
   frontend:
     runs-on: ubuntu-latest

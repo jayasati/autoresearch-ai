@@ -77,29 +77,34 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full module-by-module breakdown.
 
 ---
 
-## Running it (stage 1)
+## Running it (stage 2)
 
-Right now "running it" means: the backend boots and answers `/health`, and the
-frontend loads and shows that it reached the backend. Nothing else.
+Right now "running it" means: the backend boots with full configuration, logging,
+error handling and versioned routing, and the frontend loads and shows that it
+reached the backend. **No research functionality.**
 
 ### Prerequisites
 
-- **Python 3.11 or 3.12** — see the note below
-- **Node.js 18+** (you have 22)
+- **Python 3.11** — required, see the note below
+- **Node.js 18+**
 - PostgreSQL — *not needed until stage 3*
 - API keys — *not needed until stage 4*
 
-> **⚠️ Python version:** this machine has Python 3.14. `torch` /
-> `sentence-transformers` / `chromadb` do not reliably ship wheels for 3.14 yet,
-> and installing them will likely fail or try to build from source. Create the
-> virtual environment with **Python 3.12** before stage 4. The stage-1 backend
-> (FastAPI only) runs fine on 3.14 if you want to start immediately.
+> **⚠️ Python version:** use **3.11**. `torch` / `sentence-transformers` /
+> `chromadb` do not reliably ship wheels for 3.14, so a 3.14 venv will fail or
+> try to build from source when stage 4 lands. `pyproject.toml` pins
+> `requires-python = ">=3.11,<3.14"`.
+>
+> On Windows, `py -3.11 -m venv .venv` picks the right interpreter even when
+> `python` resolves to a newer one.
 
 ### Backend
 
 ```bash
 cd backend
-python -m venv .venv
+py -3.11 -m venv .venv             # Windows
+# python3.11 -m venv .venv         # macOS / Linux
+
 source .venv/Scripts/activate      # Windows Git Bash
 # .venv\Scripts\Activate.ps1       # Windows PowerShell
 # source .venv/bin/activate        # macOS / Linux
@@ -114,15 +119,18 @@ Verify:
 
 | URL | Expected |
 |---|---|
-| http://localhost:8000/health | `{"status":"ok", ...}` |
+| http://localhost:8000/ | name, version, environment, stage, where to find docs and health |
+| http://localhost:8000/api/health | `{"status":"ok","version":"0.1.0","environment":"development"}` |
 | http://localhost:8000/docs | interactive OpenAPI page |
 | http://localhost:8000/api/v1/system/capabilities | which integrations are configured |
+| http://localhost:8000/nope | the error envelope, with a `request_id` |
 
-Run the smoke tests:
+Run the tests:
 
 ```bash
 cd backend
-pytest
+pytest              # test suite
+ruff check .        # lint
 ```
 
 ### Frontend
