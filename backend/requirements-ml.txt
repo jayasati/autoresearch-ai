@@ -1,0 +1,26 @@
+# AutoResearch AI -- retrieval and machine-learning stack (stage 4).
+#
+# Split out from the foundation layer because this pulls torch (~2.5 GB) and
+# resolving it takes minutes. Nothing in stages 1-3 imports any of it, so
+# installing it early only slows the project down.
+#
+# Install when starting stage 4:
+#     pip install -r requirements-ml.txt
+#
+# Requires Python <3.14 -- torch and chromadb do not reliably publish wheels
+# for 3.14. Use the 3.11 virtual environment.
+
+# --- Embeddings & vector store ---
+sentence-transformers>=3.2
+chromadb>=0.5.15
+
+# --- Retrieval ---
+tavily-python>=0.5
+beautifulsoup4>=4.12
+trafilatura>=1.12
+lxml>=5.3
+
+# --- Evaluation & analysis ---
+numpy>=1.26
+pandas>=2.2
+scikit-learn>=1.5

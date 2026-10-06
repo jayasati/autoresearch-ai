@@ -1,8 +1,16 @@
--r requirements.txt
+# Development environment for the backend foundation.
+#
+# Intentionally depends on requirements-base.txt rather than the full runtime:
+# the foundation and its tests need neither a database driver nor torch, so this
+# installs in seconds. Add the other layers as their stages begin:
+#
+#     pip install -r requirements.txt      # stage 3: database + OpenAI
+#     pip install -r requirements-ml.txt   # stage 4: embeddings + retrieval
+
+-r requirements-base.txt
 
 pytest>=8.3
 pytest-asyncio>=0.24
 pytest-cov>=5.0
 ruff>=0.7
 mypy>=1.13
-types-beautifulsoup4
