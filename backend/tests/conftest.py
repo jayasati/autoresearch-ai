@@ -13,9 +13,13 @@ from collections.abc import Iterator
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
+from app.db.session import enable_sqlite_foreign_keys
 from app.main import create_app
+from app.models import Base
 
 
 @pytest.fixture(autouse=True)
@@ -68,3 +72,37 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in list(os.environ):
         if key.startswith(("APP_", "API_", "OPENAI_", "TAVILY_", "CORS_", "LOG_", "DEBUG")):
             monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture
+def db_engine():
+    """A throwaway in-memory database with the real schema.
+
+    SQLite rather than PostgreSQL so the suite needs no running server, with
+    foreign key enforcement switched on -- SQLite ignores foreign keys by default,
+    and without the pragma these tests would pass against constraints PostgreSQL
+    would reject. The schema would look correct and be wrong.
+
+    `tests/integration/test_schema_portability.py` separately checks that the same
+    metadata compiles for the PostgreSQL dialect.
+    """
+    engine = create_engine("sqlite://")
+    enable_sqlite_foreign_keys(engine)
+    Base.metadata.create_all(engine)
+    try:
+        yield engine
+    finally:
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+
+
+@pytest.fixture
+def db(db_engine) -> Iterator[Session]:
+    """A session on the throwaway database.
+
+    Every test starts from an empty schema: no seed data, no fixtures that look
+    like real research output. Rows are built per test and discarded with it.
+    """
+    factory = sessionmaker(bind=db_engine, expire_on_commit=False, autoflush=False)
+    with factory() as session:
+        yield session
