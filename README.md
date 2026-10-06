@@ -4,13 +4,13 @@ An evidence-grounded agentic research system. Give it a research topic; it
 produces a research report where **every claim is traceable to a real source**,
 and it measures how well it did.
 
-> **Status: Stage 5 of 10 — foundations and persistence.**
+> **Status: Stage 6 of 11 — foundations, persistence, and web search.**
 > The backend serves configuration, logging, error handling, versioned routing and
 > health; the full data model is implemented and migrated; the frontend routes six
-> pages and reads real system status. **No research functionality exists** — no LLM
-> calls, no retrieval. See [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for exactly what
-> is and is not done, stage by stage, and [DATA_MODEL.md](DATA_MODEL.md) for the
-> schema.
+> pages and reads real system status; web search returns candidate sources.
+> **No LLM calls, no generated text, and nothing is treated as evidence yet.** See
+> [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for exactly what is and is not done, stage
+> by stage, and [DATA_MODEL.md](DATA_MODEL.md) for the schema.
 
 ---
 
@@ -91,8 +91,9 @@ reached the backend. **No research functionality.**
 - **Python 3.11** — required, see the note below
 - **Node.js 18+**
 - **PostgreSQL 14+** — needed now, for persistence
-- An OpenAI key — *not needed until stage 6*
-- Tavily / Semantic Scholar keys — *not needed until stage 7*
+- A **Tavily** key — needed now, for web search ([free tier](https://app.tavily.com))
+- An OpenAI key — *not needed until stage 7*
+- A Semantic Scholar key — *optional; the public API needs none*
 
 > **⚠️ Python version:** use **3.11**. `torch` / `sentence-transformers` /
 > `chromadb` do not reliably ship wheels for 3.14, so a 3.14 venv will fail or
@@ -166,9 +167,26 @@ Verify:
 
 Run the tests:
 
+### Try a web search
+
+```bash
+backend/.venv/Scripts/python.exe scripts/search_web.py "does retrieval reduce factual errors"
+```
+
+Prints the candidate sources Tavily returned, with canonical URLs, identity
+fingerprints and relevance scores. **This costs Tavily credits**, which is why it is a
+script you run deliberately rather than part of the test suite — the suite is fully
+mocked and makes no network requests.
+
+What it prints are *candidates*: pages a relevance model thinks are topical. Nothing
+has been fetched, read, or checked against a claim, and the service is written so
+nothing downstream can mistake one for evidence.
+
+### Run the tests
+
 ```bash
 cd backend
-pytest              # 366 tests
+pytest              # 460 tests
 ruff check .        # lint
 mypy app            # types
 ```

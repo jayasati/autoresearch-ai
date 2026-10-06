@@ -47,11 +47,12 @@ the whole project reports on.
 |  app/agents/            planner -> retriever -> synthesizer   |
 |                         -> critic, driven by orchestrator     |
 +--------------------+------------------+----------------------+
-| app/retrieval/     | app/evidence/    | app/evaluation/      |
-| web - academic -   | claims -         | metrics -            |
-| fetch - chunk -    | verification -   | benchmark            |
-| embed - vector -   | citations -      |                      |
-| rag                | conflicts        |                      |
+| app/services/      | app/evidence/    | app/evaluation/      |
+|   retrieval/       | claims -         | metrics -            |
+| web - academic -   | verification -   | benchmark            |
+| fetch - chunk -    | citations -      |                      |
+| embed - vector -   | conflicts        |                      |
+| rag                |                  |                      |
 +--------------------+------------------+----------------------+
 |  app/models/ + app/db/   SQLAlchemy over PostgreSQL          |
 +--------------------------------------------------------------+
@@ -132,11 +133,25 @@ The orchestration loop. Single-responsibility steps; the orchestrator sequences
 them and enforces `MAX_LLM_CALLS_PER_RUN`. Run state is a plain object, not an
 ORM row, so a pipeline can execute without a database.
 
-### `app/retrieval/` *(planned)*
+### `app/services/retrieval/` *(web search implemented)*
 
-One `Retriever` protocol, three implementations. The chunker preserves
-`(start_char, end_char)` per chunk — without that, requirement 8 (traceability)
-is impossible to honour and "grounded" becomes unverifiable.
+`tavily_service.py` is done: web search over `httpx`, with timeout, bounded retry,
+429 handling that obeys `Retry-After`, 5xx handling, URL normalisation and
+deduplication.
+
+**It returns candidate sources, not evidence.** A search result is a page a relevance
+model thinks is topical; nothing has been fetched, read, or linked to a claim. The
+types enforce that — `CandidateSource` carries no `relation`, no verdict, no
+"supports" field, and its `evidence_depth` is fixed at `snippet`. Recording the honest
+depth now is what stops the groundedness metrics overstating later.
+
+Planned here: Semantic Scholar search, the fetcher (URL to clean text), the chunker —
+which preserves `(start_char, end_char)` per chunk, without which requirement 8
+(traceability) cannot be honoured and "grounded" becomes unverifiable — the embedder
+and the vector store.
+
+Note the path: this moved from `app/retrieval/` to `app/services/retrieval/` when the
+service was written, so there is one home for it rather than two.
 
 ### `app/evidence/` *(planned)*
 

@@ -1,6 +1,7 @@
 # services/ — Use cases, and the transaction boundary
 
-**`research_service.py` is implemented.** The rest arrive with their stages.
+**`research_service.py` and `retrieval/` are implemented.** The rest arrive with
+their stages.
 
 This layer answers "what happened, and did *all* of it happen". Each public method is
 one atomic operation: it either completes and commits, or raises and leaves the
@@ -30,3 +31,22 @@ No LLM calls and no retrieval here: this service persists what those stages will
 eventually produce.
 
 Planned: `source_service.py`, `metrics_service.py`, `job_queue.py`.
+
+## `retrieval/` — getting candidate sources from outside
+
+`retrieval/tavily_service.py` is implemented: web search over `httpx`, with timeout,
+bounded retry, 429 handling that obeys `Retry-After`, 5xx handling, URL normalisation
+and deduplication.
+
+**It returns candidate sources, not evidence**, and that is enforced rather than
+documented: `CandidateSource` has no `relation`, no verdict and no "supports" field,
+and its `evidence_depth` is fixed at `snippet` because a search result is an extract
+the provider chose. Its only bridge to the database is `to_source_create()`, which
+produces a `source` row and nothing else — evidence needs a fetched chunk, and a
+citation needs a claim.
+
+It does not sit in the transaction-owning part of this package. It makes no database
+calls at all; the orchestrator will persist what it returns.
+
+Planned alongside it: Semantic Scholar search, the fetcher, the chunker, the embedder
+and the vector store.

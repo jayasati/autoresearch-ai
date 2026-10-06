@@ -5,6 +5,225 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 6 — Web retrieval (Tavily) — 2026-10-06
+
+**Goal:** a web search service that returns **candidate sources**. No LLM calls, no
+generated text, and nothing presented as evidence.
+
+### The constraint this stage was written around
+
+The brief said the service "must NOT claim that retrieved results are evidence yet. It
+only returns candidate sources." That is not a comment to add — it is the design, so it
+is enforced in the types:
+
+- the type is `CandidateSource`, not `Source` and not `Evidence`;
+- it has **no** `relation`, no verdict, no `supports`, no `confidence`, no `claim_id`.
+  `EvidenceRelation` and `VerificationVerdict` are not even imported in that module;
+- `relevance_score` is named for what it is. Tavily's score says a page looks topical;
+  it says nothing about correctness, credibility, or support for any claim. The field
+  description says so, and a test asserts the description says so — because the single
+  easiest way for this project to deceive itself later is to start reading a relevance
+  score as a confidence;
+- `evidence_depth` is pinned to `SNIPPET` via `Literal`, so it cannot be set to
+  `FULL_TEXT`. A search result is an extract the provider chose. Recording the honest
+  depth now is what stops the groundedness metrics overstating later;
+- the only bridge to the database is `to_source_create()`, which returns a `SourceCreate`
+  and nothing else. Not an `Evidence` row, not a `Citation` — evidence needs a fetched
+  chunk and a citation needs a claim. A search result justifies neither.
+
+### What was implemented
+
+| Requirement | How |
+|---|---|
+| API key from environment | `TAVILY_API_KEY`; a placeholder counts as unset, same rule as every other credential |
+| Configurable search depth | `TAVILY_SEARCH_DEPTH` (`basic`/`advanced`), overridable per call |
+| Configurable result count | `TAVILY_MAX_RESULTS`, overridable per call, bounded 1–50 |
+| Timeout | `TAVILY_TIMEOUT_SECONDS`, applied to the client and named in the error |
+| Retry handling | `TAVILY_MAX_ATTEMPTS`; exponential backoff with full jitter, capped |
+| 429 handling | retried, **obeying `Retry-After`** when sent, capped; `retry_after` reported on the exception |
+| 5xx handling | retried, then `SearchProviderUnavailable` (502, not 500) |
+| Structured source output | `CandidateSource` / `WebSearchResult` |
+| URL normalisation | `app/utils/urls.py`, shared with persistence |
+| Duplicate removal | by identity fingerprint, first occurrence wins, count reported |
+| Retrieval timestamp | `retrieved_at` on each candidate and on the result, tz-aware UTC |
+| Source type = web | `Literal[SourceType.WEB]` — not a default that can be overridden |
+
+### Files added
+
+- `app/services/retrieval/tavily_service.py` — `TavilySearchService`
+- `app/services/retrieval/models.py` — `WebSearchQuery`, `CandidateSource`, `WebSearchResult`
+- `app/services/retrieval/exceptions.py` — nine exception types, each marked retryable or not
+- `app/services/retrieval/__init__.py`
+- `app/utils/urls.py` — `canonicalize_url`, `url_fingerprint`, `source_fingerprint`
+- `scripts/search_web.py` — the manual command
+- `tests/unit/test_tavily_service.py` (58), `tests/unit/test_urls.py` (32)
+
+### Files changed
+
+- `app/core/config.py` — seven Tavily settings
+- `app/schemas/source.py` — `SourceCreate.fingerprint` now delegates to the shared
+  implementation, so retrieval and persistence cannot disagree
+- `app/retrieval/` — **removed.** It was an empty stage-1 placeholder; keeping it
+  alongside `app/services/retrieval/` would have meant two homes for one concern
+- `requirements-ml.txt` — `tavily-python` removed; unused
+- `.env.example`, `README.md`, `ARCHITECTURE.md`, `app/services/README.md`
+
+### Commands used
+
+```bash
+cd backend
+./.venv/Scripts/python.exe -m pytest tests/unit/test_tavily_service.py tests/unit/test_urls.py
+./.venv/Scripts/python.exe -m pytest ; ruff check . ; mypy app
+
+# the manual command, against the real API
+backend/.venv/Scripts/python.exe scripts/search_web.py "does retrieval reduce factual errors" --max-results 4
+```
+
+### Tests performed
+
+**460 backend tests, all passing** (90 new). The five required scenarios, all mocked:
+
+| Required | Where | Covers |
+|---|---|---|
+| successful search | `TestSuccessfulSearch`, `TestTheRequestSent` | ordering, typing, timestamp, the key in a header not the body, `include_answer=False` |
+| empty results | `TestEmptyResults` | zero results is a **success**, not an error; malformed entries counted rather than silently dropped |
+| rate limiting | `TestRateLimiting` | 429 retried then succeeding, attempts exhausted, `Retry-After` obeyed and capped, non-numeric header ignored, jitter proven |
+| timeout | `TestTimeout` | retried then raising, the configured value in the message, the timeout actually on the client |
+| server failure | `TestServerFailure` | 500/502/503/504 retried, recovery, connection failure, unreadable body, error detail never echoing the request |
+
+Plus `TestUrlNormalisationAndDeduplication` (one page in five spellings → one
+candidate), `TestCandidatesAreNotEvidence` (the constraint, asserted), and
+`TestNonRetryableFailures` (auth and 4xx never retried).
+
+Every test drives a **real `httpx.AsyncClient` over `MockTransport`**, so the status
+mapping, header parsing and JSON decoding under test are the code that runs in
+production. Mocking a vendor client would have tested the mock. `sleep` is injected, so
+backoff is asserted rather than waited for.
+
+**No test makes a network request.** The one real call was the manual command, run
+deliberately once.
+
+### Result
+
+| Check | Result |
+|---|---|
+| `pytest` | **460 passed** in 82s |
+| `ruff check .` | All checks passed |
+| `mypy app` | Success: no issues found in 53 source files |
+| manual command, real Tavily API | **4 candidates from 4 results across 4 domains in 2.9s, 1 attempt** |
+| frontend | unchanged — 67 tests still passing |
+
+### Decisions made
+
+1. **`httpx` directly, not `tavily-python`.** The requirements *are* timeout, retry, 429
+   and 5xx handling — which means owning the HTTP behaviour rather than inheriting a
+   vendor wrapper's. It also makes the tests honest: they exercise the real status
+   handling over a mock transport instead of a stubbed client. `tavily-python` was
+   removed from the requirements rather than left as an unused dependency.
+
+2. **`include_answer=False`, deliberately.** Tavily can return an LLM-written summary of
+   the results. That is generated text, not a source, and accepting it would smuggle an
+   unattributed, unverified claim into the exact layer meant to be collecting evidence
+   about the world. `include_raw_content` is off for a related reason: full page text
+   belongs to the fetch stage, and taking it here would make a snippet-depth candidate
+   look better grounded than it is. A test asserts both.
+
+3. **Retryability is a property of the exception class, not a decision at the call
+   site.** A 429, a timeout and a 5xx may succeed on a second attempt; a bad API key
+   never will, and retrying it only delays a clear error while spending the run's time
+   budget. Putting `retryable` on the class means the policy cannot drift between
+   callers.
+
+4. **The provider's `Retry-After` wins over our backoff.** It knows when its limit
+   resets and we do not. Backing off less invites another 429; backing off more wastes
+   budget. It is capped, so one unlucky search cannot stall a run for ten minutes.
+
+5. **Backoff is jittered, and that is tested.** Without jitter, several sub-question
+   searches rate-limited together would all retry at the same instant and be
+   rate-limited together again. The test runs twelve searches and asserts the waits
+   differ.
+
+6. **Zero results is a success.** "Searched and found nothing" is a real finding, and a
+   different one from "the search broke". A run must be able to record which happened,
+   so an empty result set returns a successful `WebSearchResult` — while a response with
+   no `results` key is an *error*, because reporting "no sources found" for an
+   unreadable response would let the benchmark read a parsing failure as a property of
+   the topic.
+
+7. **Malformed results are counted, not silently dropped.** Zero candidates from eight
+   results is a very different fact from zero results, and `duplicates_removed` /
+   `malformed_results` are what make the difference visible. Eight results that are five
+   copies of one page is three sources; reporting eight would overstate the breadth of
+   the retrieval.
+
+8. **URL canonicalisation lives in `app/utils/`, shared with persistence.** Retrieval
+   deduplicates candidates by it and persistence deduplicates `source` rows by it. If
+   the two normalised differently, one page found by two runs would become two rows and
+   every per-source metric would be computed over a split identity. A test asserts a
+   candidate's fingerprint equals what `SourceCreate` would compute.
+
+9. **Identity ignores `http` vs `https`; the canonical URL does not.** The canonical URL
+   is what you would fetch and what a citation should point at, so it keeps its real
+   scheme. Identity drops the distinction, because counting `http://x/p` and
+   `https://x/p` as two sources would inflate source diversity — a number this project
+   reports — every time a search returns both spellings.
+
+10. **`search_many` returns failures instead of raising them.** One dead sub-question
+    must not discard the ones that worked, and the orchestrator needs to record partial
+    retrieval as exactly that rather than as a failed run. Concurrency is bounded,
+    because a provider that is rate-limiting is not helped by twelve simultaneous
+    requests.
+
+11. **Error details never echo the request.** A provider's error body can quote the
+    request it rejected, and the request carries the API key. Detail strings are
+    truncated to 200 characters and a test asserts the key never appears.
+
+### Issues found
+
+1. **A behaviour change in source identity, and it is a correctness fix.** The old
+   `SourceCreate.fingerprint` lower-cased the *entire* URL, so `https://x/Page` and
+   `https://x/page` collapsed into one source. Paths are case-sensitive on most servers,
+   so those can be two different documents — merging them would undercount sources and
+   could attribute a claim to the wrong page. The shared implementation lower-cases only
+   the scheme and host, per RFC 3986. One stage-4 test encoded the old assumption and
+   was rewritten; two tests were added for the corrected semantics.
+
+2. **Two homes for retrieval.** The brief asked for `services/retrieval/`, while
+   ARCHITECTURE had declared `app/retrieval/` back at stage 1. Having both would be
+   worse than either, so the empty placeholder was removed and the architecture document
+   updated. Worth noting as a layering trade-off: retrieval makes no database calls and
+   owns no transaction, so it is not a "service" in the sense `research_service.py` is —
+   `app/services/README.md` says so explicitly rather than leaving the inconsistency
+   silent.
+
+3. **Ten lint findings and one failing test** on first full run — long lines, an import
+   order, a `SIM108`, and three `pytest.raises(Exception)` that now name
+   `ValidationError`. All fixed rather than suppressed.
+
+### Not implemented
+
+**LLM generation is NOT implemented.** No OpenAI calls, no prompts, no planning, no
+synthesis, no claim extraction, no verification, no citation validation, no conflict
+detection, no metrics, no benchmark.
+
+**Nothing retrieved is treated as evidence.** No `Evidence` rows, no `Citation` rows,
+and no `ResearchSource` links are created by this service — it does not touch the
+database at all.
+
+Also absent: academic search (Semantic Scholar), page fetching, chunking, embeddings,
+the vector store, and any API endpoint exposing search. `POST /api/v1/research` still
+does not exist, so the frontend's submit button stays disabled.
+
+### Next stage
+
+**Stage 7 — academic search and fetching.** Semantic Scholar over the same exception
+and candidate-source shapes, then the fetcher (URL to clean text) and the chunker that
+preserves `(start_char, end_char)` — the offsets every traceability claim in this
+project depends on. That is also the stage where a candidate first becomes a
+`document`, and where `evidence_depth` stops being `snippet`.
+
+---
+
 ## Stage 5 — PostgreSQL persistence — 2026-10-06
 
 **Goal:** a working persistence layer — configuration, sessions, migrations,
@@ -1006,45 +1225,47 @@ benchmark, and no research UI. Every one of these has a directory and a
 Each stage ends with something runnable and testable. No stage depends on a
 later one.
 
-Stages 1–5 are done; see the entries above. Two reorderings so far: the frontend
-arrived before the data model, and the data model's endpoints moved out of stage 4 —
-stage 5 became persistence (migrations, repositories, services, health), and the API
-moved to stage 6.
+Stages 1–6 are done; see the entries above. The order has shifted twice: the frontend
+arrived before the data model, and web retrieval was brought forward ahead of the
+research API and the model-only pipeline — so retrieval exists before there is anything
+to generate with it, which is the right way round for a project whose point is
+grounding.
 
-### Stage 6 — Research API and the model-only pipeline (the baseline)
+### Stage 7 — Academic search, fetching and chunking
+- Semantic Scholar search, over the same exception and candidate-source shapes
+- Fetcher: URL to clean text, with politeness and timeouts
+- Chunker preserving `(start_char, end_char)` — the offsets every traceability claim
+  depends on
+- Sentence Transformers embedder, ChromaDB store, top-k retrieval
+- **First stage that needs `requirements-ml.txt`.** Install it on the Python 3.11
+  venv; whether torch and chromadb resolve there is still unverified.
+- **Done when:** a candidate source becomes a `document` with chunks whose offsets
+  address its text exactly, and `evidence_depth` stops being `snippet`.
+
+### Stage 8 — Research API and the model-only pipeline (the baseline)
 - `POST /api/v1/research`, `GET /api/v1/research/{id}`, `GET /api/v1/research`
   over the stage-5 service layer
 - OpenAI client wrapper with retry, timeout, and `llm_call_log` writing
 - `prompts/planner.md`, `prompts/synthesizer.md` (versioned)
-- `pipelines/model_only.py` end to end
+- `pipelines/model_only.py`, then `hybrid.py` and `search_grounded.py`
 - **Done when:** a topic produces a stored report using no external sources — the
   baseline the other two modes must beat — and the New Research form's submit button
   is enabled.
 
-### Stage 7 — Retrieval
-- Tavily web search; Semantic Scholar academic search
-- Fetcher (clean text extraction), chunker with character offsets
-- Sentence Transformers embedder, ChromaDB store, top-k RAG retrieval
-- `pipelines/hybrid.py`, `pipelines/search_grounded.py`
-- **First stage that needs `requirements-ml.txt`.** Install it on the Python 3.11
-  venv; whether torch and chromadb resolve there is still unverified.
-- **Done when:** reports cite real, retrievable sources and every chunk can be
-  traced to a character span in its source.
-
-### Stage 8 — Evidence layer
+### Stage 9 — Evidence layer
 - Claim extraction, evidence linking, per-claim verification
 - Citation validation (valid / broken / misattributed / fabricated)
 - Conflict detection, traceability serialization
 - **Done when:** a report comes back annotated — every claim carries a verdict
   and a quoted supporting span, or an explicit "no evidence".
 
-### Stage 9 — Evaluation and benchmark
+### Stage 10 — Evaluation and benchmark
 - Metrics module; benchmark harness over a committed topic set
 - Comparison tables across the three modes
 - **Done when:** running the benchmark regenerates the comparison table from
   scratch, and the numbers support (or refute) the project's hypothesis.
 
-### Stage 10 — Wire the UI to real data, harden, write up
+### Stage 11 — Wire the UI to real data, harden, write up
 - Replace each placeholder with the real view: run timeline, report with inline
   citations, claim inspector with evidence drill-down, benchmark dashboard
 - Background job execution, caching, retry on partial failure
