@@ -15,7 +15,9 @@ sentence-transformers>=3.2
 chromadb>=0.5.15
 
 # --- Retrieval ---
-tavily-python>=0.5
+# No tavily-python: app/services/retrieval/tavily_service.py speaks to the API over
+# httpx, so it owns the timeout, retry and status handling the requirements call for,
+# and the tests drive that same code over a MockTransport rather than a vendor stub.
 beautifulsoup4>=4.12
 trafilatura>=1.12
 lxml>=5.3

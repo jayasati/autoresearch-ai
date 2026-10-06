@@ -52,7 +52,25 @@ class Settings(BaseSettings):
 
     # --- Web search (Tavily) ---
     TAVILY_API_KEY: str | None = None
+    TAVILY_BASE_URL: str = "https://api.tavily.com"
+
+    # "basic" is one round of retrieval; "advanced" costs more Tavily credits and
+    # digs deeper. Configurable because the benchmark will want to hold it constant
+    # across modes, and because it is a real cost lever.
+    TAVILY_SEARCH_DEPTH: Literal["basic", "advanced"] = "basic"
     TAVILY_MAX_RESULTS: int = 8
+
+    # Total time allowed for one search, including connect. A search that has not
+    # answered in this long will not become useful by waiting longer, and the
+    # orchestrator has a whole run to get through.
+    TAVILY_TIMEOUT_SECONDS: float = 20.0
+
+    # Attempts, not retries: 3 means one try plus two more. Only timeouts, 429s and
+    # 5xx are retried -- a bad API key will never succeed, so retrying it just
+    # delays the error.
+    TAVILY_MAX_ATTEMPTS: int = 3
+    TAVILY_BACKOFF_BASE_SECONDS: float = 0.5
+    TAVILY_BACKOFF_MAX_SECONDS: float = 10.0
 
     # --- Academic search (Semantic Scholar) ---
     SEMANTIC_SCHOLAR_API_KEY: str | None = None
