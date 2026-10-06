@@ -15,6 +15,12 @@ pydantic>=2.9
 pydantic-settings>=2.6
 python-dotenv>=1.0
 
+# --- ORM ---
+# The model layer itself, so it belongs in the foundation. The PostgreSQL driver
+# does not: SQLite needs no driver, which is what lets the test suite run with
+# nothing installed beyond this file.
+sqlalchemy>=2.0.35
+
 # --- HTTP client (Semantic Scholar, page fetching) ---
 httpx>=0.27
 

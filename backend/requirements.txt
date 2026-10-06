@@ -2,9 +2,9 @@
 #
 # Layered so that each stage installs only what it needs:
 #
-#   requirements-base.txt   foundation: HTTP, config, validation   (stages 1-3)
-#   this file               + database and foundation model         (stage 3)
-#   requirements-ml.txt     + embeddings, vector store, retrieval   (stage 4)
+#   requirements-base.txt   foundation: HTTP, config, validation, ORM (stages 1-4)
+#   this file               + PostgreSQL driver and foundation model (stage 5)
+#   requirements-ml.txt     + embeddings, vector store, retrieval    (stage 6)
 #   requirements-dev.txt    + test and lint tooling
 #
 # Lower bounds only. Run `pip freeze > requirements.lock.txt` once the
@@ -12,8 +12,8 @@
 
 -r requirements-base.txt
 
-# --- Database ---
-sqlalchemy>=2.0.35
+# --- PostgreSQL driver and migrations ---
+# SQLAlchemy itself lives in requirements-base.txt.
 psycopg[binary]>=3.2
 alembic>=1.13
 
