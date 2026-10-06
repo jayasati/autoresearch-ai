@@ -97,7 +97,7 @@ class Claim(UUIDPrimaryKey, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("report_id", "position", name="position_unique_per_report"),
+        UniqueConstraint("report_id", "position", name="uq_claim_position_per_report"),
         CheckConstraint("position >= 0", name="position_non_negative"),
         CheckConstraint(
             "(start_char IS NULL AND end_char IS NULL) "
@@ -162,7 +162,7 @@ class Evidence(UUIDPrimaryKey, Base):
     document_chunk: Mapped["DocumentChunk"] = relationship(back_populates="evidence")
 
     __table_args__ = (
-        UniqueConstraint("claim_id", "document_chunk_id", name="chunk_once_per_claim"),
+        UniqueConstraint("claim_id", "document_chunk_id", name="uq_evidence_chunk_per_claim"),
         CheckConstraint(
             "similarity IS NULL OR (similarity >= 0 AND similarity <= 1)",
             name="similarity_is_a_fraction",
@@ -227,7 +227,7 @@ class Citation(UUIDPrimaryKey, Base):
     source: Mapped["Source | None"] = relationship(back_populates="citations")
 
     __table_args__ = (
-        UniqueConstraint("claim_id", "marker", name="marker_unique_per_claim"),
+        UniqueConstraint("claim_id", "marker", name="uq_citation_marker_per_claim"),
         # A fabricated citation has no source; every other status must name one.
         CheckConstraint(
             "(status = 'fabricated' AND source_id IS NULL) "
@@ -364,7 +364,10 @@ class Conflict(UUIDPrimaryKey, Base):
             name="confidence_is_a_fraction",
         ),
         UniqueConstraint(
-            "evidence_a_id", "evidence_b_id", "conflict_type", name="conflict_pair_unique"
+            "evidence_a_id",
+            "evidence_b_id",
+            "conflict_type",
+            name="uq_conflict_evidence_pair_and_type",
         ),
         Index("ix_conflict_run_type", "research_run_id", "conflict_type"),
     )

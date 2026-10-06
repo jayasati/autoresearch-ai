@@ -69,7 +69,7 @@ class EvaluationResult(UUIDPrimaryKey, Base):
             "research_run_id",
             "metric_key",
             "metrics_version",
-            name="one_value_per_metric_per_version",
+            name="uq_evaluation_result_metric_and_version",
         ),
         # A denominator of zero is not a measurement. If a run produced no claims,
         # the support rate is undefined and no row should exist -- recording 0.0

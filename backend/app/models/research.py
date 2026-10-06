@@ -258,7 +258,7 @@ class SubQuestion(UUIDPrimaryKey, Base):
     research_sources: Mapped[list["ResearchSource"]] = relationship(back_populates="subquestion")
 
     __table_args__ = (
-        UniqueConstraint("research_run_id", "position", name="position_unique_per_run"),
+        UniqueConstraint("research_run_id", "position", name="uq_subquestion_position_per_run"),
         CheckConstraint("position >= 0", name="position_non_negative"),
     )
 

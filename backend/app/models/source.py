@@ -146,8 +146,10 @@ class ResearchSource(UUIDPrimaryKey, Base):
 
     __table_args__ = (
         # One row per source per run: a source retrieved twice is still one source.
-        UniqueConstraint("research_run_id", "source_id", name="source_once_per_run"),
-        UniqueConstraint("research_run_id", "citation_label", name="citation_label_unique_per_run"),
+        UniqueConstraint("research_run_id", "source_id", name="uq_research_source_source_per_run"),
+        UniqueConstraint(
+            "research_run_id", "citation_label", name="uq_research_source_label_per_run"
+        ),
         CheckConstraint("rank IS NULL OR rank >= 0", name="rank_non_negative"),
     )
 
@@ -191,7 +193,7 @@ class Document(UUIDPrimaryKey, Base):
 
     __table_args__ = (
         # Re-fetching identical content must not create a second document.
-        UniqueConstraint("source_id", "content_hash", name="content_unique_per_source"),
+        UniqueConstraint("source_id", "content_hash", name="uq_document_content_per_source"),
         CheckConstraint("char_length > 0", name="char_length_positive"),
     )
 
@@ -237,7 +239,7 @@ class DocumentChunk(UUIDPrimaryKey, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("document_id", "position", name="position_unique_per_document"),
+        UniqueConstraint("document_id", "position", name="uq_document_chunk_position_per_document"),
         CheckConstraint("position >= 0", name="position_non_negative"),
         CheckConstraint("start_char >= 0", name="start_char_non_negative"),
         # The offsets must describe a real, non-empty span.

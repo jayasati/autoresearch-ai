@@ -1,16 +1,19 @@
 """
-Create the database and bring it to the latest migration.
+Create the database if needed and bring it to the latest migration.
 
-Run from the backend directory with the project virtual environment:
+Run from the repository root (or from backend/) with the project virtual environment:
 
-    cd backend
-    python ../scripts/init_db.py
+    backend/.venv/Scripts/python.exe scripts/init_db.py
 
 Reads `DATABASE_URL` from the environment or `.env` — it never takes a password on
 the command line, because that would put the credential in your shell history.
 
 Idempotent: safe to run again. It creates the database only if it is missing, and
 `alembic upgrade head` is a no-op once the schema is current.
+
+Works against a local PostgreSQL and against managed providers (Neon, Supabase, RDS),
+which pre-provision the database and usually forbid `CREATE DATABASE` — see
+`ensure_database` for how that case is handled.
 """
 
 from __future__ import annotations
@@ -24,9 +27,9 @@ sys.path.insert(0, str(BACKEND))
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from sqlalchemy import text  # noqa: E402
-from sqlalchemy.engine import make_url  # noqa: E402
+from sqlalchemy.engine import URL, make_url  # noqa: E402
 
-from app.core.config import get_settings  # noqa: E402
+from app.core.config import Settings, get_settings  # noqa: E402
 from app.db.session import build_engine, check_connection  # noqa: E402
 
 
@@ -35,6 +38,81 @@ def fail(message: str, *hints: str) -> None:
     for hint in hints:
         print(f"    - {hint}")
     raise SystemExit(1)
+
+
+def settings_for(settings: Settings, url: URL) -> Settings:
+    """Copy the settings with a different URL.
+
+    `url.render_as_string(hide_password=False)` is **not** optional here.
+    `str(url)` renders the password as `***`, so passing it on would try to
+    authenticate with three asterisks and report "password authentication failed" —
+    a failure that looks exactly like a wrong password and sends you looking in the
+    wrong place entirely.
+    """
+    return settings.model_copy(
+        update={"DATABASE_URL": url.render_as_string(hide_password=False)}
+    )
+
+
+def ensure_database(settings: Settings, url: URL) -> None:
+    """Make sure the target database exists.
+
+    Tries the target first. If it answers, there is nothing to create — and this
+    matters for more than efficiency: managed PostgreSQL (Neon, Supabase, RDS)
+    provisions the database for you and the application role usually cannot
+    `CREATE DATABASE` at all. Attempting creation first would fail against every
+    hosted database, for no reason.
+
+    Only when the target is unreachable does it connect to the `postgres`
+    maintenance database and create it — the local-development case.
+    """
+    engine = build_engine(settings)
+    reachable, latency_ms, error = check_connection(engine)
+    engine.dispose()
+
+    if reachable:
+        print(f"  Database {url.database!r} is reachable ({latency_ms:.0f} ms); nothing to create.")
+        return
+
+    if not settings.database_is_postgres:
+        # SQLite creates its file on connect; nothing to do.
+        print(f"  {url.get_backend_name()} database will be created on connect.")
+        return
+
+    print(f"  Database {url.database!r} not reachable: {error}")
+    print("  Trying the 'postgres' maintenance database to create it...")
+
+    admin = settings_for(settings, url.set(database="postgres"))
+    admin_engine = build_engine(admin)
+    admin_reachable, _, admin_error = check_connection(admin_engine)
+    if not admin_reachable:
+        admin_engine.dispose()
+        fail(
+            f"Cannot reach the server: {admin_error}",
+            "Is PostgreSQL running? On Windows: Get-Service *postgres*",
+            "Is the password in DATABASE_URL correct?",
+            "On a managed provider, create the database in its dashboard first.",
+        )
+
+    try:
+        with admin_engine.connect() as connection:
+            # CREATE DATABASE cannot run inside a transaction.
+            connection = connection.execution_options(isolation_level="AUTOCOMMIT")
+            exists = connection.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                {"name": url.database},
+            ).scalar_one_or_none()
+            if exists:
+                # The database exists but we could not reach it directly: a
+                # permissions problem, not a missing database.
+                fail(
+                    f"Database {url.database!r} exists but could not be opened.",
+                    "Does the role have CONNECT privilege on it?",
+                )
+            connection.execute(text(f'CREATE DATABASE "{url.database}"'))
+            print(f"  Created database {url.database!r}.")
+    finally:
+        admin_engine.dispose()
 
 
 def main() -> None:
@@ -50,35 +128,7 @@ def main() -> None:
             "Example: postgresql+psycopg://postgres:<your password>@localhost:5432/autoresearch",
         )
 
-    if not settings.database_is_postgres:
-        print(f"  Not a PostgreSQL URL ({url.drivername}); skipping database creation.")
-    else:
-        # Connect to the maintenance database to create ours. CREATE DATABASE cannot
-        # run inside a transaction, hence AUTOCOMMIT.
-        admin_url = url.set(database="postgres")
-        admin_settings = settings.model_copy(update={"DATABASE_URL": str(admin_url)})
-        admin_engine = build_engine(admin_settings)
-
-        reachable, _, error = check_connection(admin_engine)
-        if not reachable:
-            fail(
-                f"Cannot reach the server: {error}",
-                "Is PostgreSQL running? On Windows: Get-Service *postgres*",
-                "Is the password in DATABASE_URL correct?",
-            )
-
-        target = url.database
-        with admin_engine.connect() as connection:
-            connection = connection.execution_options(isolation_level="AUTOCOMMIT")
-            exists = connection.execute(
-                text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": target}
-            ).scalar_one_or_none()
-            if exists:
-                print(f"  Database {target!r} already exists.")
-            else:
-                connection.execute(text(f'CREATE DATABASE "{target}"'))
-                print(f"  Created database {target!r}.")
-        admin_engine.dispose()
+    ensure_database(settings, url)
 
     print("\nApplying migrations...")
     config = Config(str(BACKEND / "alembic.ini"))
@@ -88,6 +138,7 @@ def main() -> None:
     engine = build_engine(settings)
     reachable, latency_ms, error = check_connection(engine)
     if not reachable:
+        engine.dispose()
         fail(f"Migrations ran but the database is unreachable: {error}")
 
     with engine.connect() as connection:
@@ -102,9 +153,11 @@ def main() -> None:
             if settings.database_is_postgres
             else text("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'")
         ).scalar_one()
+        server = connection.execute(text("SELECT version()")).scalar_one()
     engine.dispose()
 
     print("\n  Ready.")
+    print(f"    server   : {server.split(' on ')[0]}")
     print(f"    revision : {revision}")
     print(f"    tables   : {tables}")
     print(f"    latency  : {latency_ms:.1f} ms")

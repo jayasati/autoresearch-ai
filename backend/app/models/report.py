@@ -96,7 +96,7 @@ class ReportSection(UUIDPrimaryKey, Base):
     claims: Mapped[list["Claim"]] = relationship(back_populates="report_section")
 
     __table_args__ = (
-        UniqueConstraint("report_id", "position", name="position_unique_per_report"),
+        UniqueConstraint("report_id", "position", name="uq_report_section_position_per_report"),
         CheckConstraint("position >= 0", name="position_non_negative"),
         CheckConstraint("start_char >= 0", name="start_char_non_negative"),
         CheckConstraint("end_char > start_char", name="span_is_non_empty"),
