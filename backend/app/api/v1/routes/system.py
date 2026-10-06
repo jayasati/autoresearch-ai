@@ -26,12 +26,7 @@ async def capabilities(settings: SettingsDep) -> dict:
     """
     return {
         "modes": [m.value for m in ResearchMode],
-        "integrations": {
-            "openai": bool(settings.OPENAI_API_KEY),
-            "tavily": bool(settings.TAVILY_API_KEY),
-            "semantic_scholar": True,  # public API; key only raises rate limits
-            "postgres": bool(settings.DATABASE_URL),
-            "chromadb": True,  # local, embedded
-        },
-        "implemented": [],  # filled in as stages land
+        "integrations": settings.integration_status,
+        "missing_credentials": settings.missing_credentials,
+        "implemented": [],  # research capabilities; filled in as stages land
     }
