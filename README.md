@@ -4,10 +4,11 @@ An evidence-grounded agentic research system. Give it a research topic; it
 produces a research report where **every claim is traceable to a real source**,
 and it measures how well it did.
 
-> **Status: Stage 1 — scaffolding only.**
-> The project structure, configuration surface and documentation exist. No
-> research logic is implemented yet. See [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md)
-> for exactly what is and is not done.
+> **Status: Stage 3 of 9 — foundations only.**
+> The backend serves configuration, logging, error handling, versioned routing and
+> health. The frontend routes six pages and reads real system status. **No research
+> functionality exists.** See [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for exactly
+> what is and is not done, stage by stage.
 
 ---
 
@@ -77,7 +78,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full module-by-module breakdown.
 
 ---
 
-## Running it (stage 2)
+## Running it (stage 3)
 
 Right now "running it" means: the backend boots with full configuration, logging,
 error handling and versioned routing, and the frontend loads and shows that it
@@ -87,12 +88,13 @@ reached the backend. **No research functionality.**
 
 - **Python 3.11** — required, see the note below
 - **Node.js 18+**
-- PostgreSQL — *not needed until stage 3*
-- API keys — *not needed until stage 4*
+- PostgreSQL — *not needed until stage 4*
+- An OpenAI key — *not needed until stage 5*
+- Tavily / Semantic Scholar keys — *not needed until stage 6*
 
 > **⚠️ Python version:** use **3.11**. `torch` / `sentence-transformers` /
 > `chromadb` do not reliably ship wheels for 3.14, so a 3.14 venv will fail or
-> try to build from source when stage 4 lands. `pyproject.toml` pins
+> try to build from source when the retrieval stage lands. `pyproject.toml` pins
 > `requires-python = ">=3.11,<3.14"`.
 >
 > On Windows, `py -3.11 -m venv .venv` picks the right interpreter even when
@@ -140,18 +142,42 @@ In a second terminal:
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev          # http://localhost:5173
+npm test             # 67 tests
+npm run lint
 ```
 
-Open http://localhost:5173. You should see **"Connected — v0.1.0 (development)"**.
-If it says not reachable, the backend isn't running on port 8000.
+Open http://localhost:5173. You should see the dashboard, a header badge reading
+**"Backend v0.1.0 · development"**, and six pages in the sidebar. If the badge says
+**"Backend offline"**, the backend isn't running on port 8000.
+
+Six pages are routed:
+
+| Page | State |
+|---|---|
+| Dashboard | **real data** — reads integration status from the backend |
+| New Research | real, interactive form; submit disabled (no endpoint yet) |
+| Research Results | placeholder |
+| Sources | placeholder |
+| Evidence Audit | placeholder — shows the real verdict/citation vocabularies |
+| Evaluation | placeholder — shows metric definitions, no measurements |
+
+Every placeholder names the stage its feature arrives in. **No page shows sample or
+mock research output.** That is a deliberate rule, not an oversight: this project
+exists to measure how often generated text is unsupported, and invented output in
+a screenshot would undermine the thing being measured.
+
+The dev server proxies `/api` to port 8000, so the browser only talks to the Vite
+origin and CORS never applies in development. For a deployed build, set
+`VITE_API_BASE` to the backend's origin.
 
 ---
 
 ## Next stage
 
-Stage 2 is the data model and the run lifecycle. See the
-[roadmap in DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md#roadmap).
+Stage 4 is the data model and the run lifecycle: SQLAlchemy models, Alembic
+migrations, and `POST /api/v1/research` so a run can actually be created and
+polled. See the [roadmap in DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md#roadmap).
 
 ---
 

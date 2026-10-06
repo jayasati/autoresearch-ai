@@ -5,6 +5,195 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 3 — Frontend foundation — 2026-10-06
+
+**Goal:** a clean, navigable React interface with all six pages routed, a proper
+component architecture, and the three async states implemented for real. Still no
+research functionality.
+
+> **Roadmap renumbered.** Stage 2 said the data model was next. The frontend was
+> built instead, so it takes stage 3 and everything after it shifts by one. The
+> roadmap below reflects the new order; nothing was dropped.
+
+### What was implemented
+
+| Requirement | How |
+|---|---|
+| React + Vite | React 18, Vite 5 |
+| Language consistency | **Plain JavaScript.** The project started in JS, and a half-migrated codebase would be worse than either choice. API shapes are JSDoc typedefs in `src/types/api.js` — editor completion without a build step. |
+| lucide-react for icons | sidebar navigation, state icons, integration status |
+| Clean component architecture | `api/` → `hooks/` → `components/ui/` → `components/layout/` → `pages/`; dependencies point one way |
+| React routing | react-router-dom 6; `routes.js` is one table driving both the router and the sidebar |
+| API client abstraction | `api/client.js` (transport) + `api/endpoints.js` (named operations). Components never call `fetch` |
+| Environment-based backend URL | `VITE_API_BASE`; empty in dev so Vite proxies `/api` and CORS never applies |
+| Loading state | `LoadingState` with `role="status"` and `aria-busy` |
+| Error state | `ErrorState` showing the backend's stable `code`, the correlation id, and a retry |
+| Empty state | `EmptyState`, kept distinct from the not-implemented placeholder |
+
+### The six pages
+
+| Page | Route | What it does |
+|---|---|---|
+| Dashboard | `/` | **Real data.** Reads `GET /api/v1/system/capabilities` and reports integration status, missing credentials and declared modes |
+| New Research | `/research/new` | **Real, interactive form** — topic input, validation, mode selection, live request preview. Submit permanently disabled |
+| Research Results | `/research/results` | Placeholder + the structure a report will have |
+| Sources | `/sources` | Placeholder + the real table columns, including evidence depth |
+| Evidence Audit | `/evidence` | Placeholder + the real verdict and citation-status vocabularies from the backend enums |
+| Evaluation | `/evaluation` | Placeholder + metric definitions; every cell reads *not measured* |
+
+### Files added
+
+- `src/routes.js` — the single route table
+- `src/App.jsx` — rewritten: routes built from that table
+- `src/main.jsx` — mounts `BrowserRouter`
+- `src/api/endpoints.js` — named operations, grouped by domain
+- `src/hooks/useApi.js` — request state modelled once
+- `src/hooks/useBackendStatus.js` — `useHealth`, `useCapabilities`, `useServiceInfo`
+- `src/components/layout/AppLayout.jsx` — shell, sidebar, backend status badge
+- `src/components/ui/states.jsx` — `LoadingState`, `ErrorState`, `EmptyState`,
+  `NotImplemented`, `AsyncBoundary`, `Spinner`
+- `src/components/ui/primitives.jsx` — `Card`, `PageHeader`, `Badge`, `Button`,
+  `StatTile`, `PlannedContents`
+- `src/pages/` — the six pages plus `NotFoundPage.jsx`
+- `src/lib/constants.js` — research modes, verdicts, citation statuses, stages
+- `src/types/api.js` — JSDoc typedefs mirroring `backend/app/schemas/common.py`
+- `src/test/` — `setup.js`, `utils.jsx`, and four test files
+- `eslint.config.js` — the `lint` script previously had no config and could not run
+
+### Files changed
+
+- `src/api/client.js` — reworked into a transport module: `http` verbs, `ApiError`
+  with `isUnreachable` / `isNotImplemented`, 204 handling, abort passthrough
+- `src/styles/index.css` — rewritten: design tokens, light **and** dark via
+  `prefers-color-scheme`, full component styles, narrow-screen layout
+- `vite.config.js` — Vitest config; dropped the redundant `/health` proxy entry
+- `package.json` — added lucide-react, Vitest, Testing Library, ESLint plugins;
+  `test` and `test:watch` scripts
+- `frontend/README.md`, root `README.md`, `.github/workflows/ci.yml`
+
+### Commands used
+
+```bash
+cd frontend
+npm install lucide-react
+npm install -D vitest jsdom @testing-library/react @testing-library/jest-dom \
+               @testing-library/user-event globals eslint-plugin-react eslint-plugin-react-hooks
+npm test
+npm run lint
+npm run build
+npm run dev
+```
+
+### Tests performed
+
+**67 automated tests, all passing**, across four files:
+
+| File | Tests | Covers |
+|---|---|---|
+| `pages.test.jsx` | 22 | shell renders, all six nav links, each route renders its heading, every placeholder names its stage, unknown routes, navigation without reload |
+| `states.test.jsx` | 21 | loading (in flight, announced, replaced), error (offline, codes, request id, retry re-issues the request), empty on all five pages, dashboard reports only what the backend says |
+| `client.test.js` | 13 | base URL, endpoint paths, error-envelope parsing, missing envelope fallback, network failure, abort passthrough, request bodies, 204 |
+| `newResearch.test.jsx` | 11 | form interaction, validation, request preview, and that submit is disabled and **never** POSTs |
+
+Tests stub `fetch`, not the api client, so the client's own envelope parsing is
+exercised rather than mocked away.
+
+Plus **23 live checks against the real dev stack** — a Python script starts
+uvicorn and `npm run dev` as actual processes, then verifies over HTTP that
+`index.html` is served, each source module compiles, the proxy forwards `/api` to
+the backend with the correlation header intact, all five client routes fall back to
+the app shell, and an absent backend route still returns the error envelope.
+
+### Result
+
+| Check | Result |
+|---|---|
+| `npm test` | **67 passed** (4 files) |
+| `npm run lint` | clean |
+| `npm run build` | built in 9.0s — 202 kB JS (65 kB gzip), 9.8 kB CSS |
+| `npm run dev` + backend | **23/23 live checks passed** |
+| backend `pytest` | still 80 passed (unchanged) |
+
+### Decisions made
+
+1. **No mock research output anywhere.** Not a single sample report, claim, source
+   or metric value. This project exists to measure how often generated text is
+   unsupported; a fabricated report in a screenshot — even labelled — would
+   undermine the thing being measured. Pages describe *structure* instead: the
+   columns a table will have, never the rows.
+
+2. **Placeholders name a stage.** "Not implemented" is useless on its own, so
+   `NotImplemented` requires a `stage` prop and every page supplies one.
+
+3. **The not-implemented notice is distinct from the empty state.** Empty means the
+   feature works and has no content; the placeholder means the feature does not
+   exist. Collapsing them would hide which is which.
+
+4. **The New Research form is real but cannot submit.** Building it now settles the
+   request shape before the endpoint is written, and the live JSON preview makes
+   that shape reviewable. Submit stays disabled rather than calling a route that
+   does not exist — a fake success and a confusing 404 are both worse than saying
+   so plainly.
+
+5. **One route table.** `routes.js` drives the router *and* the sidebar, so a page
+   cannot be routable but unreachable, or listed but broken.
+
+6. **Plain JavaScript, deliberately.** Consistency was the stated requirement and
+   the project began in JS. `src/types/api.js` carries the API shapes as JSDoc.
+
+7. **`loading` is derived, not stored.** `useApi` tags each settled result with the
+   key of the request that produced it; loading is "the stored key is not the key I
+   want". This makes showing a stale result structurally impossible and removes
+   `setState` from the effect body.
+
+8. **The dashboard cross-checks the backend's mode list** against the copy in
+   `lib/constants.js` and warns on screen if they disagree, so a drift between
+   frontend and backend surfaces instead of silently mislabelling a benchmark
+   configuration.
+
+### Issues found
+
+1. **`npm run lint` had no ESLint config** — the script shipped in stage 1 could
+   never have run. Added `eslint.config.js` (flat config, React + hooks plugins),
+   and it immediately found four real errors, below.
+
+2. **`useApi` updated a ref during render** and **called `setState` synchronously
+   inside an effect** — both flagged by `react-hooks`, both real. Fixed by
+   deriving `loading` from a request key and syncing the ref in its own effect.
+   Not a rule I disabled.
+
+3. **Two unescaped quote characters** in JSX text. Fixed with typographic quotes.
+
+4. **The dashboard rendered the same failed request as two error blocks.** Two
+   cards shared one `useCapabilities()` call, so an outage produced duplicate
+   error panels. The static notice was moved out of the boundary.
+
+5. **Vite binds to `localhost`, which resolves to `::1` here.** The first live
+   verification reported the dev server as not started while it was running fine —
+   `127.0.0.1:5173` never connects. Worth knowing before debugging a phantom.
+
+6. **A stale uvicorn process held port 8000** from an earlier run and served old
+   code, which made several checks behave inexplicably until it was killed.
+
+### Not implemented
+
+**AI functionality is NOT implemented yet.** No OpenAI calls, no prompts, no
+planning, no retrieval, no embeddings, no vector store, no claim extraction, no
+verification, no citation validation, no conflict detection, no metrics, no
+benchmark. No database tables, no migrations, no research endpoints. The frontend
+displays no research output of any kind, real or sample.
+
+### Next stage
+
+**Stage 4 — data model and run lifecycle.** SQLAlchemy models for the tables in
+ARCHITECTURE.md §5; Alembic initialised with a first migration;
+`POST /api/v1/research` and `GET /api/v1/research/{id}` persisting `RunStatus`
+transitions; a readiness endpoint that verifies the database. The New Research
+form's submit button gets enabled at the end of that stage — it is the acceptance
+test for it.
+
+---
+
 ## Stage 2 — Backend foundation — 2026-10-06
 
 **Goal:** a complete, correct application foundation — configuration, logging,
@@ -293,57 +482,62 @@ benchmark, and no research UI. Every one of these has a directory and a
 Each stage ends with something runnable and testable. No stage depends on a
 later one.
 
-### Stage 2 — Data model and run lifecycle
+Stages 1–3 are done; see the entries above. The frontend arrived before the data
+model, so everything from the data model onward shifted by one.
+
+### Stage 4 — Data model and run lifecycle
 - SQLAlchemy models for the tables in ARCHITECTURE.md §5
 - Alembic initialised; first migration
 - `POST /api/v1/research` creates a run row; `GET /api/v1/research/{id}` reads it
 - `RunStatus` transitions persisted and exposed
-- **Done when:** a run can be created and polled through the API, with no
-  research actually happening.
+- A readiness endpoint that does verify the database, alongside the existing
+  liveness check
+- **Done when:** a run can be created and polled through the API, and the New
+  Research form's submit button can be enabled — that is the acceptance test.
 
-### Stage 3 — Model-only pipeline (the baseline)
+### Stage 5 — Model-only pipeline (the baseline)
 - OpenAI client wrapper with retry, timeout, and `llm_call_log` writing
 - `prompts/planner.md`, `prompts/synthesizer.md` (versioned)
 - `pipelines/model_only.py` end to end
 - **Done when:** a topic produces a stored report using no external sources.
   This is the baseline the other two modes must beat.
 
-### Stage 4 — Retrieval
+### Stage 6 — Retrieval
 - Tavily web search; Semantic Scholar academic search
 - Fetcher (clean text extraction), chunker with character offsets
 - Sentence Transformers embedder, ChromaDB store, top-k RAG retrieval
 - `pipelines/hybrid.py`, `pipelines/search_grounded.py`
+- **First stage that needs `requirements-ml.txt`.** Install it on the Python 3.11
+  venv; whether torch and chromadb resolve there is still unverified.
 - **Done when:** reports cite real, retrievable sources and every chunk can be
-  traced to a character span in its source. *Needs the Python 3.12 venv.*
+  traced to a character span in its source.
 
-### Stage 5 — Evidence layer
+### Stage 7 — Evidence layer
 - Claim extraction, evidence linking, per-claim verification
 - Citation validation (valid / broken / misattributed / fabricated)
 - Conflict detection, traceability serialization
 - **Done when:** a report comes back annotated — every claim carries a verdict
   and a quoted supporting span, or an explicit "no evidence".
 
-### Stage 6 — Evaluation and benchmark
+### Stage 8 — Evaluation and benchmark
 - Metrics module; benchmark harness over a committed topic set
 - Comparison tables across the three modes
 - **Done when:** running the benchmark regenerates the comparison table from
   scratch, and the numbers support (or refute) the project's hypothesis.
 
-### Stage 7 — Frontend
-- Topic submission, live run timeline, report view with inline citations
-- Claim inspector with evidence drill-down
-- Benchmark dashboard
-- **Done when:** the whole system is usable and auditable without a terminal.
-
-### Stage 8 — Hardening and write-up
-- Background job execution, caching, error states
+### Stage 9 — Wire the UI to real data, harden, write up
+- Replace each placeholder with the real view: run timeline, report with inline
+  citations, claim inspector with evidence drill-down, benchmark dashboard
+- Background job execution, caching, retry on partial failure
 - Final report, figures from `notebooks/`, reproducibility instructions
+- **Done when:** the whole system is usable and auditable without a terminal.
 
 ---
 
 ## Log conventions
 
-Each stage entry records: **Done** (what exists now), **Decisions made** (and
-why — the reasoning is the part worth keeping), **Issues found**, and
-**Not implemented**. Reversed decisions get an ADR in `docs/adr/` rather than a
-quiet edit to an earlier entry.
+Each stage entry records: **what was implemented**, **files changed**, **commands
+used**, **tests performed**, **result**, **decisions made** (and why — the
+reasoning is the part worth keeping), **issues found**, and **what is not
+implemented**. Reversed decisions get an ADR in `docs/adr/` rather than a quiet
+edit to an earlier entry.

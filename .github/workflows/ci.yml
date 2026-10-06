@@ -37,6 +37,12 @@ jobs:
       - name: Install
         working-directory: frontend
         run: npm install
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+      - name: Test
+        working-directory: frontend
+        run: npm test
       - name: Build
         working-directory: frontend
         run: npm run build
