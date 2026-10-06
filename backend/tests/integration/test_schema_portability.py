@@ -6,9 +6,15 @@ These tests close it without needing a running PostgreSQL server, by compiling t
 same metadata for the PostgreSQL dialect and checking the parts that differ
 between backends.
 
-PostgreSQL *was* listening on this machine while this was written, but the
-credentials were not available, so a live check could not be run. Compiling the
-DDL is the strongest verification possible without them.
+These checks are not a substitute for a live run, and should not be treated as one:
+an earlier version of this schema passed every test here and then failed part-way
+through `alembic upgrade head` on a real server, because two tables shared a
+constraint name. `test_no_two_constraints_or_indexes_share_a_name` exists because of
+that, and closes the specific gap -- but the general lesson stands.
+
+The schema has since been applied to PostgreSQL 18.6 (Neon) and verified: 17 tables,
+40 check constraints, 13 unique constraints, 26 foreign keys, native `uuid` and
+`timestamptz`, and zero pending differences against the models.
 """
 
 import pytest
@@ -75,6 +81,49 @@ class TestConstraintNaming:
     def test_primary_keys_follow_the_convention(self):
         for table in Base.metadata.sorted_tables:
             assert str(table.primary_key.name) == f"pk_{table.name}"
+
+    def test_no_two_constraints_or_indexes_share_a_name(self):
+        """Constraint and index names are schema-scoped in PostgreSQL.
+
+        Regression guard for a bug that reached a real server. `report_section` and
+        `claim` both declared `UniqueConstraint(..., name="position_unique_per_report")`.
+        An **explicit** name bypasses the metadata naming convention entirely --
+        SQLAlchemy only generates one when none is given -- so both tables asked for
+        the same name. SQLite accepts that; PostgreSQL rejects the second with
+        `relation "position_unique_per_report" already exists`, part-way through
+        `alembic upgrade head`.
+
+        Nothing in the suite caught it, because the suite runs on SQLite. This test
+        does, with no database at all.
+        """
+        from collections import Counter
+
+        names: list[str] = []
+        for table in Base.metadata.sorted_tables:
+            names.extend(str(c.name) for c in table.constraints if c.name)
+            names.extend(str(index.name) for index in table.indexes)
+
+        duplicates = {name: count for name, count in Counter(names).items() if count > 1}
+        assert duplicates == {}, f"names reused across tables: {duplicates}"
+
+    def test_unique_constraints_are_table_prefixed(self):
+        """So a collision is structurally impossible rather than merely unlikely.
+
+        Check constraints get their table prefix from the naming convention's
+        `%(constraint_name)s` token; unique constraints have no such token, so the
+        prefix has to be written into the name.
+        """
+        from sqlalchemy import UniqueConstraint
+
+        offenders = [
+            f"{table.name}.{constraint.name}"
+            for table in Base.metadata.sorted_tables
+            for constraint in table.constraints
+            if isinstance(constraint, UniqueConstraint)
+            and constraint.name
+            and not str(constraint.name).startswith(f"uq_{table.name}")
+        ]
+        assert offenders == [], f"unique constraints without their table prefix: {offenders}"
 
 
 class TestSchemaShape:
