@@ -4,11 +4,12 @@ An evidence-grounded agentic research system. Give it a research topic; it
 produces a research report where **every claim is traceable to a real source**,
 and it measures how well it did.
 
-> **Status: Stage 6 of 11 — foundations, persistence, and web search.**
+> **Status: Stage 7 of 12 — foundations, persistence, and retrieval.**
 > The backend serves configuration, logging, error handling, versioned routing and
 > health; the full data model is implemented and migrated; the frontend routes six
-> pages and reads real system status; web search returns candidate sources.
-> **No LLM calls, no generated text, and nothing is treated as evidence yet.** See
+> pages and reads real system status; web **and academic** search return candidate
+> sources. **No LLM calls, no generated text, nothing downloaded, and nothing treated
+> as evidence yet.** See
 > [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for exactly what is and is not done, stage
 > by stage, and [DATA_MODEL.md](DATA_MODEL.md) for the schema.
 
@@ -92,8 +93,9 @@ reached the backend. **No research functionality.**
 - **Node.js 18+**
 - **PostgreSQL 14+** — needed now, for persistence
 - A **Tavily** key — needed now, for web search ([free tier](https://app.tavily.com))
-- An OpenAI key — *not needed until stage 7*
-- A Semantic Scholar key — *optional; the public API needs none*
+- A Semantic Scholar key — **optional**; the public API works without one, a key only
+  raises the quota
+- An OpenAI key — *not needed until stage 8*
 
 > **⚠️ Python version:** use **3.11**. `torch` / `sentence-transformers` /
 > `chromadb` do not reliably ship wheels for 3.14, so a 3.14 venv will fail or
@@ -167,26 +169,38 @@ Verify:
 
 Run the tests:
 
-### Try a web search
+### Try a search
 
 ```bash
+# Web pages, via Tavily
 backend/.venv/Scripts/python.exe scripts/search_web.py "does retrieval reduce factual errors"
+
+# Academic papers, via Semantic Scholar
+backend/.venv/Scripts/python.exe scripts/search_papers.py "retrieval augmented generation" --limit 5
 ```
 
-Prints the candidate sources Tavily returned, with canonical URLs, identity
-fingerprints and relevance scores. **This costs Tavily credits**, which is why it is a
-script you run deliberately rather than part of the test suite — the suite is fully
-mocked and makes no network requests.
+Both print candidate sources with canonical URLs or DOIs, identity fingerprints, and
+the **evidence depth** of each — `snippet` for a web result, `abstract` for a paper
+whose abstract the provider returned, and `metadata` for one where it did not, meaning
+there is no text for that paper at all.
 
-What it prints are *candidates*: pages a relevance model thinks are topical. Nothing
-has been fetched, read, or checked against a claim, and the service is written so
-nothing downstream can mistake one for evidence.
+The web search costs Tavily credits, which is why both are scripts you run deliberately
+rather than part of the test suite — the suite is fully mocked and makes **no network
+requests**.
+
+What they print are *candidates*: things a ranking model thinks are topical. Nothing
+has been fetched, nothing downloaded, nothing checked against a claim, and the services
+are written so nothing downstream can mistake one for evidence.
+
+Semantic Scholar allows one request per second across all endpoints, so the client
+throttles itself below that before sending — `--limit` controls results per query, not
+request rate.
 
 ### Run the tests
 
 ```bash
 cd backend
-pytest              # 460 tests
+pytest              # 593 tests
 ruff check .        # lint
 mypy app            # types
 ```
@@ -245,8 +259,9 @@ origin and CORS never applies in development. For a deployed build, set
 
 ## Next stage
 
-Stage 6 is the research API and the model-only pipeline: `POST /api/v1/research` over
-the existing service layer, then the first real OpenAI calls. See the
+Stage 8 is fetching and chunking: turning a candidate source into a `document` with
+chunks whose character offsets address its text exactly — the offsets every traceability
+claim in this project depends on. See the
 [roadmap in DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md#roadmap).
 
 ---

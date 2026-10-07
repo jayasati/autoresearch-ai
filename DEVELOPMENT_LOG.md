@@ -5,6 +5,262 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 7 — Academic retrieval (Semantic Scholar) — 2026-10-07
+
+**Goal:** paper search returning candidate academic sources. No PDFs, no RAG, no LLM
+calls.
+
+### What was implemented
+
+| Requirement | How |
+|---|---|
+| API key from environment if available | `SEMANTIC_SCHOLAR_API_KEY`; **absent is valid** — the public API works without one |
+| Configurable result limit | `SEMANTIC_SCHOLAR_MAX_RESULTS`, overridable per call, bounded 1–100 |
+| Search by research topic | `search(topic)`, with optional year range and minimum citation count |
+| Retrieve title, authors, year, abstract, URL, DOI, citation count, paper id | all captured; plus arXiv id, venue, influential citations, publication types |
+| Handle HTTP 429 explicitly | retried, obeying `Retry-After`, **and** penalising the shared throttle |
+| Retry transient failures | 429, timeout, 5xx and connection errors; auth and 4xx never |
+| Timeout handling | `SEMANTIC_SCHOLAR_TIMEOUT_SECONDS`, named in the error |
+| Normalise metadata | DOI, authors, abstract whitespace, year, counts — each with its own rule |
+| Deduplicate papers | by DOI first, then URL, then paper id; first occurrence wins |
+
+### The rate limit drove the design
+
+The provider allows **one request per second, cumulative across all endpoints**, and
+asks callers to stay below that. Handling 429 alone would have been the wrong answer: a
+run with six sub-questions would fire six requests, collect five rejections, and spend
+its time budget backing off from a limit it could simply have respected.
+
+So `rate_limit.py` throttles **before sending**, and two properties make it correct
+rather than approximately correct:
+
+- **It is process-wide, keyed by provider.** "Cumulative across all endpoints" means two
+  service instances must not each get a request per second. A module-level registry gives
+  every caller the same limiter, because the limit belongs to the account, not the object.
+- **A 429 penalises everyone.** Without that, N queued callers each hit the limit, each
+  back off independently, and each retries into the same wall. `penalise()` pushes the
+  shared deadline forward so the process waits once.
+
+**Verified against the real API.** Three queries launched together: all three succeeded,
+30 papers, 5.2s wall clock, 2.7s of it spent throttled. One request still drew a 429 —
+the retry and the shared penalty absorbed it. That observation is why the default
+interval is **1.25s and not 1.1s**: a rejection costs a round trip and a backoff, so a
+little more headroom is cheaper than the retry it avoids.
+
+### A paper with no abstract has no text, and the schema could not say so
+
+Semantic Scholar does not always return an abstract. That left three options, and two of
+them were wrong:
+
+- **Drop those papers.** No — it would bias retrieval toward whatever happens to have an
+  abstract indexed, which is a worse distortion than carrying a source we cannot quote.
+- **Label them `abstract` anyway.** No — a small lie that the groundedness metrics would
+  faithfully repeat, and it would read as a property of the sources rather than a bug.
+- **Add `EvidenceDepth.METADATA`.** Correct, and it cost a migration.
+
+So the enum has four values now, ordered `metadata < snippet < abstract < full_text`,
+with `has_text` false for exactly the first. `AcademicCandidateSource` enforces the
+correspondence in both directions: depth `ABSTRACT` with no abstract is rejected, and so
+is depth `METADATA` with one.
+
+### What that migration uncovered
+
+**The enum columns had no `CHECK` constraint at all.** `enum_column()` passed
+`native_enum=False` meaning "VARCHAR plus a CHECK", DATA_MODEL.md said so in writing, and
+stage-4 commit messages repeated it. It was **not true**: SQLAlchemy 1.4 changed
+`Enum`'s `create_constraint` to default to `False`, so all eleven enum columns were
+unconstrained `VARCHAR(40)`. Python and Pydantic validated; a data-loading script, a
+migration or a `psql` session could have written any string at all.
+
+Worse, **Alembic's autogenerate is silent about it.** Asked to compare the models against
+a database whose `CHECK` did not exist and whose enum was missing a value, it reported
+**zero differences** — so `test_the_migration_matches_the_models` passed while a
+`metadata` insert would have failed at runtime.
+
+Fixed in migration `b4c1e7f29a05`: `create_constraint=True`, and eleven `CHECK`
+constraints added. Two new tests close the blind spot permanently, and neither needs a
+database:
+`test_every_enum_column_is_constrained_to_its_vocabulary` and
+`test_the_enum_check_names_follow_the_convention`. I confirmed the premise by building the
+same column without `create_constraint` and checking that no `CHECK` is rendered.
+
+The trade-off is now stated accurately rather than optimistically: adding an enum member
+requires a migration that drops and recreates the `CHECK`. That is the price of the
+database enforcing the vocabulary, and it is the right way round for a project that
+argues invariants belong in both layers.
+
+### Files added
+
+- `app/services/retrieval/semantic_scholar_service.py` — the service and five
+  normalisation functions
+- `app/services/retrieval/http_backend.py` — shared retry loop, status mapping,
+  `Retry-After` parsing, backoff
+- `app/services/retrieval/rate_limit.py` — `AsyncRateLimiter` and the process-wide registry
+- `migrations/versions/20261007_0930_b4c1e7f29a05_enforce_enum_vocabularies.py`
+- `scripts/search_papers.py` — the manual command
+- `tests/unit/test_semantic_scholar_service.py` (89), `tests/unit/test_rate_limit.py` (20)
+
+### Files changed
+
+- `app/core/constants.py` — `EvidenceDepth.METADATA`, plus `rank` and `has_text`
+- `app/db/base.py` — `create_constraint=True`, with the reason written down
+- `app/services/retrieval/models.py` — `AcademicSearchQuery`,
+  `AcademicCandidateSource`, `AcademicSearchResult`
+- `app/services/retrieval/tavily_service.py` — **refactored** onto the shared backend
+- `app/core/config.py` — eight Semantic Scholar settings
+- `tests/integration/test_schema_portability.py` — two enum-coverage tests
+- `tests/unit/test_schema_validation.py` — the `EvidenceDepth` vocabulary test
+- `.env.example`, `README.md`, `DATA_MODEL.md`, `app/services/README.md`
+
+### Commands used
+
+```bash
+cd backend
+./.venv/Scripts/python.exe -m alembic upgrade head
+./.venv/Scripts/python.exe -m alembic downgrade -1   # and back up again
+./.venv/Scripts/python.exe -m pytest ; ruff check . ; mypy app
+
+# against the real API
+backend/.venv/Scripts/python.exe scripts/search_papers.py "retrieval augmented generation reduces hallucination" --limit 4
+backend/.venv/Scripts/python.exe scripts/init_db.py   # applied b4c1e7f29a05 to Neon
+```
+
+### Tests performed
+
+**593 backend tests, all passing** (133 new). The five required scenarios, all mocked:
+
+| Required | Where | Covers |
+|---|---|---|
+| successful search | `TestSuccessfulSearch`, `TestTheRequestSent` | every requested field, abstract vs metadata depth, PDF URL recorded but not fetched, key optional |
+| no results | `TestNoResults` | empty `data`, `total: 0` with **no** `data` key, records with no id or title counted as malformed |
+| 429 | `TestRateLimiting` | retried then succeeding, attempts exhausted, `Retry-After` obeyed, **the shared limiter penalised**, a 5xx *not* penalising it |
+| timeout | `TestTimeout` | retried then raising, configured value in the message, timeout on the client |
+| malformed response | `TestMalformedResponse` | non-JSON, array instead of object, no `data` and no `total`, wrong type, **not retried**, one bad record not discarding the good ones |
+
+Plus `TestDeduplication` (same DOI under two paper ids; DOI spellings normalised before
+comparison; papers with no DOI still fingerprinted),
+`TestMetadataNormalisation` (nine DOI spellings to one value, whitespace, author order,
+implausible years and negative counts), `TestCandidatesAreNotEvidence`, and
+`test_rate_limit.py` with a fake clock so the throttle is asserted rather than waited for.
+
+**No test makes a network request.** The real calls were the two manual commands, run
+deliberately.
+
+### Result
+
+| Check | Result |
+|---|---|
+| `pytest` | **593 passed** in 68s |
+| `ruff check .` | All checks passed |
+| `mypy app` | Success: no issues found in 56 source files |
+| `alembic upgrade head` | revision `b4c1e7f29a05`, verified down and up again |
+| migration applied to **Neon** | 11 enum constraints added; 51 named CHECKs total; 0 pending differences; 0 rows |
+| live PostgreSQL rejects a bad enum | confirmed — `'telepathy'` refused by the database, not just Python |
+| manual paper search, real API | **4 papers, all with DOIs and abstracts, 2.2s, 1 attempt** |
+| throttle, real API | 3 concurrent queries → 30 papers, 5.2s, 2.7s throttled, one 429 absorbed |
+| Tavily's 58 tests after the refactor | still passing |
+| frontend | unchanged — 67 tests still passing |
+
+### Decisions made
+
+1. **Throttle before sending, not just handle 429.** With a limit of one request per
+   second, a retry-only design spends the run's budget on rejections. The limiter is
+   process-wide because the limit is per account.
+
+2. **A 429 penalises the shared limiter.** Backing off only the rejected caller leaves
+   the others queued to make the same mistake in turn. A 5xx deliberately does *not*
+   penalise it — a server error is not a rate limit, and slowing every caller for one bad
+   response would turn it into a project-wide delay.
+
+3. **An absent Semantic Scholar key is not a misconfiguration.** The public API works
+   without one. `capabilities` still reports `semantic_scholar: true` with no key,
+   because reporting false would tell the user to fix something that is not broken — and
+   there is no `SearchNotConfigured` on this path, unlike Tavily's.
+
+4. **`EvidenceDepth.METADATA` rather than a convenient lie.** See above. The depth has to
+   describe what is actually there, because every later measurement built on it inherits
+   the error otherwise.
+
+5. **Deduplicate by DOI first.** Semantic Scholar indexes preprints and published versions
+   separately; they are one paper. DOI spellings are normalised before comparison, by
+   resolver **host** rather than by prefix matching — the prefix approach missed
+   `http://dx.doi.org/...` because `{http, https} × {doi.org, dx.doi.org}` is four
+   spellings and the first match won.
+
+6. **Paper id as the last-resort fingerprint.** A paper with neither DOI nor URL is still
+   a source; leaving it unfingerprinted would make every such paper collapse into one row.
+
+7. **The retry logic was extracted, not duplicated.** `http_backend.py` now holds the
+   loop, status mapping and backoff for both providers. Duplicated retry logic is where a
+   bug gets fixed in one copy and lives on in the other. Tavily's 58 tests were the safety
+   net, and two of them caught a real regression: the generic base had lost the *name of
+   the setting to fix* in an auth error, which is the most useful part of that message.
+
+8. **`search_many` has no semaphore here.** The limiter already serialises these to one
+   per second, so a concurrency cap would be a second, weaker constraint doing nothing.
+   The searches are still launched together so each one's turn comes up as soon as the
+   limiter allows.
+
+9. **The open-access PDF URL is recorded, not fetched.** Keeping the address costs nothing
+   and saves the fetch stage a lookup. A test asserts only one request was made and that
+   it was the search.
+
+### Issues found
+
+1. **The enum `CHECK` constraints did not exist**, and the documentation claimed they
+   did — for two stages. Detailed above. The lesson is narrow and worth keeping: a
+   default changed under a library upgrade, the code still read correctly, and
+   autogenerate could not see the gap. Only a test that asks "does the database actually
+   reject this?" would have caught it.
+
+2. **Alembic reported zero differences for a missing enum member.** So
+   `test_the_migration_matches_the_models` is necessary but not sufficient, and the
+   documentation now says which kinds of drift it cannot see.
+
+3. **1.1s was not enough headroom.** Observed, not guessed: three real requests at that
+   spacing drew one 429. Widened to 1.25s.
+
+4. **A constraint-naming collision, again — this time doubled.** Passing an
+   already-prefixed name to `batch.create_check_constraint` produced
+   `ck_document_ck_document_evidencedepth`, because the naming convention prepends
+   `ck_<table>_` to whatever it is given. Fixed by passing the bare token, and verified by
+   comparing the migrated schema's constraint names against what `CreateTable` generates
+   from the models — all eleven match.
+
+5. **Two of my own test assertions were wrong, not the code.** The concurrency test
+   expected waits of `0,1,2,3` when the correct behaviour is `0,1,1,1` — waits are
+   computed as each caller takes the lock, so what matters is the spacing of *send times*,
+   which the test now asserts. And the 429-penalty test checked the limiter *after* the
+   search, by which time the retry had already served the penalty; it now asserts the
+   limiter was told.
+
+### Not implemented
+
+**No PDFs are downloaded.** No fetching of any kind — the open-access PDF address is
+recorded and nothing more.
+
+**No RAG.** No chunking, no embeddings, no vector store, no similarity search.
+
+**No LLM generation.** No OpenAI calls, no prompts, no planning, no synthesis, no claim
+extraction, no verification, no citation validation, no conflict detection, no metrics,
+no benchmark.
+
+**Nothing retrieved is treated as evidence.** Neither service creates an `Evidence`,
+`Citation` or `ResearchSource` row; neither touches the database at all.
+
+Also absent: any API endpoint exposing search. `POST /api/v1/research` still does not
+exist, so the frontend's submit button stays disabled.
+
+### Next stage
+
+**Stage 8 — fetching and chunking.** URL to clean text with politeness and timeouts, then
+the chunker that preserves `(start_char, end_char)` — the offsets every traceability claim
+in this project depends on. That is the stage where a candidate becomes a `document`,
+where `evidence_depth` finally reaches `full_text`, and where `requirements-ml.txt` is
+needed for the first time.
+
+---
+
 ## Stage 6 — Web retrieval (Tavily) — 2026-10-06
 
 **Goal:** a web search service that returns **candidate sources**. No LLM calls, no
@@ -1225,14 +1481,13 @@ benchmark, and no research UI. Every one of these has a directory and a
 Each stage ends with something runnable and testable. No stage depends on a
 later one.
 
-Stages 1–6 are done; see the entries above. The order has shifted twice: the frontend
-arrived before the data model, and web retrieval was brought forward ahead of the
-research API and the model-only pipeline — so retrieval exists before there is anything
-to generate with it, which is the right way round for a project whose point is
+Stages 1–7 are done; see the entries above. The order has shifted twice: the frontend
+arrived before the data model, and both retrieval providers were brought forward ahead of
+the research API and the model-only pipeline — so retrieval exists before there is
+anything to generate with it, which is the right way round for a project whose point is
 grounding.
 
-### Stage 7 — Academic search, fetching and chunking
-- Semantic Scholar search, over the same exception and candidate-source shapes
+### Stage 8 — Fetching, chunking and the vector store
 - Fetcher: URL to clean text, with politeness and timeouts
 - Chunker preserving `(start_char, end_char)` — the offsets every traceability claim
   depends on
@@ -1240,9 +1495,9 @@ grounding.
 - **First stage that needs `requirements-ml.txt`.** Install it on the Python 3.11
   venv; whether torch and chromadb resolve there is still unverified.
 - **Done when:** a candidate source becomes a `document` with chunks whose offsets
-  address its text exactly, and `evidence_depth` stops being `snippet`.
+  address its text exactly, and `evidence_depth` finally reaches `full_text`.
 
-### Stage 8 — Research API and the model-only pipeline (the baseline)
+### Stage 9 — Research API and the model-only pipeline (the baseline)
 - `POST /api/v1/research`, `GET /api/v1/research/{id}`, `GET /api/v1/research`
   over the stage-5 service layer
 - OpenAI client wrapper with retry, timeout, and `llm_call_log` writing
@@ -1252,20 +1507,20 @@ grounding.
   baseline the other two modes must beat — and the New Research form's submit button
   is enabled.
 
-### Stage 9 — Evidence layer
+### Stage 10 — Evidence layer
 - Claim extraction, evidence linking, per-claim verification
 - Citation validation (valid / broken / misattributed / fabricated)
 - Conflict detection, traceability serialization
 - **Done when:** a report comes back annotated — every claim carries a verdict
   and a quoted supporting span, or an explicit "no evidence".
 
-### Stage 10 — Evaluation and benchmark
+### Stage 11 — Evaluation and benchmark
 - Metrics module; benchmark harness over a committed topic set
 - Comparison tables across the three modes
 - **Done when:** running the benchmark regenerates the comparison table from
   scratch, and the numbers support (or refute) the project's hypothesis.
 
-### Stage 11 — Wire the UI to real data, harden, write up
+### Stage 12 — Wire the UI to real data, harden, write up
 - Replace each placeholder with the real view: run timeline, report with inline
   citations, claim inspector with evidence drill-down, benchmark dashboard
 - Background job execution, caching, retry on partial failure

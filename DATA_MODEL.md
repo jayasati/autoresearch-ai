@@ -151,6 +151,20 @@ abstract. A claim grounded in full text and a claim grounded in an abstract are 
 equally well supported, and without this column the groundedness metrics would
 overstate the result.
 
+The vocabulary has four values, ordered by how much text we actually have:
+
+| Depth | Meaning |
+|---|---|
+| `metadata` | title and bibliography only — **no text at all** |
+| `snippet` | a search-result extract the provider chose |
+| `abstract` | the paper's abstract, no body |
+| `full_text` | fetched and extracted body text |
+
+`metadata` exists because Semantic Scholar does not always return an abstract. Such a
+paper is still a real source worth recording — dropping it would bias retrieval toward
+whatever happens to be well indexed — but it cannot support a claim until something
+fetches its text. `EvidenceDepth.has_text` is `False` for exactly that case.
+
 ---
 
 ### Report
@@ -413,9 +427,25 @@ API, the frontend and the benchmark tables all speak in **values** (`model_only`
 value — otherwise raw SQL and every export would disagree with the API about what a
 mode is called. A test asserts the stored string directly.
 
-`native_enum=False` renders `VARCHAR` + `CHECK` rather than a PostgreSQL `ENUM`
-type, which makes adding a member a data migration instead of a DDL one, and lets the
-same model run against SQLite in tests.
+`native_enum=False` renders `VARCHAR` plus a `CHECK` constraint rather than a
+PostgreSQL `ENUM` type. A native enum can only be altered outside a transaction on
+older servers and can never have a value removed; a `CHECK` can be dropped and
+recreated in one migration, and the same model runs against SQLite in tests.
+
+> **This was not true until stage 7, and the documentation said it was.**
+> SQLAlchemy 1.4 changed `Enum`'s `create_constraint` to default to `False`, so every
+> enum column was an unconstrained `VARCHAR(40)` — validated by Python and Pydantic,
+> but writable with any string at all from a script, a migration or a `psql` session.
+> Migration `b4c1e7f29a05` adds the eleven missing constraints.
+>
+> Alembic's autogenerate **cannot** catch this: it reported zero differences against a
+> schema whose `CHECK` did not exist. `test_every_enum_column_is_constrained_to_its_vocabulary`
+> is the check that can, and it needs no database.
+>
+> Consequence to know: adding an enum member now requires a migration that drops and
+> recreates the `CHECK`. That is the price of the database enforcing the vocabulary,
+> and it is the right way round for a project that argues invariants belong in both
+> layers.
 
 ---
 
