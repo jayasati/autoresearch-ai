@@ -73,8 +73,33 @@ class Settings(BaseSettings):
     TAVILY_BACKOFF_MAX_SECONDS: float = 10.0
 
     # --- Academic search (Semantic Scholar) ---
+    # The public API works without a key; a key raises the quota. So an absent key is
+    # not a misconfiguration here, unlike every other credential in this file.
     SEMANTIC_SCHOLAR_API_KEY: str | None = None
+    SEMANTIC_SCHOLAR_BASE_URL: str = "https://api.semanticscholar.org"
     SEMANTIC_SCHOLAR_MAX_RESULTS: int = 10
+
+    # Semantic Scholar allows ONE REQUEST PER SECOND, cumulative across all
+    # endpoints, and asks callers to stay below that threshold. This is a client-side
+    # throttle applied before sending, not just 429 handling: with a limit this tight,
+    # firing six sub-question searches at once would collect five rejections and spend
+    # the run's budget backing off from a limit it could simply have respected.
+    #
+    # 1.25s, not 1.1s, on evidence: three real requests spaced 1.1s apart still drew
+    # one 429. The retry and the shared penalty absorbed it, but a rejection costs an
+    # extra round trip and a backoff, so a little more headroom is cheaper than the
+    # retry it avoids.
+    SEMANTIC_SCHOLAR_MIN_INTERVAL_SECONDS: float = 1.25
+
+    # Longer than Tavily's: Semantic Scholar is slower, and the throttle means a
+    # queued request may wait a second or more before it is even sent.
+    SEMANTIC_SCHOLAR_TIMEOUT_SECONDS: float = 30.0
+
+    # One more attempt than Tavily, with a longer floor, because a 429 here is an
+    # expected condition rather than an anomaly.
+    SEMANTIC_SCHOLAR_MAX_ATTEMPTS: int = 4
+    SEMANTIC_SCHOLAR_BACKOFF_BASE_SECONDS: float = 1.0
+    SEMANTIC_SCHOLAR_BACKOFF_MAX_SECONDS: float = 30.0
 
     # --- Structured data (PostgreSQL) ---
     # The single source of the connection string. Never assembled from separate
@@ -203,6 +228,9 @@ class Settings(BaseSettings):
         return {
             "openai": self._is_real_credential(self.OPENAI_API_KEY),
             "tavily": self._is_real_credential(self.TAVILY_API_KEY),
+            # True regardless of the key: the public API is usable without one, and a
+            # key only raises the quota. Reporting False would tell the user to go and
+            # fix something that is not broken.
             "semantic_scholar": True,
             # A DATABASE_URL still holding the shipped CHANGEME placeholder is not
             # a configured database, for the same reason sk-replace-me is not a key.

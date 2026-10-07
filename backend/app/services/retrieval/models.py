@@ -239,3 +239,258 @@ class WebSearchResult(ReadModel):
     @property
     def unique_domain_count(self) -> int:
         return len(self.domains)
+
+
+# --------------------------------------------------------------------------- #
+# Academic search
+# --------------------------------------------------------------------------- #
+
+
+class AcademicSearchQuery(WriteModel):
+    """One paper search to run."""
+
+    query: str = Field(min_length=1, max_length=400)
+    limit: int = Field(default=10, ge=1, le=100)
+    year_from: int | None = Field(default=None, ge=1400, le=2200)
+    year_to: int | None = Field(default=None, ge=1400, le=2200)
+    min_citation_count: int | None = Field(default=None, ge=0)
+
+    @field_validator("query")
+    @classmethod
+    def query_must_be_substantive(cls, value: str) -> str:
+        collapsed = " ".join(value.split())
+        if not collapsed:
+            raise ValueError("query must not be blank")
+        return collapsed
+
+    @model_validator(mode="after")
+    def year_range_must_make_sense(self) -> "AcademicSearchQuery":
+        if (
+            self.year_from is not None
+            and self.year_to is not None
+            and self.year_from > self.year_to
+        ):
+            raise ValueError(f"year_from ({self.year_from}) is after year_to ({self.year_to})")
+        return self
+
+    @property
+    def year_filter(self) -> str | None:
+        """Semantic Scholar's `year` parameter: 2020, 2020-, -2020, or 2016-2020."""
+        if self.year_from is None and self.year_to is None:
+            return None
+        if self.year_from is not None and self.year_to is not None:
+            if self.year_from == self.year_to:
+                return str(self.year_from)
+            return f"{self.year_from}-{self.year_to}"
+        if self.year_from is not None:
+            return f"{self.year_from}-"
+        return f"-{self.year_to}"
+
+
+class AcademicCandidateSource(ReadModel):
+    """A paper a search returned. **A candidate, not evidence.**
+
+    Same rule as `CandidateSource`, and for the same reasons: nothing has been read
+    beyond what the provider volunteered, nothing is linked to a claim, and this
+    carries no `relation`, no verdict and no "supports" field.
+
+    One difference matters. A web result always comes with a snippet; a paper does
+    **not** always come with an abstract. When Semantic Scholar returns no abstract we
+    have the title and the bibliography and no text at all, so `evidence_depth` is
+    `METADATA` rather than `ABSTRACT`. Calling it `ABSTRACT` would be a small lie that
+    the groundedness metrics would faithfully repeat later.
+
+    Such papers are still returned, not dropped: discarding every paper whose abstract
+    the provider failed to index would bias retrieval toward whatever happens to be
+    well indexed, which is a worse distortion than carrying a source we cannot yet
+    quote. The fetch stage is what turns it into text.
+    """
+
+    paper_id: str = Field(description="Semantic Scholar's own identifier for the paper.")
+
+    title: str
+    authors: list[str] = Field(
+        default_factory=list, description="Author names in the order given."
+    )
+    year: int | None = Field(default=None, ge=1400, le=2200)
+
+    abstract: str | None = Field(
+        default=None,
+        description=(
+            "The abstract as published, when the provider has one. Not quotable as "
+            "support for a claim yet -- it has not been linked to one. Often absent."
+        ),
+    )
+
+    url: str | None = Field(default=None, description="Landing page for the paper.")
+    doi: str | None = Field(default=None, description="Normalised: lower-cased, bare.")
+    arxiv_id: str | None = None
+    external_ids: dict[str, str] = Field(
+        default_factory=dict, description="Every identifier the provider returned."
+    )
+
+    venue: str | None = None
+    citation_count: int | None = Field(default=None, ge=0)
+    influential_citation_count: int | None = Field(default=None, ge=0)
+    publication_types: list[str] = Field(default_factory=list)
+
+    open_access_pdf_url: str | None = Field(
+        default=None,
+        description=(
+            "Where an open-access PDF would be, when the provider knows of one. "
+            "**Recorded, never downloaded** -- fetching belongs to a later stage. "
+            "Keeping the address costs nothing and saves that stage a lookup."
+        ),
+    )
+
+    fingerprint: str = Field(
+        description="Identity hash: DOI when there is one, else the URL, else the paper id."
+    )
+    rank: int = Field(ge=0, description="Position in the provider's ranking, 0-based.")
+
+    source_type: Literal[SourceType.ACADEMIC] = Field(
+        default=SourceType.ACADEMIC,
+        description="Always academic. This service only searches papers.",
+    )
+
+    evidence_depth: EvidenceDepth = Field(
+        description=(
+            "ABSTRACT when the provider returned one, METADATA when it did not. "
+            "Never FULL_TEXT: nothing has been fetched."
+        ),
+    )
+
+    retrieved_at: datetime = Field(default_factory=utcnow)
+    provider: str = Field(default="semantic_scholar")
+    query: str = Field(description="The query that produced this candidate.")
+
+    @field_validator("evidence_depth")
+    @classmethod
+    def depth_cannot_claim_full_text(cls, value: EvidenceDepth) -> EvidenceDepth:
+        """Nothing has been fetched, so full text is not representable here.
+
+        A plain `Literal` cannot express "one of two", so this is a validator -- but it
+        is the same rule `CandidateSource` enforces with a `Literal`.
+        """
+        if value not in (EvidenceDepth.METADATA, EvidenceDepth.ABSTRACT):
+            raise ValueError(
+                "an academic search result has at most an abstract; "
+                f"{value.value!r} would claim text that has not been fetched"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def depth_must_match_whether_there_is_an_abstract(self) -> "AcademicCandidateSource":
+        """The depth has to describe what is actually here.
+
+        This is the check that keeps the groundedness metrics honest at the source. If
+        depth could say ABSTRACT while `abstract` is None, every later measurement built
+        on depth would inherit the error -- and it would read as a property of the
+        sources rather than a bug.
+        """
+        if self.abstract and self.evidence_depth is not EvidenceDepth.ABSTRACT:
+            raise ValueError("an abstract is present, so evidence_depth must be abstract")
+        if not self.abstract and self.evidence_depth is not EvidenceDepth.METADATA:
+            raise ValueError("there is no abstract, so evidence_depth must be metadata")
+        return self
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def has_text(self) -> bool:
+        """Whether there is anything to quote. False for a metadata-only paper."""
+        return self.evidence_depth.has_text
+
+    @property
+    def citation_label_hint(self) -> str:
+        """A human-readable label for a source list. Not a citation.
+
+        Produces forms like "Smith et al. (2021)". It exists so a person reading the
+        retrieved sources can recognise them; nothing in the pipeline cites by it,
+        because a citation has to resolve to an identifier.
+        """
+        if not self.authors:
+            stem = "Unknown"
+        elif len(self.authors) == 1:
+            parts = self.authors[0].split()
+            stem = parts[-1] if parts else self.authors[0]
+        else:
+            parts = self.authors[0].split()
+            stem = f"{parts[-1] if parts else self.authors[0]} et al."
+        return f"{stem} ({self.year})" if self.year else stem
+
+    def to_source_create(self):
+        """Convert to the persistence schema for a `source` row.
+
+        Returns a **`SourceCreate`** and nothing else, for the same reason as the web
+        candidate: evidence needs a fetched chunk and a citation needs a claim, and a
+        search result justifies neither.
+        """
+        from app.schemas.source import SourceCreate
+
+        return SourceCreate(
+            source_type=SourceType.ACADEMIC,
+            url=self.url,
+            canonical_url=canonicalize_url(self.url) if self.url else None,
+            doi=self.doi,
+            external_id=self.paper_id,
+            title=self.title,
+            authors=self.authors or None,
+            venue=self.venue,
+            publication_year=self.year,
+            citation_count=self.citation_count,
+        )
+
+
+class AcademicSearchResult(ReadModel):
+    """The outcome of one paper search.
+
+    `metadata_only_count` is reported separately from the total because "eight papers
+    found" and "eight papers found, five of which we have no text for" support very
+    different conclusions, and only the second one is true.
+    """
+
+    query: str
+    provider: str = "semantic_scholar"
+    candidates: list[AcademicCandidateSource] = Field(default_factory=list)
+
+    requested_limit: int = Field(ge=0)
+    total_available: int | None = Field(
+        default=None,
+        ge=0,
+        description="How many the provider says match, usually far more than were returned.",
+    )
+    raw_result_count: int = Field(default=0, ge=0, description="Before deduplication.")
+    duplicates_removed: int = Field(default=0, ge=0)
+    malformed_results: int = Field(default=0, ge=0)
+
+    elapsed_ms: float = Field(default=0.0, ge=0.0)
+    attempts: int = Field(default=1, ge=1)
+    throttled_ms: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Time spent waiting on the client-side rate limit, not on the network.",
+    )
+    retrieved_at: datetime = Field(default_factory=utcnow)
+
+    @property
+    def is_empty(self) -> bool:
+        """No candidates. A legitimate answer, not a failure."""
+        return not self.candidates
+
+    @property
+    def with_abstracts(self) -> list[AcademicCandidateSource]:
+        return [c for c in self.candidates if c.evidence_depth is EvidenceDepth.ABSTRACT]
+
+    @property
+    def metadata_only(self) -> list[AcademicCandidateSource]:
+        """Papers we found but have no text for. They cannot support a claim yet."""
+        return [c for c in self.candidates if c.evidence_depth is EvidenceDepth.METADATA]
+
+    @property
+    def metadata_only_count(self) -> int:
+        return len(self.metadata_only)
+
+    @property
+    def with_doi(self) -> list[AcademicCandidateSource]:
+        """Papers carrying a DOI -- the identifier a citation can be validated against."""
+        return [c for c in self.candidates if c.doi]
