@@ -90,9 +90,21 @@ def enum_column(enum_cls: type, **kwargs) -> SAEnum:
       The API, the frontend and the benchmark tables all speak in values, so
       without this the database would be the one place using a different
       vocabulary -- and every raw SQL query would silently disagree.
-    - `native_enum=False` renders VARCHAR + CHECK rather than a PostgreSQL ENUM
-      type. Adding a member then becomes a data migration instead of a DDL one,
-      and the same model works against SQLite in tests.
+    - `native_enum=False` renders VARCHAR plus a CHECK constraint rather than a
+      PostgreSQL ENUM type. A native enum can only be altered outside a
+      transaction on older servers and can never have a value removed; a CHECK can
+      be dropped and recreated in one migration.
+    - `create_constraint=True` is **not** the default. SQLAlchemy 1.4 changed it to
+      False, which means an enum column silently becomes an unconstrained VARCHAR
+      and the database will accept any string at all. The Python layer still
+      validates, but a data-loading script, a migration or a psql session would
+      not -- exactly the gap this project closes everywhere else by enforcing an
+      invariant in both places.
+
+    Consequence worth knowing: adding a member to an enum now requires a migration
+    that drops and recreates the CHECK. Alembic's autogenerate does **not** detect
+    that change, so `tests/integration/test_schema_portability.py` asserts the
+    constraint covers every member.
     """
     return SAEnum(
         enum_cls,
@@ -100,5 +112,6 @@ def enum_column(enum_cls: type, **kwargs) -> SAEnum:
         length=40,
         values_callable=lambda e: [m.value for m in e],
         validate_strings=True,
+        create_constraint=True,
         **kwargs,
     )

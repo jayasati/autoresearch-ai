@@ -77,9 +77,36 @@ class EvidenceDepth(StrEnum):
     groundedness metrics would overstate the result.
     """
 
+    METADATA = "metadata"        # title and bibliographic data only -- no text at all
     SNIPPET = "snippet"          # a search-result snippet only
     ABSTRACT = "abstract"        # paper abstract, no full text
     FULL_TEXT = "full_text"      # fetched and extracted body text
+
+    @property
+    def rank(self) -> int:
+        """How much text we have, 0 (none) to 3 (the whole document).
+
+        Ordered so metrics can ask "was this claim grounded in more than an
+        abstract" without hard-coding the comparison in several places.
+        """
+        return {
+            EvidenceDepth.METADATA: 0,
+            EvidenceDepth.SNIPPET: 1,
+            EvidenceDepth.ABSTRACT: 2,
+            EvidenceDepth.FULL_TEXT: 3,
+        }[self]
+
+    @property
+    def has_text(self) -> bool:
+        """False for METADATA: there is nothing to quote, so nothing to verify against.
+
+        A paper whose abstract the provider did not return is still a real source
+        worth recording -- dropping it would bias retrieval toward whatever happens
+        to have an abstract indexed -- but it cannot support a claim until something
+        fetches its text. Saying so is the honest alternative to labelling it
+        "abstract" and hoping nobody checks.
+        """
+        return self is not EvidenceDepth.METADATA
 
 
 class PipelineStage(StrEnum):

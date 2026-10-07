@@ -55,10 +55,59 @@ class TestPostgresCompilation:
         assert "TIMESTAMP WITH TIME ZONE" in ddl
 
     def test_enums_render_as_varchar_not_a_native_postgres_enum(self):
-        """Chosen so adding a member is a data migration, not a DDL one."""
+        """A native enum can only be altered outside a transaction on older servers
+        and can never have a value removed; a CHECK can be dropped and recreated."""
         ddl = str(CreateTable(Base.metadata.tables["run_configuration"]).compile(dialect=PG))
         assert "mode VARCHAR(40)" in ddl
         assert "CREATE TYPE" not in ddl
+
+    def test_every_enum_column_is_constrained_to_its_vocabulary(self):
+        """The database must reject a value outside the enum, not just Python.
+
+        Regression guard for a gap that survived two stages. `enum_column()` passed
+        `native_enum=False` meaning "VARCHAR plus a CHECK", and the documentation said
+        so -- but SQLAlchemy 1.4 changed `create_constraint` to default to False, so
+        every enum column was an unconstrained VARCHAR. A data-loading script or a
+        psql session could have written any string at all.
+
+        Alembic's autogenerate cannot catch this: it reported **zero** differences
+        against a schema whose CHECK did not exist. So the check lives here.
+        """
+        # The values are bind parameters in the metadata (`IN (__[POSTCOMPILE_...])`)
+        # and only inline when compiled for a dialect, so the rendered DDL is what has
+        # to be inspected -- and it is also what would actually be executed.
+        unconstrained = []
+        for table in Base.metadata.sorted_tables:
+            enum_columns = [c for c in table.columns if getattr(c.type, "enums", None)]
+            if not enum_columns:
+                continue
+            ddl = str(CreateTable(table).compile(dialect=PG))
+            for column in enum_columns:
+                if f"ck_{table.name}_{column.type.name}" not in ddl:
+                    unconstrained.append(f"{table.name}.{column.name} has no CHECK at all")
+                    continue
+                missing = [value for value in column.type.enums if f"'{value}'" not in ddl]
+                if missing:
+                    unconstrained.append(f"{table.name}.{column.name} missing {missing}")
+
+        assert unconstrained == [], (
+            "enum columns whose CHECK does not cover every member: " + "; ".join(unconstrained)
+        )
+
+    def test_the_enum_check_names_follow_the_convention(self):
+        """So the migration that drops one has a stable name, and a freshly created
+        schema and a migrated one agree."""
+        for table in Base.metadata.sorted_tables:
+            for column in table.columns:
+                if not getattr(column.type, "enums", None):
+                    continue
+                expected = f"ck_{table.name}_{column.type.name}"
+                names = {
+                    str(c.name)
+                    for c in table.constraints
+                    if type(c).__name__ == "CheckConstraint"
+                }
+                assert expected in names, f"{table.name}.{column.name}: expected {expected}"
 
 
 class TestConstraintNaming:

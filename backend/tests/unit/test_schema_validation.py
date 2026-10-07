@@ -659,4 +659,21 @@ class TestPlaceholderDiscipline:
         assert source.url.endswith(".invalid/page")
 
     def test_evidence_depth_vocabulary_is_closed(self):
-        assert {d.value for d in EvidenceDepth} == {"snippet", "abstract", "full_text"}
+        assert {d.value for d in EvidenceDepth} == {
+            "metadata",
+            "snippet",
+            "abstract",
+            "full_text",
+        }
+
+    def test_evidence_depth_is_ordered_from_no_text_to_the_whole_document(self):
+        """So a metric can ask "was this grounded in more than an abstract" without
+        hard-coding the comparison in several places."""
+        ranks = [EvidenceDepth(v).rank for v in ("metadata", "snippet", "abstract", "full_text")]
+        assert ranks == [0, 1, 2, 3]
+
+    def test_only_metadata_depth_means_there_is_nothing_to_quote(self):
+        """A paper whose abstract the provider did not return is a real source, but it
+        cannot support a claim until something fetches its text."""
+        assert EvidenceDepth.METADATA.has_text is False
+        assert all(d.has_text for d in EvidenceDepth if d is not EvidenceDepth.METADATA)
