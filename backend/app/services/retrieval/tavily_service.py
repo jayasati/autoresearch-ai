@@ -20,28 +20,22 @@ into the pipeline at exactly the layer that is supposed to be collecting evidenc
 about the world. `include_raw_content` is off for the same kind of reason: full page
 text belongs to the fetch stage, and claiming it here would make every candidate look
 better-grounded than it is.
+
+The retry loop, status mapping, `Retry-After` parsing and backoff live in
+`http_backend.py`, shared with Semantic Scholar — duplicated retry logic is the kind
+of thing where a bug gets fixed in one copy and lives on in the other.
 """
 
 import asyncio
 import logging
-import random
-import time
 from collections.abc import Sequence
 
-import httpx
-
-from app.core.config import Settings, get_settings
 from app.services.retrieval.exceptions import (
     RetrievalError,
-    SearchAuthenticationFailed,
     SearchNotConfigured,
-    SearchProviderUnavailable,
-    SearchRateLimited,
-    SearchRequestInvalid,
     SearchResponseInvalid,
-    SearchTimeout,
-    SearchUnreachable,
 )
+from app.services.retrieval.http_backend import HttpSearchBackend
 from app.services.retrieval.models import (
     CandidateSource,
     SearchDepth,
@@ -55,7 +49,7 @@ PROVIDER = "tavily"
 SEARCH_PATH = "/search"
 
 
-class TavilySearchService:
+class TavilySearchService(HttpSearchBackend):
     """Searches the web and returns candidate sources.
 
     Construct with no arguments for normal use. Pass `client` to supply a prepared
@@ -63,44 +57,40 @@ class TavilySearchService:
     patching anything.
     """
 
-    def __init__(
-        self,
-        settings: Settings | None = None,
-        client: httpx.AsyncClient | None = None,
-        sleep=asyncio.sleep,
-    ) -> None:
-        self.settings = settings or get_settings()
-        self._client = client
-        self._owns_client = client is None
-        # Injectable so retry tests do not actually wait. Backoff is real behaviour
-        # worth asserting on, and a test that sleeps for it is a test nobody runs.
-        self._sleep = sleep
+    provider = PROVIDER
 
-    # --- lifecycle -----------------------------------------------------------
+    # --- configuration the shared backend asks for ---------------------------
 
     @property
-    def client(self) -> httpx.AsyncClient:
-        if self._client is None:
-            self._client = httpx.AsyncClient(
-                base_url=self.settings.TAVILY_BASE_URL,
-                timeout=httpx.Timeout(self.settings.TAVILY_TIMEOUT_SECONDS),
-                headers={"Content-Type": "application/json"},
-            )
-        return self._client
+    def base_url(self) -> str:
+        return self.settings.TAVILY_BASE_URL
 
-    async def aclose(self) -> None:
-        """Close the client, but only if this service created it."""
-        if self._client is not None and self._owns_client:
-            await self._client.aclose()
-            self._client = None
+    @property
+    def timeout_seconds(self) -> float:
+        return self.settings.TAVILY_TIMEOUT_SECONDS
 
-    async def __aenter__(self) -> "TavilySearchService":
-        return self
+    @property
+    def max_attempts(self) -> int:
+        return self.settings.TAVILY_MAX_ATTEMPTS
 
-    async def __aexit__(self, *_exc_info) -> None:
-        await self.aclose()
+    @property
+    def backoff_base_seconds(self) -> float:
+        return self.settings.TAVILY_BACKOFF_BASE_SECONDS
 
-    # --- configuration -------------------------------------------------------
+    @property
+    def backoff_max_seconds(self) -> float:
+        return self.settings.TAVILY_BACKOFF_MAX_SECONDS
+
+    def auth_headers(self) -> dict[str, str]:
+        """The key goes in a header, never in the body.
+
+        A request body is far more likely to end up in a log than a header is.
+        """
+        return {"Authorization": f"Bearer {self._require_key()}"}
+
+    @property
+    def credential_setting(self) -> str:
+        return "TAVILY_API_KEY"
 
     @property
     def is_configured(self) -> bool:
@@ -154,9 +144,11 @@ class TavilySearchService:
             )
         )
 
-        started = time.perf_counter()
-        payload, attempts = await self._post_with_retries(request)
-        elapsed_ms = (time.perf_counter() - started) * 1000
+        started = self.now()
+        payload, attempts = await self.request_json(
+            "POST", SEARCH_PATH, json_body=self._request_body(request)
+        )
+        elapsed_ms = (self.now() - started) * 1000
 
         raw_results = payload.get("results")
         if not isinstance(raw_results, list):
@@ -222,7 +214,7 @@ class TavilySearchService:
 
         return list(await asyncio.gather(*(run_one(q) for q in queries)))
 
-    # --- HTTP ----------------------------------------------------------------
+    # --- the request body ----------------------------------------------------
 
     def _request_body(self, request: WebSearchQuery) -> dict:
         body: dict = {
@@ -241,164 +233,6 @@ class TavilySearchService:
         if request.exclude_domains:
             body["exclude_domains"] = list(request.exclude_domains)
         return body
-
-    async def _post_with_retries(self, request: WebSearchQuery) -> tuple[dict, int]:
-        """POST the search, retrying only what could plausibly succeed.
-
-        Returns `(payload, attempts)`. The attempt count is reported in the result
-        because a search that needed three tries is a cost worth seeing in the logs
-        and in the benchmark's timing.
-        """
-        api_key = self._require_key()
-        body = self._request_body(request)
-        headers = {"Authorization": f"Bearer {api_key}"}
-        max_attempts = max(1, self.settings.TAVILY_MAX_ATTEMPTS)
-
-        last_error: RetrievalError | None = None
-
-        for attempt in range(1, max_attempts + 1):
-            try:
-                response = await self.client.post(SEARCH_PATH, json=body, headers=headers)
-            except httpx.TimeoutException as exc:
-                last_error = SearchTimeout(
-                    PROVIDER,
-                    f"Search timed out after {self.settings.TAVILY_TIMEOUT_SECONDS:g}s.",
-                    details={
-                        "attempt": attempt,
-                        "timeout_seconds": self.settings.TAVILY_TIMEOUT_SECONDS,
-                    },
-                )
-                logger.warning("tavily attempt %d/%d timed out: %s", attempt, max_attempts, exc)
-            except httpx.HTTPError as exc:
-                last_error = SearchUnreachable(
-                    PROVIDER,
-                    f"Could not reach the search provider: {type(exc).__name__}.",
-                    details={"attempt": attempt},
-                )
-                logger.warning("tavily attempt %d/%d unreachable: %s", attempt, max_attempts, exc)
-            else:
-                error = self._error_for(response, attempt)
-                if error is None:
-                    return self._decode(response), attempt
-                last_error = error
-                logger.warning(
-                    "tavily attempt %d/%d failed: %s (%s)",
-                    attempt,
-                    max_attempts,
-                    error.code,
-                    error.message,
-                )
-
-            if not last_error.retryable or attempt == max_attempts:
-                break
-
-            await self._sleep(self._backoff_seconds(attempt, last_error))
-
-        assert last_error is not None  # the loop cannot exit without one
-        last_error.details["attempts"] = max_attempts if last_error.retryable else 1
-        raise last_error
-
-    def _error_for(self, response: httpx.Response, attempt: int) -> RetrievalError | None:
-        """Map a status code to an exception, or `None` when the response is usable."""
-        status = response.status_code
-        if 200 <= status < 300:
-            return None
-
-        detail = self._error_detail(response)
-
-        if status == 429:
-            return SearchRateLimited(
-                PROVIDER,
-                f"Rate limited by the search provider: {detail}",
-                retry_after=self._retry_after_seconds(response),
-                details={"status": status, "attempt": attempt},
-            )
-        if status in (401, 403):
-            return SearchAuthenticationFailed(
-                PROVIDER,
-                f"The search provider rejected the API key: {detail}",
-                details={"status": status, "setting": "TAVILY_API_KEY"},
-            )
-        if 500 <= status < 600:
-            return SearchProviderUnavailable(
-                PROVIDER,
-                f"The search provider returned {status}: {detail}",
-                details={"status": status, "attempt": attempt},
-            )
-        return SearchRequestInvalid(
-            PROVIDER,
-            f"The search provider returned {status}: {detail}",
-            details={"status": status},
-        )
-
-    @staticmethod
-    def _error_detail(response: httpx.Response) -> str:
-        """A short, safe description of a failure body.
-
-        Truncated, and never echoed in full: a provider error body can contain the
-        request it rejected, and the request carries the API key.
-        """
-        try:
-            payload = response.json()
-        except (ValueError, httpx.DecodingError):
-            return (response.text or "").strip()[:200] or "no body"
-        if isinstance(payload, dict):
-            for key in ("detail", "error", "message"):
-                value = payload.get(key)
-                if isinstance(value, str) and value.strip():
-                    return value.strip()[:200]
-        return str(payload)[:200]
-
-    @staticmethod
-    def _retry_after_seconds(response: httpx.Response) -> float | None:
-        """Parse `Retry-After`, which may be seconds or an HTTP date.
-
-        Only the numeric form is honoured. A date form would need clock-skew handling
-        to be trustworthy, and guessing wrong about when to come back is worse than
-        falling through to our own backoff.
-        """
-        raw = response.headers.get("Retry-After")
-        if not raw:
-            return None
-        try:
-            seconds = float(raw.strip())
-        except ValueError:
-            return None
-        return seconds if seconds >= 0 else None
-
-    def _backoff_seconds(self, attempt: int, error: RetrievalError) -> float:
-        """How long to wait before the next attempt.
-
-        The provider's own `Retry-After` wins when it sent one — it knows when its
-        limit resets and we do not. Otherwise exponential backoff with full jitter.
-
-        The jitter is not decoration: without it, several sub-question searches that
-        were rate-limited together would all retry at the same instant and be
-        rate-limited together again. Everything is capped, so one unlucky search
-        cannot sit still for a minute while the run's budget drains.
-        """
-        retry_after = getattr(error, "retry_after", None)
-        if retry_after is not None:
-            return min(float(retry_after), self.settings.TAVILY_BACKOFF_MAX_SECONDS)
-
-        exponential = self.settings.TAVILY_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1))
-        capped = min(exponential, self.settings.TAVILY_BACKOFF_MAX_SECONDS)
-        return random.uniform(0, capped)  # noqa: S311 - jitter, not cryptography
-
-    @staticmethod
-    def _decode(response: httpx.Response) -> dict:
-        try:
-            payload = response.json()
-        except (ValueError, httpx.DecodingError) as exc:
-            raise SearchResponseInvalid(
-                PROVIDER, "The response body was not valid JSON."
-            ) from exc
-        if not isinstance(payload, dict):
-            raise SearchResponseInvalid(
-                PROVIDER,
-                f"Expected a JSON object, got {type(payload).__name__}.",
-            )
-        return payload
 
     # --- shaping the results -------------------------------------------------
 
