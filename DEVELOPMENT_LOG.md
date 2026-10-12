@@ -5,6 +5,93 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 15 — Benchmark dataset infrastructure — 2026-10-12
+
+**Goal:** the measuring instrument, finished before the first measurement. Three
+question sets covering eight behaviours, a schema that makes invalid items unloadable,
+and a freeze that makes the no-modification rule for the final test set a mechanism
+rather than a promise. **No benchmark results were generated, none exist**, and none
+contributed to any expectation in the dataset — that ordering is what will make the
+eventual results mean something.
+
+### What was implemented
+
+- `app/schemas/benchmark.py` — `BenchmarkItem` with exactly the required fields
+  (question_id, question, category, difficulty, expected_sources, expected_evidence,
+  known_claims, known_conflicts, expected_behavior) plus two the methodology needs:
+  `ground_truth_basis` and `ground_truth_notes`. Eight categories
+  (`BenchmarkCategory`); ids carry their set and category and are validated against
+  both, so a copy-paste error cannot silently misfile results.
+- `data/benchmarks/` — `development.json`, `validation.json`, `test.json`: 8 items
+  each, one per category, 24 questions total, no question repeated across sets
+  (tested — a test question leaking into development would let tuning see the exam).
+  Committed to git, because the dataset is part of the method. This fulfils the
+  placeholder README that has sat in `data/benchmarks/` since stage 1.
+- `app/services/benchmark/dataset.py` — the loader and the freeze.
+  `load_set("test")` recomputes a canonical content hash (key-order-, whitespace-
+  and line-ending-independent, so Windows and Linux checkouts agree) and raises
+  `FrozenSetViolation` when it does not match `test.freeze.json`. An edited test set
+  cannot be evaluated against by accident; a formatting-only change does not trip it.
+- **The final test set was frozen at creation** — before any evaluation has ever
+  run — at version 1.0.0, hash `7f6aff0e2413…`, 2026-10-12.
+
+### How ground truth is established (summary; the full document is
+`data/benchmarks/README.md`)
+
+Four tiers, named on every item, because they warrant different scoring confidence:
+**verifiable_fact** (the public record: Wakefield's retraction, DPP's 58%, a reef
+death declaration that never happened), **established_consensus** (textbook-level
+findings, phrased as ranges with their anchor literature named in the notes),
+**behavioral** (definable a priori: a false premise must be challenged, an unstudied
+question must yield "insufficient evidence", a time-varying answer must be grounded
+in dated recent sources — these items deliberately store **no answer**, because a
+stored answer would rot into wrong ground truth), and **author_judgment** (advisory
+hints only; the schema forbids verdict-scored claims at this tier).
+
+### Governance, in force from the freeze
+
+- Benchmark results may never motivate a change to the test set; a test item that
+  scores badly is reporting on the system, which is its job.
+- A genuine pre-evaluation defect may be fixed only before final evaluation begins,
+  with a version bump, re-freeze, and a log entry. After that: immutable, defects
+  reported in the write-up.
+- Development and validation sets are refinable (version bump + log note); tuning
+  uses them only. The test set runs once per final configuration.
+
+### Tests performed
+
+**816 backend tests, all passing** (21 new): every committed set loads and covers
+all eight categories; ids and questions unique across sets; every item names its
+ground-truth basis; current-information items store no answers; false-premise items
+expect contradiction; conflict items name their known disagreement; the committed
+test set matches its manifest; an edited copy is refused; a reformatted copy is not;
+a missing manifest is itself a violation; development/validation stay editable; and
+the schema rules (category-in-id, no author-judgment verdicts, contradictory flags,
+duplicate ids, wrong-set items, fingerprint semantics). Freeze tests run on copies
+in tmp_path — a test that edited the real test set would be the crime the freeze
+exists to catch. `ruff` and `mypy` clean.
+
+### Known limitations
+
+- One item per category per set is enough to exercise every behaviour and keep a
+  full three-mode benchmark affordable (~72 pipeline runs), not enough for tight
+  confidence intervals; growing the dev/validation sets is cheap and allowed, and a
+  larger frozen test set v2 can be created (and frozen) before final evaluation if
+  budget allows.
+- Tier-2 expectations are only as good as the consensus they summarise; each item's
+  notes name its anchor so a reviewer can check the author's reading.
+- The freeze protects content, not intent: nothing mechanical can stop someone
+  re-freezing after seeing results. The rule, the manifest's policy text, and this
+  log entry exist so doing that would require visible, documented dishonesty.
+
+### Next stage
+
+**The evaluation runner and metrics** — execute a set's questions through the
+pipeline per mode, score against these expectations tier by tier, and fill the
+`evaluation_result` tables with the project's first real numbers.
+
+---
+
 ## Stage 14 — The final report and the evidence audit — 2026-10-12
 
 **Goal:** report generation now ends after verification, not before it.

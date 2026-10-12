@@ -141,6 +141,12 @@ class Settings(BaseSettings):
     # request that must always answer promptly.
     DB_CONNECT_TIMEOUT: int = 5
 
+    # --- Benchmark dataset ---
+    # The question sets live in the repo (data/benchmarks), versioned in git, because
+    # the dataset is part of the method: results against an unversioned dataset are
+    # not reproducible claims.
+    BENCHMARK_DATA_DIR: str = "../data/benchmarks"
+
     # --- Retrieval / chunking defaults ---
     CHUNK_SIZE: int = 900
     CHUNK_OVERLAP: int = 150

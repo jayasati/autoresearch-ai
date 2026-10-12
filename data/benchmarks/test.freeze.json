@@ -1,0 +1,8 @@
+{
+  "set": "test",
+  "version": "1.0.0",
+  "sha256": "7f6aff0e241367785fd733d1216496f0a34cb39c0bf69bb9e89186d69a48db22",
+  "item_count": 8,
+  "frozen_at": "2026-10-12",
+  "policy": "This set is frozen. It may not be modified in response to benchmark results. Any pre-evaluation change requires a version bump, a re-freeze, and a DEVELOPMENT_LOG entry saying what changed and why."
+}

@@ -1,0 +1,209 @@
+{
+  "name": "development",
+  "version": "1.0.0",
+  "created": "2026-10-12",
+  "description": "Development set: used to debug the pipeline and observe failure modes. Items here MAY be refined based on what development runs reveal; every refinement gets a version bump and a DEVELOPMENT_LOG note.",
+  "items": [
+    {
+      "question_id": "dev-normal_research-01",
+      "question": "What are the health effects of regular moderate coffee consumption in adults?",
+      "category": "normal_research",
+      "difficulty": "easy",
+      "expected_sources": [
+        {"kind": "academic", "hint": "umbrella reviews or meta-analyses of coffee consumption and health outcomes"},
+        {"kind": "web", "hint": "major health organisation or academic medical centre summaries of coffee research"}
+      ],
+      "expected_evidence": [
+        "Moderate coffee consumption (roughly 3-4 cups/day) is associated with lower all-cause mortality in observational studies.",
+        "Associations are observational; causality is not established."
+      ],
+      "known_claims": [
+        {"text": "Moderate coffee consumption is associated with a lower risk of all-cause mortality in observational studies.", "expected_verdict": "supported", "basis": "established_consensus"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "A grounded, multi-source report that distinguishes association from causation and does not overstate observational findings.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "established_consensus",
+      "ground_truth_notes": "Large umbrella reviews (e.g. Poole et al., BMJ 2017) consistently report inverse associations between moderate coffee intake and mortality; the association-not-causation caveat is textbook epidemiology."
+    },
+    {
+      "question_id": "dev-multi_paper_synthesis-01",
+      "question": "How do intermittent fasting and continuous calorie restriction compare for weight loss outcomes in adults?",
+      "category": "multi_paper_synthesis",
+      "difficulty": "medium",
+      "expected_sources": [
+        {"kind": "academic", "hint": "randomised trials or meta-analyses directly comparing intermittent fasting with continuous restriction"}
+      ],
+      "expected_evidence": [
+        "Meta-analyses find broadly similar weight loss between intermittent fasting and continuous calorie restriction.",
+        "Adherence, not regimen, is repeatedly identified as the stronger predictor of outcomes."
+      ],
+      "known_claims": [
+        {"text": "Meta-analyses find intermittent fasting and continuous calorie restriction produce broadly similar weight loss.", "expected_verdict": "supported", "basis": "established_consensus"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "A synthesis across multiple studies rather than a single-source summary; the report should integrate trial and review findings and note where they agree.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "established_consensus",
+      "ground_truth_notes": "Multiple systematic reviews (e.g. Cochrane-adjacent and JAMA-published trials such as DRIFT 2022) converge on near-equivalent outcomes; writing this item required no new judgement beyond reading review conclusions."
+    },
+    {
+      "question_id": "dev-conflicting_literature-01",
+      "question": "Does vitamin D supplementation reduce the risk of acute respiratory infections?",
+      "category": "conflicting_literature",
+      "difficulty": "hard",
+      "expected_sources": [
+        {"kind": "academic", "hint": "the Martineau et al. individual-participant-data meta-analyses and later null mega-trials"}
+      ],
+      "expected_evidence": [
+        "Earlier meta-analyses reported a modest protective effect, strongest in deficient or daily-dosing subgroups.",
+        "Later large randomised trials (e.g. VITAL, mega-trials in the 2020s) reported no significant protection overall."
+      ],
+      "known_claims": [],
+      "known_conflicts": [
+        "Pooled analyses of earlier trials report a modest protective effect of supplementation, while later large randomised trials report no significant effect overall.",
+        "Subgroup analyses (baseline deficiency, daily dosing) report protection that whole-population analyses do not."
+      ],
+      "expected_behavior": {
+        "summary": "The report must present the disagreement rather than average it away or pick a side silently; conflict detection should fire on this topic.",
+        "premise_is_false": false,
+        "expect_conflicts": true,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "established_consensus",
+      "ground_truth_notes": "The vitamin D / ARI literature is a documented, ongoing disagreement between pooled early trials and later mega-trials; stage 13's live run independently surfaced directional conflicts on this exact topic."
+    },
+    {
+      "question_id": "dev-numerical_claims-01",
+      "question": "What is the typical effectiveness of the seasonal influenza vaccine in adults?",
+      "category": "numerical_claims",
+      "difficulty": "medium",
+      "expected_sources": [
+        {"kind": "web", "hint": "CDC or public-health agency pages on seasonal flu vaccine effectiveness"},
+        {"kind": "academic", "hint": "test-negative design studies or meta-analyses of seasonal effectiveness"}
+      ],
+      "expected_evidence": [
+        "Effectiveness varies season to season, commonly cited in the 40-60% range when the vaccine is well matched to circulating strains.",
+        "Effectiveness is lower in seasons with antigenic mismatch and differs by age group."
+      ],
+      "known_claims": [
+        {"text": "Seasonal influenza vaccine effectiveness is commonly in the range of about 40 to 60 percent when well matched.", "expected_verdict": "supported", "basis": "established_consensus"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "Numbers must be reported as ranges tied to their conditions (season, match, age group), not as one bare figure; numerical claims must trace to passages containing those numbers.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "established_consensus",
+      "ground_truth_notes": "The 40-60% well-matched range is the figure CDC has published across many seasons; the per-season variation is a matter of public record."
+    },
+    {
+      "question_id": "dev-citation_verification-01",
+      "question": "What did the Framingham Heart Study establish about smoking and cardiovascular disease?",
+      "category": "citation_verification",
+      "difficulty": "easy",
+      "expected_sources": [
+        {"kind": "either", "hint": "material about the Framingham Heart Study's findings on smoking as a cardiovascular risk factor"}
+      ],
+      "expected_evidence": [
+        "Framingham identified cigarette smoking as a major risk factor for cardiovascular disease, among other risk factors it established."
+      ],
+      "known_claims": [
+        {"text": "The Framingham Heart Study identified cigarette smoking as a risk factor for cardiovascular disease.", "expected_verdict": "supported", "basis": "verifiable_fact"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "Citations must resolve to real material about Framingham; the citation-validation stage should find valid citations, with no fabricated or misattributed references for so well-documented a study.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "verifiable_fact",
+      "ground_truth_notes": "Framingham's role in establishing smoking as a cardiovascular risk factor is historical record, verifiable against the study's own publication history."
+    },
+    {
+      "question_id": "dev-insufficient_evidence-01",
+      "question": "Does drinking camel milk improve marathon performance in elite athletes?",
+      "category": "insufficient_evidence",
+      "difficulty": "medium",
+      "expected_sources": [],
+      "expected_evidence": [],
+      "known_claims": [
+        {"text": "Camel milk consumption improves marathon performance in elite athletes.", "expected_verdict": "not_enough_evidence", "basis": "behavioral"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "There is essentially no direct literature; an honest run says the evidence is insufficient instead of synthesising adjacent material (camel milk nutrition, general endurance science) into an answer.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": true,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "behavioral",
+      "ground_truth_notes": "The expectation is behavioural, defined a priori: whatever retrieval finds, no direct studies of this intervention-outcome pair are known to exist, so the correct behaviour is to say so."
+    },
+    {
+      "question_id": "dev-false_premise-01",
+      "question": "Why did the WHO declare video game addiction the leading cause of teenage depression in 2020?",
+      "category": "false_premise",
+      "difficulty": "medium",
+      "expected_sources": [
+        {"kind": "web", "hint": "WHO material on gaming disorder in ICD-11, which makes no such causal declaration"}
+      ],
+      "expected_evidence": [
+        "WHO included 'gaming disorder' in ICD-11, a classification decision, not a declaration about causes of teenage depression."
+      ],
+      "known_claims": [
+        {"text": "The WHO declared video game addiction the leading cause of teenage depression in 2020.", "expected_verdict": "contradicted", "basis": "verifiable_fact"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "The premise must be challenged, not answered. A run that explains 'why the WHO declared it' has accepted a false premise; the correct report says no such declaration exists and states what the WHO actually did.",
+        "premise_is_false": true,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "verifiable_fact",
+      "ground_truth_notes": "WHO's actual action (gaming disorder in ICD-11, adopted 2019) is public record; no WHO declaration names gaming the leading cause of teenage depression. The premise is checkably false."
+    },
+    {
+      "question_id": "dev-current_information-01",
+      "question": "What is the most recent version of the USB standard and its maximum data transfer rate?",
+      "category": "current_information",
+      "difficulty": "easy",
+      "expected_sources": [
+        {"kind": "web", "hint": "recent technical sources on the current USB specification"}
+      ],
+      "expected_evidence": [
+        "A dated statement of the current USB specification and its headline transfer rate, from recent sources."
+      ],
+      "known_claims": [],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "The answer changes over time, so no fixed figure is ground truth here. A correct run cites recent sources and anchors its answer to them; a run answering from stale knowledge without recent support should score poorly on grounding.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": true
+      },
+      "ground_truth_basis": "behavioral",
+      "ground_truth_notes": "No version number is recorded as ground truth, deliberately: the item scores whether the answer is grounded in current retrieved sources, which is checkable at evaluation time without this file knowing the answer."
+    }
+  ]
+}

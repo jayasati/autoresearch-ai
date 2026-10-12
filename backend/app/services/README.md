@@ -1,8 +1,18 @@
 # services/ — Use cases, and the transaction boundary
 
 **`research_service.py`, `retrieval/`, `processing/`, `vectorstore/`, `llm/`,
-`orchestration/`, `claims/` and `verification/` are implemented.** The rest arrive
-with their stages.
+`orchestration/`, `claims/`, `verification/` and `benchmark/` are implemented.**
+The rest arrive with their stages.
+
+## `benchmark/` — the dataset and its freeze
+
+`load_set()` loads and validates the three question sets in `data/benchmarks/`
+(development, validation, and the **frozen** test set); for the test set it enforces
+the freeze manifest's canonical content hash and refuses a set that no longer
+matches (`FrozenSetViolation`). The ground-truth methodology — four named tiers,
+and the rule that benchmark results never modify the test set — is in
+[`data/benchmarks/README.md`](../../../data/benchmarks/README.md). No results live
+here; this is the instrument, not the measurement.
 
 This layer answers "what happened, and did *all* of it happen". Each public method is
 one atomic operation: it either completes and commits, or raises and leaves the

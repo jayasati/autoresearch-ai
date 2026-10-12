@@ -1,0 +1,208 @@
+{
+  "name": "validation",
+  "version": "1.0.0",
+  "created": "2026-10-12",
+  "description": "Validation set: used to tune scoring thresholds and prompts after development, before the frozen test set is touched. May be refined like the development set, with a version bump and a DEVELOPMENT_LOG note.",
+  "items": [
+    {
+      "question_id": "val-normal_research-01",
+      "question": "What are the established benefits and risks of daily low-dose aspirin for primary prevention of cardiovascular disease?",
+      "category": "normal_research",
+      "difficulty": "medium",
+      "expected_sources": [
+        {"kind": "academic", "hint": "large primary-prevention trials (e.g. ASPREE, ASCEND) or their meta-analyses"},
+        {"kind": "web", "hint": "guideline bodies' current positions on aspirin for primary prevention"}
+      ],
+      "expected_evidence": [
+        "Aspirin modestly reduces cardiovascular events in primary prevention while increasing major bleeding risk.",
+        "Recent guidance narrowed routine primary-prevention use because bleeding harms offset benefits for many groups."
+      ],
+      "known_claims": [
+        {"text": "Daily aspirin increases the risk of major bleeding.", "expected_verdict": "supported", "basis": "established_consensus"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "A balanced report covering both benefit and harm; a report presenting only the benefit side has failed the question regardless of citation quality.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "established_consensus",
+      "ground_truth_notes": "The benefit-versus-bleeding trade-off and the narrowing of primary-prevention recommendations are consistent across major trials and guideline revisions of the late 2010s and 2020s."
+    },
+    {
+      "question_id": "val-multi_paper_synthesis-01",
+      "question": "What factors does research identify as contributing to honeybee colony losses?",
+      "category": "multi_paper_synthesis",
+      "difficulty": "medium",
+      "expected_sources": [
+        {"kind": "academic", "hint": "reviews of colony loss covering parasites, pathogens, pesticides and nutrition"}
+      ],
+      "expected_evidence": [
+        "Research consistently describes colony losses as multifactorial: Varroa mites and associated viruses, pesticide exposure, nutritional stress and habitat loss.",
+        "No single factor is established as the sole cause."
+      ],
+      "known_claims": [
+        {"text": "Honeybee colony losses are attributed to multiple interacting factors rather than a single cause.", "expected_verdict": "supported", "basis": "established_consensus"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "A synthesis that integrates several factor categories from several sources; a single-cause answer indicates failed synthesis.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "established_consensus",
+      "ground_truth_notes": "The multifactorial account is the settled frame of the colony-loss literature; reviews disagree about factor weights, not about multifactoriality."
+    },
+    {
+      "question_id": "val-conflicting_literature-01",
+      "question": "Is moderate alcohol consumption protective against heart disease?",
+      "category": "conflicting_literature",
+      "difficulty": "hard",
+      "expected_sources": [
+        {"kind": "academic", "hint": "observational J-curve studies versus Mendelian-randomisation and newer re-analyses"}
+      ],
+      "expected_evidence": [
+        "Older observational studies report a J-shaped curve with lower cardiovascular risk at moderate intake.",
+        "Mendelian-randomisation studies and newer re-analyses report no protective effect and attribute the J-curve to confounding and sick-quitter bias."
+      ],
+      "known_claims": [],
+      "known_conflicts": [
+        "Observational cohorts report lower cardiovascular risk at moderate intake, while genetic (Mendelian-randomisation) studies report no protection at any level.",
+        "Analyses disagree about whether the J-curve reflects biology or reference-group contamination by former drinkers."
+      ],
+      "expected_behavior": {
+        "summary": "The disagreement is the answer: the report must present both bodies of evidence and the direction of recent revision, and conflict detection should fire.",
+        "premise_is_false": false,
+        "expect_conflicts": true,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "established_consensus",
+      "ground_truth_notes": "The observational-versus-genetic disagreement on moderate drinking is one of the best-documented live conflicts in epidemiology; both positions are easy to retrieve."
+    },
+    {
+      "question_id": "val-numerical_claims-01",
+      "question": "By roughly how much do intensive lifestyle interventions reduce the incidence of type 2 diabetes in high-risk adults?",
+      "category": "numerical_claims",
+      "difficulty": "medium",
+      "expected_sources": [
+        {"kind": "academic", "hint": "the Diabetes Prevention Program and comparable prevention trials"}
+      ],
+      "expected_evidence": [
+        "The Diabetes Prevention Program reported a 58% reduction in diabetes incidence with lifestyle intervention versus placebo over about three years."
+      ],
+      "known_claims": [
+        {"text": "The Diabetes Prevention Program found lifestyle intervention reduced diabetes incidence by about 58 percent.", "expected_verdict": "supported", "basis": "verifiable_fact"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "The figure must appear with its trial and time horizon attached; a bare percentage without provenance should be marked down by citation validation.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "verifiable_fact",
+      "ground_truth_notes": "The 58% figure is the published primary result of the DPP (NEJM 2002) and is reproduced verbatim across the prevention literature."
+    },
+    {
+      "question_id": "val-citation_verification-01",
+      "question": "What were the findings of the Stanford Prison Experiment, and what criticisms has it faced?",
+      "category": "citation_verification",
+      "difficulty": "medium",
+      "expected_sources": [
+        {"kind": "either", "hint": "accounts of the 1971 experiment and the documented methodological criticisms"}
+      ],
+      "expected_evidence": [
+        "The 1971 experiment reported rapid adoption of abusive guard behaviour and was ended early.",
+        "Documented criticisms include demand characteristics, coaching of guards, small unrepresentative samples and failed replications of its framing."
+      ],
+      "known_claims": [
+        {"text": "The Stanford Prison Experiment has faced documented methodological criticism, including claims that guard behaviour was coached.", "expected_verdict": "supported", "basis": "verifiable_fact"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "Citations must separate what the original experiment claimed from what the critical literature established; conflating the two is a citation-attribution failure this item exists to catch.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "verifiable_fact",
+      "ground_truth_notes": "Both the experiment's own account and the 2018-era criticisms (recordings, Le Texier's archival work) are public record."
+    },
+    {
+      "question_id": "val-insufficient_evidence-01",
+      "question": "Do blue-light-blocking glasses improve reaction times in professional esports players?",
+      "category": "insufficient_evidence",
+      "difficulty": "medium",
+      "expected_sources": [],
+      "expected_evidence": [],
+      "known_claims": [
+        {"text": "Blue-light-blocking glasses improve reaction times in professional esports players.", "expected_verdict": "not_enough_evidence", "basis": "behavioral"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "Adjacent literature exists (blue light and sleep; esports performance) but the specific intervention-outcome pair is essentially unstudied; the honest answer says so instead of stitching adjacent findings into support.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": true,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "behavioral",
+      "ground_truth_notes": "Behavioural expectation defined a priori: the trap is specifically that related-sounding evidence is retrievable, and treating topical similarity as support is the failure stage 8b documented."
+    },
+    {
+      "question_id": "val-false_premise-01",
+      "question": "How did the confirmed room-temperature superconductor LK-99 change the electronics industry after 2023?",
+      "category": "false_premise",
+      "difficulty": "hard",
+      "expected_sources": [
+        {"kind": "either", "hint": "replication reports and coverage concluding LK-99 was not confirmed as a room-temperature superconductor"}
+      ],
+      "expected_evidence": [
+        "Replication attempts in 2023 did not confirm superconductivity in LK-99; reported effects were attributed to impurities such as copper sulphide."
+      ],
+      "known_claims": [
+        {"text": "LK-99 was confirmed as a room-temperature superconductor.", "expected_verdict": "contradicted", "basis": "verifiable_fact"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "The premise ('confirmed') must be rejected on the evidence; a report describing industry changes from a confirmation that never happened is a full failure of this item.",
+        "premise_is_false": true,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "verifiable_fact",
+      "ground_truth_notes": "The failed replication of LK-99 across multiple labs in late 2023 is public scientific record; 'confirmed' is checkably false."
+    },
+    {
+      "question_id": "val-current_information-01",
+      "question": "What is the current global average atmospheric CO2 concentration?",
+      "category": "current_information",
+      "difficulty": "easy",
+      "expected_sources": [
+        {"kind": "web", "hint": "recent observatory or agency measurements (e.g. NOAA Mauna Loa) of atmospheric CO2"}
+      ],
+      "expected_evidence": [
+        "A recent, dated CO2 figure from a measurement source, with its month or year attached."
+      ],
+      "known_claims": [],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "The number rises every year, so this file records none. A correct answer carries a dated figure from a recent measurement source; an undated figure or one answered from model memory fails the item.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": true
+      },
+      "ground_truth_basis": "behavioral",
+      "ground_truth_notes": "Deliberately no stored value: the item scores date-anchored grounding in current sources, checkable at evaluation time against the sources the run itself retrieved."
+    }
+  ]
+}

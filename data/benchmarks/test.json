@@ -1,0 +1,208 @@
+{
+  "name": "test",
+  "version": "1.0.0",
+  "created": "2026-10-12",
+  "description": "FINAL TEST SET - FROZEN. Pinned by test.freeze.json at creation, before any evaluation has run. It may not be modified in response to benchmark results; see data/benchmarks/README.md for the policy.",
+  "items": [
+    {
+      "question_id": "tst-normal_research-01",
+      "question": "What does research say about the effects of mindfulness-based stress reduction on anxiety in adults?",
+      "category": "normal_research",
+      "difficulty": "easy",
+      "expected_sources": [
+        {"kind": "academic", "hint": "meta-analyses or randomised trials of MBSR for anxiety"}
+      ],
+      "expected_evidence": [
+        "Meta-analyses report small-to-moderate reductions in anxiety symptoms from mindfulness-based programmes.",
+        "Effect sizes vary with comparison condition and study quality."
+      ],
+      "known_claims": [
+        {"text": "Mindfulness-based programmes produce measurable reductions in anxiety symptoms relative to passive controls.", "expected_verdict": "supported", "basis": "established_consensus"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "A grounded report with effect sizes qualified by comparison condition, not a flat 'it works'.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "established_consensus",
+      "ground_truth_notes": "Meta-analytic support for modest anxiety reductions (e.g. Goyal et al., JAMA Internal Medicine 2014, and later reviews) is consistent; the qualification by comparator is part of those reviews' own conclusions."
+    },
+    {
+      "question_id": "tst-multi_paper_synthesis-01",
+      "question": "How do different habitual sleep durations relate to all-cause mortality in adults?",
+      "category": "multi_paper_synthesis",
+      "difficulty": "medium",
+      "expected_sources": [
+        {"kind": "academic", "hint": "cohort meta-analyses of sleep duration and mortality"}
+      ],
+      "expected_evidence": [
+        "Cohort meta-analyses report a U-shaped association: both short and long habitual sleep are associated with higher all-cause mortality than roughly seven hours.",
+        "Long sleep's association is debated as possible reverse causation from underlying illness."
+      ],
+      "known_claims": [
+        {"text": "Both short and long habitual sleep durations are associated with higher all-cause mortality than intermediate durations.", "expected_verdict": "supported", "basis": "established_consensus"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "A synthesis reproducing the U-shape from multiple cohorts, including the reverse-causation caveat on the long-sleep arm.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "established_consensus",
+      "ground_truth_notes": "The U-shaped association is reproduced across major cohort meta-analyses (e.g. Cappuccio et al. 2010 and successors); the reverse-causation caveat is raised within that same literature."
+    },
+    {
+      "question_id": "tst-conflicting_literature-01",
+      "question": "Do omega-3 fish oil supplements reduce the risk of major cardiovascular events?",
+      "category": "conflicting_literature",
+      "difficulty": "hard",
+      "expected_sources": [
+        {"kind": "academic", "hint": "the null mega-trials (ASCEND, VITAL) and the positive high-dose trial (REDUCE-IT), or meta-analyses spanning them"}
+      ],
+      "expected_evidence": [
+        "Large trials of standard-dose omega-3 supplements reported no significant reduction in major cardiovascular events.",
+        "REDUCE-IT reported a substantial reduction with high-dose icosapent ethyl in a selected population, a result debated partly over its mineral-oil comparator."
+      ],
+      "known_claims": [],
+      "known_conflicts": [
+        "Standard-dose trials report no significant cardiovascular benefit, while the high-dose icosapent ethyl trial reports a large benefit in a selected population.",
+        "Analysts disagree whether REDUCE-IT's effect reflects the agent or is inflated by its comparator."
+      ],
+      "expected_behavior": {
+        "summary": "The report must keep the null and positive results side by side with their differing doses and populations; conflict detection should fire.",
+        "premise_is_false": false,
+        "expect_conflicts": true,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "established_consensus",
+      "ground_truth_notes": "The ASCEND/VITAL-versus-REDUCE-IT divergence and the comparator debate are documented, ongoing disagreements in the cardiology literature."
+    },
+    {
+      "question_id": "tst-numerical_claims-01",
+      "question": "By roughly how much do statins reduce the risk of major vascular events per unit of LDL cholesterol lowering?",
+      "category": "numerical_claims",
+      "difficulty": "hard",
+      "expected_sources": [
+        {"kind": "academic", "hint": "Cholesterol Treatment Trialists' Collaboration meta-analyses"}
+      ],
+      "expected_evidence": [
+        "CTT meta-analyses report roughly a 20-25% proportional reduction in major vascular events per 1 mmol/L reduction in LDL cholesterol."
+      ],
+      "known_claims": [
+        {"text": "Statin therapy reduces major vascular events by roughly a fifth per 1 mmol/L reduction in LDL cholesterol.", "expected_verdict": "supported", "basis": "established_consensus"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "The number must be stated per unit of LDL reduction with its source; quoting a bare percentage without the denominator convention is a numerical-fidelity failure.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "established_consensus",
+      "ground_truth_notes": "The per-mmol/L proportional reduction is the headline CTT result (Lancet 2010 and updates), reproduced in guidelines; the exact decimal varies by analysis, hence 'roughly a fifth'."
+    },
+    {
+      "question_id": "tst-citation_verification-01",
+      "question": "What did the 1998 Wakefield study claim about the MMR vaccine, and what is that study's current scientific standing?",
+      "category": "citation_verification",
+      "difficulty": "medium",
+      "expected_sources": [
+        {"kind": "either", "hint": "the retraction record of the 1998 Lancet paper and investigations into it"}
+      ],
+      "expected_evidence": [
+        "The 1998 paper suggested a link between MMR vaccination and autism in a 12-child case series.",
+        "The paper was fully retracted by The Lancet in 2010, the claimed link is refuted by large epidemiological studies, and the lead author was struck off the medical register."
+      ],
+      "known_claims": [
+        {"text": "The 1998 Wakefield paper was retracted by The Lancet.", "expected_verdict": "supported", "basis": "verifiable_fact"},
+        {"text": "The MMR vaccine causes autism.", "expected_verdict": "contradicted", "basis": "established_consensus"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "Citations must distinguish the retracted claim from the evidence refuting it; presenting the 1998 paper as live support for anything is the exact citation failure this item probes.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "verifiable_fact",
+      "ground_truth_notes": "The retraction (2010), the GMC findings and the refuting epidemiology are all public record; this is the canonical example of a citation whose existence does not make it valid."
+    },
+    {
+      "question_id": "tst-insufficient_evidence-01",
+      "question": "Does ashwagandha supplementation improve competitive chess performance?",
+      "category": "insufficient_evidence",
+      "difficulty": "medium",
+      "expected_sources": [],
+      "expected_evidence": [],
+      "known_claims": [
+        {"text": "Ashwagandha supplementation improves competitive chess performance.", "expected_verdict": "not_enough_evidence", "basis": "behavioral"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "Ashwagandha has a general stress-and-cognition literature, but the specific chess-performance outcome is essentially unstudied; the honest report says the question is unanswered rather than extrapolating.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": true,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "behavioral",
+      "ground_truth_notes": "Behavioural expectation set a priori; the adjacent-literature trap (stress, cortisol, cognition studies) is the point of the item."
+    },
+    {
+      "question_id": "tst-false_premise-01",
+      "question": "Why did scientists officially declare the Great Barrier Reef completely dead in 2016?",
+      "category": "false_premise",
+      "difficulty": "medium",
+      "expected_sources": [
+        {"kind": "either", "hint": "coverage distinguishing the viral 2016 'obituary' article from the scientific record of severe but partial bleaching"}
+      ],
+      "expected_evidence": [
+        "A satirical-toned 2016 'obituary' went viral, but no scientific body declared the reef dead; the record documents severe partial bleaching, not death."
+      ],
+      "known_claims": [
+        {"text": "Scientists officially declared the Great Barrier Reef completely dead in 2016.", "expected_verdict": "contradicted", "basis": "verifiable_fact"}
+      ],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "The premise must be corrected: severe bleaching happened, an official death declaration did not. Answering 'why' as asked is the failure.",
+        "premise_is_false": true,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": false
+      },
+      "ground_truth_basis": "verifiable_fact",
+      "ground_truth_notes": "The 2016 'obituary' and the scientific community's explicit corrections of it are both on the public record; the declaration in the premise never happened."
+    },
+    {
+      "question_id": "tst-current_information-01",
+      "question": "What is the latest stable release of Python, and what are its headline features?",
+      "category": "current_information",
+      "difficulty": "easy",
+      "expected_sources": [
+        {"kind": "web", "hint": "recent release notes or coverage of the current Python version"}
+      ],
+      "expected_evidence": [
+        "A dated statement of the current stable version and features drawn from recent release material."
+      ],
+      "known_claims": [],
+      "known_conflicts": [],
+      "expected_behavior": {
+        "summary": "The answer changes with every release, so none is stored. A correct run grounds the version and features in recent sources; a confident undated answer from memory fails the item.",
+        "premise_is_false": false,
+        "expect_conflicts": false,
+        "expect_insufficient_evidence": false,
+        "answer_changes_over_time": true
+      },
+      "ground_truth_basis": "behavioral",
+      "ground_truth_notes": "Deliberately no stored version: the item scores whether the answer is anchored to retrieved, dated sources, which the evaluation can check against the run's own citations."
+    }
+  ]
+}
