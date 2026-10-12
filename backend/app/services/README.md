@@ -1,6 +1,6 @@
 # services/ — Use cases, and the transaction boundary
 
-**`research_service.py` and `retrieval/` are implemented.** The rest arrive with
+**`research_service.py`, `retrieval/` and `processing/` are implemented.** The rest arrive with
 their stages.
 
 This layer answers "what happened, and did *all* of it happen". Each public method is
@@ -64,5 +64,13 @@ which is a different thing from fetching it.
 It does not sit in the transaction-owning part of this package. It makes no database
 calls at all; the orchestrator will persist what it returns.
 
-Planned alongside it: Semantic Scholar search, the fetcher, the chunker, the embedder
-and the vector store.
+Planned alongside it: the fetcher, the embedder and the vector store.
+
+## `processing/` — provider text to documents and chunks
+
+`DocumentProcessor` turns a search result's snippet or abstract into a cleaned
+document and overlapping chunks. Each chunk is exactly `document.text[start:end]` and
+carries its source's metadata. Cleaning only deletes and normalises, so a paper with no
+abstract gets an empty document, not its title. IDs are UUIDv5, stable across runs.
+Pure and synchronous, with no database calls. The chunking strategy and its limitations
+are in [`processing/README.md`](processing/README.md).

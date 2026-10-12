@@ -5,6 +5,192 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 8 — Document processing: cleaning and chunking — 2026-10-08
+
+**Goal:** source metadata plus available text in, a document and its chunks out. v1
+covers the text retrieval already returns: web snippets and paper abstracts. No PDF
+extraction, no fetching, no embeddings.
+
+### What was implemented
+
+| Requirement | How |
+|---|---|
+| Clean text | `clean_text`: strip tags, decode entities, NFC, drop invisible and control characters, collapse whitespace while keeping paragraphs |
+| Remove obvious boilerplate where safe | `strip_boilerplate`: whole short lines anchored on a known phrase, a leading `Abstract:` label, a trailing `©`+year notice; **every removal is reported** |
+| Preserve source metadata | immutable `SourceMetadata` with all 17 fields from both candidate types, on the document **and on every chunk** |
+| Configurable chunk size | `ChunkingConfig.chunk_size`, defaults to `CHUNK_SIZE` (900 characters) |
+| Configurable overlap | `ChunkingConfig.chunk_overlap`, defaults to `CHUNK_OVERLAP` (150); must be smaller than the size, the same rule `research_settings` enforces |
+| Stable chunk IDs | UUIDv5 from the source fingerprint, content hash and span; same input gives same ids, and they work as primary keys |
+| Every chunk references its source | `source_fingerprint` plus the full `SourceMetadata`, checked against each other; a source with no DOI, URL or id is rejected |
+| Handle missing abstract/content | empty document, depth `metadata`, no chunks, `empty_reason` saying why; returned, not dropped |
+| Do not fabricate text | cleaning only deletes; the title is never substituted for a missing abstract; `to_document_create()` refuses an empty document |
+
+### The invariant everything else hangs on
+
+**A chunk's text is exactly `document.text[start:end]`.** Not approximately, and not
+"after stripping". The chunker returns spans rather than strings, chunk text is
+sliced from the document, and `ProcessedDocument` checks every chunk against its
+text in a validator. Offsets point into the **cleaned** text, which is what becomes
+`Document.text`, so they address what is actually stored. Every chunk produced in the
+tests is also passed through `DocumentChunkCreate`, whose own span check accepts it.
+
+### Chunking strategy
+
+Character-based, with these steps:
+
+- The end moves back from the size limit to the best boundary in the second half of
+  the window. The preferred boundaries, in order, are a paragraph, a sentence end, a
+  line break, and whitespace. Only text with no whitespace is cut mid-word.
+- The next chunk starts `overlap` characters earlier, moved forward to a word start.
+  So the overlap is at most the setting, and short of it by less than one word.
+
+Six guarantees are tested directly. Spans are non-empty and within the size limit.
+None starts or ends with whitespace. Spans advance. The overlap stays within its
+bound. No non-whitespace character is lost. The output is deterministic. The full
+write-up and the limitations are in `app/services/processing/README.md`.
+
+### Files added
+
+- `app/services/processing/cleaning.py`: `clean_text`, `strip_boilerplate`
+- `app/services/processing/chunking.py`: `chunk_spans`
+- `app/services/processing/models.py`: `ChunkingConfig`, `SourceMetadata`,
+  `RawDocument`, `TextChunk`, `ProcessedDocument`, and the id functions
+- `app/services/processing/processor.py`: `DocumentProcessor`
+- `app/services/processing/__init__.py`, `app/services/processing/README.md`
+- `tests/unit/test_document_processing.py` (84 tests)
+
+### Files changed
+
+- `app/services/README.md`: the new package
+- `app/services/retrieval/__init__.py`: the planned-modules line, since chunking
+  now lives in `processing/`
+
+### Commands used
+
+```bash
+cd backend
+./.venv/Scripts/python.exe -m pytest ; ruff check . ; mypy app
+
+# against the real APIs, from a scratch script (not committed)
+SemanticScholarService().search("retrieval augmented generation hallucination", limit=8)
+TavilySearchService().search("retrieval augmented generation hallucination")
+# each result through DocumentProcessor().process_many(...), spans asserted, run twice
+```
+
+### Tests performed
+
+**677 backend tests, all passing** (84 new). These cover the five required scenarios:
+
+| Required | Class | Covers |
+|---|---|---|
+| short document | `TestShortDocument` | one chunk covering everything; exactly-one-chunk-long is not split; a single word |
+| long document | `TestLongDocument` | many chunks within the size limit, each exactly its span, accepted by `DocumentChunkCreate`, positions sequential, **no text lost**, boundaries on sentence ends, whitespace-free text chunked completely |
+| empty document | `TestEmptyDocument` | `None` / `""` / whitespace; depth forced to `metadata`; text that cleans to nothing; **missing abstract not replaced by the title**; refuses to become a `document` row; kept in a batch |
+| chunk overlap | `TestChunkOverlap` | overlap within its bound for four configurations, including 0; shared characters really are shared; no chunk starts mid-word; more overlap gives more chunks; invalid configurations rejected; a near-maximal overlap still ends |
+| metadata preservation | `TestMetadataPreservation` | every field from both candidate types reaches the document and every chunk; survives JSON serialisation; immutable; round-trips to `SourceCreate` / `DocumentCreate`; unidentifiable sources rejected; fingerprint derived with retrieval's rule |
+
+Plus `TestStableIds`, `TestNoFabrication` (the output's characters are a
+**subsequence** of the input's), `TestCleaning`, `TestBoilerplate`,
+`TestConfiguration` and `TestInvariantsAreEnforced`.
+
+No test makes a network request.
+
+### Result
+
+| Check | Result |
+|---|---|
+| `pytest` | **677 passed** in 67s |
+| `ruff check .` | All checks passed |
+| `mypy app` | Success: no issues found in 61 source files |
+| 8 real Semantic Scholar abstracts | 1,002–1,635 chars each, 2–3 chunks each, nothing removed, every span exact, ids identical across two runs; one 429 absorbed by the existing retry |
+| 8 real Tavily snippets | 917–1,504 chars, 2–3 chunks each, nothing removed, up to 8 characters of whitespace collapsed |
+| frontend | unchanged |
+
+### Decisions made
+
+1. **Offsets into the cleaned text, not the raw text.** The cleaned text is what gets
+   stored as `Document.text`, and `document_chunk` offsets are defined against that.
+   Mapping back to raw provider text would need an offset map through every cleaning
+   step, and nothing downstream wants the raw text.
+
+2. **Characters, not tokens.** No tokenizer is installed yet, offsets are characters
+   anyway, and at about four characters per token the default of 900 is well inside
+   any embedding window. `token_count` is left empty rather than estimated.
+
+3. **The title is metadata, never text.** A title says what a paper is about, not what
+   it found. If a title were in the text, a claim could be "supported" by it, and a
+   paper with no abstract would look as if it had text.
+
+4. **An empty document is a result, not an error.** That is consistent with stage 7's
+   reasoning about metadata-only papers. `empty_reason` separates "the provider gave
+   us nothing" from "it all turned out to be boilerplate".
+
+5. **IDs are derived from content, not from time.** `document_id` comes from the
+   fingerprint and the content hash. That matches the `uq_document_content_per_source`
+   constraint: re-processing unchanged text is the same document, and changed text is
+   a new one. `chunk_id` comes from the span, not the position, so the same characters
+   are the same chunk whatever configuration produced them. Retrieval provenance (rank,
+   query) is deliberately left out, so finding a page twice does not make two documents.
+
+6. **Every chunk carries the full source metadata, not just a foreign key.** Chunks
+   go to the vector store alone, and a retrieved chunk must be citable without a
+   database join. The cost is a few hundred bytes of repeated metadata per chunk.
+
+7. **NFC, not NFKC.** NFKC rewrites `m²` as `m2` and `½` as `1⁄2`, which changes
+   what a passage says. A test pins this down.
+
+8. **Boilerplate removal is opt-out and auditable.** `removed_boilerplate` lists every
+   fragment taken out, and `strip_boilerplate=False` turns removal off. When in doubt
+   the text stays: a stray "Read more" costs a few characters, while a wrongly removed
+   sentence is evidence a claim can no longer cite.
+
+### Issues found
+
+1. **The first boilerplate rules deleted an entire abstract.** The line rule
+   `.{0,100}all rights reserved` was meant for footer lines. Semantic Scholar
+   abstracts are a single line, so a short abstract ending "© 2021 Elsevier Ltd. All
+   rights reserved." matched the rule **as a whole line**, and the abstract became
+   empty. The trailing-copyright test caught it: it expected the body to survive, and got an empty string. Every line rule
+   is now anchored on the boilerplate phrase at the start of the line, and the case is
+   a named regression test. The cookie rule had the same shape of risk ("We use
+   cookies as a proxy for…" is a plausible sentence in a paper). It now requires a
+   banner's ending, and that case is a test too.
+
+2. **One of my test assertions was wrong, not the code.** The no-fabrication test first
+   compared word sets, and failed on `H<sub>2</sub>O`. Removing an inline tag joins
+   `H`, `2`, `O` into `H2O`, a "word" the input never spelled out. The correct
+   invariant is that cleaning only **deletes**, so the output's characters are a
+   subsequence of the input's. That is also the stronger check.
+
+3. **A block tag pair is a paragraph break.** `</p><p>` becomes `\n\n`, not `\n`. The
+   test expectation was wrong; the behaviour is right.
+
+### Not implemented
+
+**No fetching and no PDF extraction.** The text is the snippet or abstract that
+retrieval returned, so `evidence_depth` still never reaches `full_text` in practice.
+`RawDocument` accepts `full_text` for when a fetcher exists.
+
+**No embeddings, no vector store, no similarity search.** `requirements-ml.txt` is
+still not installed.
+
+**No persistence.** The bridges exist (`to_source_create()`, `to_document_create()`,
+`spans` for `DocumentChunkRepository.add_chunks`), but nothing calls them yet. That
+is the orchestrator's job.
+
+**No LLM calls, no evidence.** No chunk is linked to a claim. A chunk is a passage
+that *could* be cited, not evidence that anything is true.
+
+### Next stage
+
+**Stage 8b — fetching, embeddings and the vector store.** URL to full text with
+politeness and timeouts; Sentence Transformers and ChromaDB, with the chunk's UUIDv5
+as the vector id. That is where `evidence_depth` first reaches `full_text`, and where
+the chunking limitations above start to matter, because a full page is ten chunks,
+not two.
+
+---
+
 ## Stage 7 — Academic retrieval (Semantic Scholar) — 2026-10-07
 
 **Goal:** paper search returning candidate academic sources. No PDFs, no RAG, no LLM
@@ -1481,17 +1667,19 @@ benchmark, and no research UI. Every one of these has a directory and a
 Each stage ends with something runnable and testable. No stage depends on a
 later one.
 
-Stages 1–7 are done; see the entries above. The order has shifted twice: the frontend
+Stages 1–8 are done; see the entries above. Stage 8 was split: cleaning and
+chunking came first, over the text retrieval already returns, so the chunker's
+invariants are tested before any fetcher exists to feed it. The order has shifted twice: the frontend
 arrived before the data model, and both retrieval providers were brought forward ahead of
 the research API and the model-only pipeline — so retrieval exists before there is
 anything to generate with it, which is the right way round for a project whose point is
 grounding.
 
-### Stage 8 — Fetching, chunking and the vector store
-- Fetcher: URL to clean text, with politeness and timeouts
-- Chunker preserving `(start_char, end_char)` — the offsets every traceability claim
-  depends on
-- Sentence Transformers embedder, ChromaDB store, top-k retrieval
+### Stage 8b — Fetching, embeddings and the vector store
+- Fetcher: URL to clean text, with politeness and timeouts, feeding the stage-8
+  `DocumentProcessor` (which already preserves `(start_char, end_char)`)
+- Sentence Transformers embedder, ChromaDB store, top-k retrieval, with the chunk's
+  UUIDv5 as the vector id
 - **First stage that needs `requirements-ml.txt`.** Install it on the Python 3.11
   venv; whether torch and chromadb resolve there is still unverified.
 - **Done when:** a candidate source becomes a `document` with chunks whose offsets
