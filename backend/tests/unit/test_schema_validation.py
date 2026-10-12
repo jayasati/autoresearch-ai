@@ -273,19 +273,30 @@ class TestDocumentChunkCreate:
 
 
 class TestClaimCreate:
+    TYPED = {"claim_type": "factual", "importance": "medium"}
+
     def test_offsets_must_be_given_together(self):
         with pytest.raises(ValidationError, match="must be given together"):
-            ClaimCreate(report_id=ID(), position=0, text="<claim under test>", start_char=5)
+            ClaimCreate(
+                report_id=ID(), position=0, text="<claim under test>", start_char=5, **self.TYPED
+            )
 
     def test_a_claim_without_offsets_is_allowed(self):
-        claim = ClaimCreate(report_id=ID(), position=0, text="<claim under test>")
+        claim = ClaimCreate(report_id=ID(), position=0, text="<claim under test>", **self.TYPED)
         assert claim.start_char is None
 
     def test_rejects_an_inverted_span(self):
         with pytest.raises(ValidationError, match="greater than start_char"):
             ClaimCreate(
-                report_id=ID(), position=0, text="<claim>", start_char=20, end_char=10
+                report_id=ID(), position=0, text="<claim>", start_char=20, end_char=10,
+                **self.TYPED,
             )
+
+    def test_type_and_importance_are_required(self):
+        """An untyped claim cannot be weighted or verified appropriately; the
+        extractor must say what kind of assertion it stored."""
+        with pytest.raises(ValidationError):
+            ClaimCreate(report_id=ID(), position=0, text="<claim under test>")
 
 
 class TestEvidenceCreate:

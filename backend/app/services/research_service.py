@@ -23,12 +23,14 @@ from collections.abc import Sequence
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.constants import EvidenceDepth, ResearchMode, RunStatus
+from app.core.constants import CitationStatus, EvidenceDepth, ResearchMode, RunStatus
 from app.core.exceptions import ConflictError, NotFoundError
 from app.db.session import unit_of_work
 from app.models import ResearchRun, RunConfiguration
+from app.models.report import ReportSection
 from app.repositories import (
     BenchmarkRunRepository,
+    CitationRepository,
     ClaimRepository,
     ReportRepository,
     ResearchRunRepository,
@@ -38,6 +40,28 @@ from app.repositories import (
 from app.schemas.research import ResearchRequest
 
 logger = logging.getLogger(__name__)
+
+
+def parse_sections(markdown: str) -> list[tuple[str, int, int]]:
+    """`(heading, start_char, end_char)` for each `##` section of a report.
+
+    A section runs from its heading line to the next `##` heading (or the end), so
+    the spans tile the body and a character position maps to at most one section.
+    Text before the first `##` belongs to no section, like a claim in a preamble.
+    """
+    sections: list[tuple[str, int, int]] = []
+    offset = 0
+    current: tuple[str, int] | None = None
+    for line in markdown.splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped.startswith("## ") and not stripped.startswith("###"):
+            if current is not None:
+                sections.append((current[0], current[1], offset))
+            current = (stripped[3:].strip(), offset)
+        offset += len(line)
+    if current is not None:
+        sections.append((current[0], current[1], len(markdown)))
+    return [section for section in sections if section[0]]
 
 
 class ResearchService:
@@ -290,6 +314,18 @@ class ResearchService:
             )
             return source, link
 
+    def set_citation_labels(self, run_id: uuid.UUID, labels: dict[str, str]) -> int:
+        """Persist the [S#] labels assigned at evidence selection, by fingerprint.
+
+        Without this, the labels exist only in the response and the report text, and
+        claim extraction could not resolve a marker back to a source row.
+        """
+        with unit_of_work(self._session) as session:
+            ResearchRunRepository(session).get_or_raise(run_id)
+            labelled = SourceRepository(session).set_citation_labels(run_id, labels)
+            logger.info("Labelled %d sources for run %s", labelled, run_id)
+            return labelled
+
     # --- the report ------------------------------------------------------------
 
     def record_report(
@@ -301,9 +337,14 @@ class ResearchService:
         model: str | None = None,
         prompt_version: str | None = None,
     ):
-        """Persist the run's report. At most one per run, enforced here as well as by
-        the unique constraint, so the error is a clear conflict rather than an
-        IntegrityError surfacing from the driver."""
+        """Persist the run's report and its sections, in one transaction.
+
+        At most one report per run, enforced here as well as by the unique
+        constraint, so the error is a clear conflict rather than an IntegrityError
+        surfacing from the driver. Sections are parsed from the markdown's `##`
+        headings with their character spans, so a claim can later be attributed to
+        the section it sits in without duplicating any text.
+        """
         with unit_of_work(self._session) as session:
             run = ResearchRunRepository(session).get_or_raise(run_id)
             reports = ReportRepository(session)
@@ -314,7 +355,134 @@ class ResearchService:
             report = reports.create(
                 run=run, title=title, markdown=markdown, model=model, prompt_version=prompt_version
             )
+            for position, (heading, start, end) in enumerate(parse_sections(markdown)):
+                session.add(
+                    ReportSection(
+                        report=report,
+                        position=position,
+                        heading=heading,
+                        start_char=start,
+                        end_char=end,
+                    )
+                )
+            session.flush()
             logger.info(
-                "Recorded report %s for run %s (%d words)", report.id, run_id, report.word_count
+                "Recorded report %s for run %s (%d words, %d sections)",
+                report.id,
+                run_id,
+                report.word_count,
+                len(report.sections),
             )
             return report
+
+    # --- claims ------------------------------------------------------------------
+
+    def record_claims(
+        self,
+        run_id: uuid.UUID,
+        *,
+        claims: Sequence[dict],
+        extractor_model: str | None = None,
+    ) -> tuple[uuid.UUID, list[dict]]:
+        """Persist extracted claims and their citations, all of them or none.
+
+        Each entry carries `text`, `claim_type`, `importance`, `requires_citation`,
+        an optional `section` heading, and `citation_labels` — the [S#] markers the
+        report used. Markers are resolved here, against the run's own labelled
+        sources: a marker that resolves becomes an `unvalidated` citation pointing
+        at the source row, and a marker that resolves to nothing becomes a
+        `fabricated` one, because the report cited a source the run never had.
+        That distinction is structural, not a judgement call, which is why it can
+        be made at extraction time.
+        """
+        with unit_of_work(self._session) as session:
+            ResearchRunRepository(session).get_or_raise(run_id)
+            report = ReportRepository(session).get_for_run(run_id)
+            if report is None:
+                raise NotFoundError(
+                    f"Run {run_id} has no report to extract claims from.",
+                    details={"run_id": str(run_id)},
+                )
+            claim_repository = ClaimRepository(session)
+            if claim_repository.count_for_report(report.id) > 0:
+                raise ConflictError(
+                    f"Report {report.id} already has claims.",
+                    details={"report_id": str(report.id)},
+                )
+
+            label_to_source: dict[str, uuid.UUID] = {}
+            for link in SourceRepository(session).links_for_run(run_id):
+                if link.citation_label:
+                    label_to_source[link.citation_label] = link.source_id
+            sections = {section.heading.strip().lower(): section for section in report.sections}
+
+            citation_repository = CitationRepository(session)
+            rows: list[dict] = []
+            citation_total = 0
+            for position, entry in enumerate(claims):
+                section = sections.get((entry.get("section") or "").strip().lower())
+                claim = claim_repository.create(
+                    report=report,
+                    position=position,
+                    text=entry["text"],
+                    claim_type=entry["claim_type"],
+                    importance=entry["importance"],
+                    requires_citation=entry.get("requires_citation", True),
+                    report_section=section,
+                    extractor_model=extractor_model,
+                )
+                citation_ids: list[uuid.UUID] = []
+                cited_source_ids: list[uuid.UUID] = []
+                markers = list(dict.fromkeys(entry.get("citation_labels", [])))
+                for marker in markers:
+                    source_id = label_to_source.get(marker)
+                    if source_id is not None:
+                        citation = citation_repository.create(
+                            claim=claim,
+                            marker=marker,
+                            status=CitationStatus.UNVALIDATED,
+                            source_id=source_id,
+                            raw_reference=f"[{marker}]",
+                        )
+                        cited_source_ids.append(source_id)
+                    else:
+                        citation = citation_repository.create(
+                            claim=claim,
+                            marker=marker,
+                            status=CitationStatus.FABRICATED,
+                            source_id=None,
+                            raw_reference=f"[{marker}]",
+                            failure_reason=(
+                                f"The report cites [{marker}], but the run provided "
+                                "no source under that label."
+                            ),
+                        )
+                    citation_ids.append(citation.id)
+                citation_total += len(citation_ids)
+
+                # Response rows are built inside the session, so nothing is read off
+                # a detached ORM object later.
+                rows.append(
+                    {
+                        "id": claim.id,
+                        "claim_id": claim.id,
+                        "research_id": run_id,
+                        "claim_text": claim.text,
+                        "claim_type": claim.claim_type,
+                        "importance": claim.importance,
+                        "section": section.heading if section else None,
+                        "citation_ids": citation_ids,
+                        "position": position,
+                        "requires_citation": claim.requires_citation,
+                        "markers": markers,
+                        "cited_source_ids": cited_source_ids,
+                    }
+                )
+
+            logger.info(
+                "Recorded %d claims (%d citations) for report %s",
+                len(rows),
+                citation_total,
+                report.id,
+            )
+            return report.id, rows

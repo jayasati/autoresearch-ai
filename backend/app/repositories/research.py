@@ -120,6 +120,40 @@ class SourceRepository(Repository[Source]):
         self.session.add(link)
         return link
 
+    def links_for_run(self, run_id: uuid.UUID) -> Sequence[ResearchSource]:
+        """A run's source links, with their sources loaded."""
+        return (
+            self.session.execute(
+                select(ResearchSource)
+                .where(ResearchSource.research_run_id == run_id)
+                .options(selectinload(ResearchSource.source))
+            )
+            .scalars()
+            .all()
+        )
+
+    def set_citation_labels(self, run_id: uuid.UUID, labels: dict[str, str]) -> int:
+        """Write the [S#] labels onto a run's source links, keyed by fingerprint.
+
+        Labels are assigned at evidence selection — after the sources were attached —
+        and they must be persisted, because claim extraction later resolves the
+        report's markers through them. Returns how many links were labelled.
+        """
+        rows = self.session.execute(
+            select(ResearchSource)
+            .join(ResearchSource.source)
+            .where(ResearchSource.research_run_id == run_id)
+            .where(Source.fingerprint.in_(labels))
+        ).scalars()
+        labelled = 0
+        for link in rows:
+            fingerprint = link.source.fingerprint
+            if fingerprint is not None and fingerprint in labels:
+                link.citation_label = labels[fingerprint]
+                labelled += 1
+        self.flush()
+        return labelled
+
 
 class ResearchRunRepository(Repository[ResearchRun]):
     model = ResearchRun

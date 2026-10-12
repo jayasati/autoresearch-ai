@@ -14,7 +14,13 @@ from collections.abc import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.core.constants import CitationStatus, EvidenceRelation, VerificationVerdict
+from app.core.constants import (
+    CitationStatus,
+    ClaimImportance,
+    ClaimType,
+    EvidenceRelation,
+    VerificationVerdict,
+)
 from app.db.base import utcnow
 from app.models import (
     Citation,
@@ -149,6 +155,8 @@ class ClaimRepository(Repository[Claim]):
         report: Report,
         position: int,
         text: str,
+        claim_type: ClaimType = ClaimType.FACTUAL,
+        importance: ClaimImportance = ClaimImportance.MEDIUM,
         requires_citation: bool = True,
         **values,
     ) -> Claim:
@@ -156,6 +164,8 @@ class ClaimRepository(Repository[Claim]):
             report=report,
             position=position,
             text=text,
+            claim_type=claim_type,
+            importance=importance,
             requires_citation=requires_citation,
             extracted_at=values.pop("extracted_at", utcnow()),
             **values,

@@ -410,6 +410,7 @@ class ResearchOrchestrator:
             evidence.chunks_indexed = index_result.newly_indexed + index_result.already_present
             for hit in hits:
                 evidence.add_passage(hit)
+            self.research.set_citation_labels(run_id, evidence.labels)
         else:
             # HYBRID: no embeddings. The same evidence budget (top_k passages), but
             # selected by the provider's own ranking — that difference IS the
@@ -418,6 +419,7 @@ class ResearchOrchestrator:
             for chunk in chunks[: profile.top_k]:
                 evidence.add_passage(chunk)
             timings["evidence_retrieval"] = round(time.perf_counter() - t0, 3)
+            self.research.set_citation_labels(run_id, evidence.labels)
 
         return evidence
 

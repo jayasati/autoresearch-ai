@@ -5,6 +5,101 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 12 — Claim extraction — 2026-10-12
+
+**Goal:** a generated report in, a structured, typed, stored list of its factual
+claims out — the input verification needs. `POST /api/v1/research/{id}/claims`.
+
+### What was implemented
+
+- `app/services/claims/` — `ClaimExtractor`: the report and its known [S#] labels go
+  to the LLM as a **structured output validated by Pydantic twice** (strict schema in
+  the request, `ExtractedClaimModel` field rules on the content). Claim types:
+  factual, numerical, comparative, methodological, causal, historical, conclusion
+  (`ClaimType`); importance high/medium/low (`ClaimImportance`). The prompt forbids
+  extracting headings, opinions, transitions and stylistic filler, and forbids
+  inventing citations the sentence does not carry.
+- **Retry policy, exactly as specified:** a parse/validation failure is retried once
+  with a schema reminder; a second failure raises `claim_extraction_failed` (502)
+  and **stores nothing** — claims and citations land in one transaction or not at
+  all. One extraction per report: re-posting is a 409, because re-rolling a claim
+  set a benchmark already measured would be editing a result.
+- **Markers resolve structurally.** The orchestrator now persists the [S#] labels
+  onto `research_source` rows at evidence selection (`set_citation_labels`), so
+  extraction can resolve each cited marker: resolvable → a stored `Citation` with
+  the new **`unvalidated`** status pointing at the real source row; unresolvable →
+  **`fabricated`**, with the reason, because the report cited a source the run
+  never had. That distinction needs no judgement, which is why it is made now;
+  valid/misattributed/broken need validation, which is the next stage.
+- `record_report` now also parses `##` headings into `ReportSection` rows with
+  character spans, and each claim maps to the section it sits under.
+- Schema migration `c7d2a91e4b3f` (applied to the live database): `claim.claim_type`
+  and `claim.importance` (VARCHAR + vocabulary CHECKs, like every enum column) and
+  the `unvalidated` citation status, with `failed_citations_have_a_reason` updated —
+  unvalidated is not a failure, so it needs no reason.
+
+### One real defect found by the first live run, and fixed
+
+The first live extraction stored all 11 claims with **no section**: the model echoes
+headings as markdown (`## Overview of Findings`) while the stored headings are bare,
+so every lookup missed — silently, which is the worst way. Fixed with a normalising
+validator that strips heading markers, pinned by a test naming the live observation.
+(That first run, `10f44a8f…`, keeps its claims; their `report_section_id` is null.)
+
+### Example — the live extraction (run `90eb3420…`)
+
+Report (search_grounded, quick): *"Does remote work reduce employee burnout?"* —
+3 sources, sections "Evidence Supporting Reduced Burnout", "Evidence Indicating
+Risks of Burnout", "Conflicting Evidence", "Conclusion". Report text begins:
+
+> *"Remote work has been associated with several factors that may reduce employee
+> burnout. One key aspect is the communication flexibility… \[S1\]. … a significant
+> portion of remote workers—93%—report positive mental health impacts, with nearly
+> half (48%) indicating a reduction in stress \[S3\]."*
+
+Extraction: **16 claims, no retry, 2,312 tokens, 11.1s.** Stored rows (sample):
+
+| pos | type/importance | section | citations | text |
+|---|---|---|---|---|
+| 0 | factual/high | Evidence Supporting… | S1 → unvalidated | "Remote work has been associated with several factors that may reduce employee burnout." |
+| 1 | causal/high | Evidence Supporting… | S1 → unvalidated | "The communication flexibility provided by remote work environments can help…" |
+| 3 | numerical/high | Evidence Supporting… | S3 → unvalidated | "93% of remote workers report positive mental health impacts…" |
+| 4 | numerical/high | Evidence Supporting… | S3 → unvalidated | "48% of remote workers indicate a reduction in stress…" |
+
+Worth noticing: rows 3–4 are **one report sentence split into two atomic numerical
+claims** — the atomicity requirement doing its job, since the two figures will get
+separate verdicts. All 14 citations in this run stored `unvalidated` with real
+source ids; no fabricated markers this time. Claims 8/11/12/15 carry no citation —
+they are the report's own synthesis sentences, and citation-recall will ask about
+exactly them later.
+
+### Tests performed
+
+**776 backend tests, all passing** (14 new: extraction/typing/storage, unvalidated
+and fabricated citations, section mapping including the unmatched-heading case, the
+cap at 50 claims, retry-once, fail-safely-storing-nothing, extract-twice conflict,
+no-report 404, label and heading normalisation, claim-text collapsing, and the
+required-fields rule on `ClaimCreate`). The seeded run in these tests is produced by
+the real orchestrator over fakes, so the labels being resolved were persisted by the
+real code path. Migration suite green, `ruff` and `mypy` clean.
+
+### Known limitations
+
+- Claims carry no character offsets into the report yet (`start_char`/`end_char`
+  are null): the extractor atomicises sentences, and mapping rephrased claims back
+  to exact spans is its own problem, deferred.
+- `requires_citation` comes from the extractor model and is not yet audited.
+- Whether a resolvable citation actually *supports* its claim is explicitly not
+  decided here — every resolvable citation is `unvalidated` by construction.
+
+### Next stage
+
+**Claim verification** — judge each claim against the run's retrieved passages,
+turn `unvalidated` citations into valid/misattributed, link claims to chunks (the
+`document`/`document_chunk` rows), and compute the first metrics.
+
+---
+
 ## Stage 11 — The three research modes — 2026-10-12
 
 **Goal:** the same endpoint runs all three experimental configurations the benchmark

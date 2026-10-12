@@ -35,6 +35,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.constants import (
     CitationStatus,
+    ClaimImportance,
+    ClaimType,
     ConflictType,
     EvidenceRelation,
     VerificationVerdict,
@@ -69,6 +71,14 @@ class Claim(UUIDPrimaryKey, Base):
 
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # What kind of assertion this is, and how central it is to the report's answer.
+    # Typed at extraction because verification treats the kinds differently, and the
+    # metrics weight central claims more than peripheral ones.
+    claim_type: Mapped[ClaimType] = mapped_column(enum_column(ClaimType), nullable=False)
+    importance: Mapped[ClaimImportance] = mapped_column(
+        enum_column(ClaimImportance), nullable=False
+    )
 
     # The sentence in the report this claim was extracted from, and where it sits.
     source_sentence: Mapped[str | None] = mapped_column(Text)
@@ -239,9 +249,10 @@ class Citation(UUIDPrimaryKey, Base):
             "status <> 'valid' OR supporting_chunk_id IS NOT NULL",
             name="valid_citations_name_a_passage",
         ),
-        # Every failure must be explained.
+        # Every failure must be explained. 'unvalidated' is not a failure — it is a
+        # citation recorded at extraction that validation has not reached yet.
         CheckConstraint(
-            "status = 'valid' OR failure_reason IS NOT NULL",
+            "status IN ('valid', 'unvalidated') OR failure_reason IS NOT NULL",
             name="failed_citations_have_a_reason",
         ),
         Index("ix_citation_status", "status"),

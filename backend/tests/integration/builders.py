@@ -14,6 +14,8 @@ from datetime import UTC, datetime, timedelta
 
 from app.core.constants import (
     CitationStatus,
+    ClaimImportance,
+    ClaimType,
     EvidenceDepth,
     EvidenceRelation,
     ResearchMode,
@@ -168,6 +170,8 @@ def make_claim(report: Report, position: int = 0, **overrides) -> Claim:
         report=report,
         position=position,
         text=f"<claim {position} under test>",
+        claim_type=overrides.pop("claim_type", ClaimType.FACTUAL),
+        importance=overrides.pop("importance", ClaimImportance.MEDIUM),
         requires_citation=overrides.pop("requires_citation", True),
         extracted_at=NOW,
         **overrides,

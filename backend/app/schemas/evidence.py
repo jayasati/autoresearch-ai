@@ -19,6 +19,8 @@ from pydantic import Field, model_validator
 
 from app.core.constants import (
     CitationStatus,
+    ClaimImportance,
+    ClaimType,
     ConflictType,
     EvidenceRelation,
     VerificationVerdict,
@@ -40,6 +42,8 @@ class ClaimCreate(WriteModel):
     report_section_id: uuid.UUID | None = None
     position: int = Field(ge=0)
     text: str = Field(min_length=1)
+    claim_type: ClaimType
+    importance: ClaimImportance
     source_sentence: str | None = None
     start_char: int | None = Field(default=None, ge=0)
     end_char: int | None = Field(default=None, ge=0)
@@ -143,6 +147,15 @@ class CitationCreate(WriteModel):
                 )
             if self.failure_reason is not None:
                 raise ValueError("a valid citation has no failure_reason")
+        elif self.status is CitationStatus.UNVALIDATED:
+            # Recorded at extraction, not yet checked: no failure to explain, and no
+            # supporting passage to claim.
+            if self.failure_reason is not None:
+                raise ValueError("an unvalidated citation has no failure_reason yet")
+            if self.supporting_chunk_id is not None:
+                raise ValueError(
+                    "an unvalidated citation cannot already name a supporting passage"
+                )
         else:
             if not self.failure_reason:
                 raise ValueError(f"status '{self.status.value}' requires a failure_reason")
@@ -246,11 +259,58 @@ class ClaimRead(IdentifiedModel):
     report_section_id: uuid.UUID | None
     position: int
     text: str
+    claim_type: ClaimType
+    importance: ClaimImportance
     source_sentence: str | None
     start_char: int | None
     end_char: int | None
     requires_citation: bool
+    extractor_model: str | None = None
     extracted_at: datetime
     verification_result: VerificationResultRead | None = None
     citations: list[CitationRead] = Field(default_factory=list)
     evidence: list[EvidenceRead] = Field(default_factory=list)
+
+
+class ExtractedClaimRead(IdentifiedModel):
+    """One stored claim in the shape the extraction endpoint reports.
+
+    The spec's required fields, under the spec's names (`claim_id` is the row id,
+    `claim_text` the text), plus what makes the row auditable: the markers as the
+    report wrote them, and which of them resolved to a real retrieved source.
+    """
+
+    claim_id: uuid.UUID = Field(description="The claim row's id; same value as `id`.")
+    research_id: uuid.UUID
+    claim_text: str
+    claim_type: ClaimType
+    importance: ClaimImportance
+    section: str | None = Field(description="Heading of the report section it sits under.")
+    citation_ids: list[uuid.UUID] = Field(
+        default_factory=list, description="The stored citation rows for this claim."
+    )
+
+    position: int
+    requires_citation: bool
+    markers: list[str] = Field(
+        default_factory=list, description="Citation markers as written, e.g. ['S1', 'S3']."
+    )
+    cited_source_ids: list[uuid.UUID] = Field(
+        default_factory=list,
+        description="Source rows the markers resolved to; a marker that resolved to "
+        "nothing is recorded as a fabricated citation instead.",
+    )
+
+
+class ClaimExtractionResponse(IdentifiedModel):
+    """What claim extraction did for one run. `id` is the report's id."""
+
+    research_id: uuid.UUID
+    claim_count: int = Field(ge=0)
+    claims: list[ExtractedClaimRead]
+    extractor_model: str
+    prompt_version: str
+    llm_calls: int = Field(ge=1)
+    retried: bool = Field(description="True when the first output failed validation.")
+    token_usage: dict[str, int] | None = None
+    duration_seconds: float = Field(ge=0)

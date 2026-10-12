@@ -42,10 +42,41 @@ class VerificationVerdict(StrEnum):
 
 
 class CitationStatus(StrEnum):
+    UNVALIDATED = "unvalidated"  # recorded at extraction; validation has not run yet
     VALID = "valid"              # citation resolves and supports the claim
     BROKEN = "broken"            # URL/DOI does not resolve
     MISATTRIBUTED = "misattributed"  # resolves, but does not support the claim
     FABRICATED = "fabricated"    # no such source exists
+
+
+class ClaimType(StrEnum):
+    """What kind of assertion a claim makes.
+
+    Typed because the verification and metric stages treat them differently: a
+    NUMERICAL claim can be checked against a figure, a CAUSAL claim needs much
+    stronger evidence than a FACTUAL one, and a CONCLUSION is the report's own
+    synthesis rather than something one passage can establish.
+    """
+
+    FACTUAL = "factual"              # a verifiable statement of fact
+    NUMERICAL = "numerical"          # asserts a quantity, rate, or measurement
+    COMPARATIVE = "comparative"      # compares two or more things
+    METHODOLOGICAL = "methodological"  # about how a study or process was conducted
+    CAUSAL = "causal"                # asserts that one thing causes another
+    HISTORICAL = "historical"        # about past events or developments
+    CONCLUSION = "conclusion"        # the report's own summarising judgement
+
+
+class ClaimImportance(StrEnum):
+    """How central a claim is to the report's answer.
+
+    Three levels, not a score: an LLM assigns these far more consistently than a
+    number, and the metrics only need "weight the central claims more".
+    """
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
 
 
 class ConflictType(StrEnum):
