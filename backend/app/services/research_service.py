@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.constants import ResearchMode, RunStatus
+from app.core.constants import EvidenceDepth, ResearchMode, RunStatus
 from app.core.exceptions import ConflictError, NotFoundError
 from app.db.session import unit_of_work
 from app.models import ResearchRun, RunConfiguration
@@ -254,6 +254,10 @@ class ResearchService:
         *,
         fingerprint: str | None,
         citation_label: str | None = None,
+        evidence_depth: EvidenceDepth = EvidenceDepth.SNIPPET,
+        retriever: str | None = None,
+        retrieval_query: str | None = None,
+        rank: int | None = None,
         **source_values,
     ):
         """Deduplicate a source and link it to a run, in one transaction.
@@ -261,12 +265,23 @@ class ResearchService:
         Both halves must land together: a source row with no link is invisible to the
         run that found it, and a link to a source that was never created is
         impossible. Doing them in separate transactions would allow the first.
+
+        The link carries the per-run retrieval facts — depth, retriever, query, rank —
+        because they differ between runs and the association row is where they live.
         """
         with unit_of_work(self._session) as session:
             run = ResearchRunRepository(session).get_or_raise(run_id)
             sources = SourceRepository(session)
             source, created = sources.get_or_create(fingerprint, **source_values)
-            link = sources.link_to_run(run, source, citation_label=citation_label)
+            link = sources.link_to_run(
+                run,
+                source,
+                citation_label=citation_label,
+                evidence_depth=evidence_depth,
+                retriever=retriever,
+                retrieval_query=retrieval_query,
+                rank=rank,
+            )
             logger.info(
                 "Attached source %s to run %s (%s)",
                 source.id,
@@ -274,3 +289,32 @@ class ResearchService:
                 "new" if created else "deduplicated",
             )
             return source, link
+
+    # --- the report ------------------------------------------------------------
+
+    def record_report(
+        self,
+        run_id: uuid.UUID,
+        *,
+        title: str,
+        markdown: str,
+        model: str | None = None,
+        prompt_version: str | None = None,
+    ):
+        """Persist the run's report. At most one per run, enforced here as well as by
+        the unique constraint, so the error is a clear conflict rather than an
+        IntegrityError surfacing from the driver."""
+        with unit_of_work(self._session) as session:
+            run = ResearchRunRepository(session).get_or_raise(run_id)
+            reports = ReportRepository(session)
+            if reports.get_for_run(run_id) is not None:
+                raise ConflictError(
+                    f"Run {run_id} already has a report.", details={"run_id": str(run_id)}
+                )
+            report = reports.create(
+                run=run, title=title, markdown=markdown, model=model, prompt_version=prompt_version
+            )
+            logger.info(
+                "Recorded report %s for run %s (%d words)", report.id, run_id, report.word_count
+            )
+            return report

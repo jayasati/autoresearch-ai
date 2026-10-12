@@ -27,7 +27,10 @@ from app.schemas.common import ErrorResponse, ServiceInfoResponse
 
 logger = logging.getLogger(__name__)
 
-STAGE = "stage-2: backend foundation (no research functionality)"
+STAGE = (
+    "stage-10: search-grounded research pipeline "
+    "(POST /api/v1/research/start; no claim verification yet)"
+)
 
 
 @asynccontextmanager

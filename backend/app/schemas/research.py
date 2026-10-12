@@ -9,6 +9,7 @@ call or quietly corrupt a benchmark.
 import re
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
@@ -20,6 +21,23 @@ MAX_TOPIC_LENGTH = 500
 
 # A topic has to contain letters. "1234567890123" is long enough and useless.
 _HAS_LETTER = re.compile(r"[^\W\d_]", re.UNICODE)
+
+
+def substantive_topic(value: str) -> str:
+    """Collapse whitespace, then insist on actual words.
+
+    Shared by every schema that accepts a topic, because each of them reaches paid
+    APIs: the length check alone passes a string of digits or punctuation, which
+    would reach the planner and spend a model call producing nothing.
+    """
+    collapsed = " ".join(value.split())
+    if len(collapsed) < MIN_TOPIC_LENGTH:
+        raise ValueError(
+            f"topic must be at least {MIN_TOPIC_LENGTH} characters once whitespace is collapsed"
+        )
+    if not _HAS_LETTER.search(collapsed):
+        raise ValueError("topic must contain words, not only digits or punctuation")
+    return collapsed
 
 
 class ResearchRequest(WriteModel):
@@ -48,20 +66,7 @@ class ResearchRequest(WriteModel):
     @field_validator("topic")
     @classmethod
     def topic_must_be_substantive(cls, value: str) -> str:
-        """Collapse whitespace, then insist on actual words.
-
-        The length check alone passes a string of digits or punctuation, which
-        would reach the planner and spend a model call producing nothing.
-        """
-        collapsed = " ".join(value.split())
-        if len(collapsed) < MIN_TOPIC_LENGTH:
-            raise ValueError(
-                f"topic must be at least {MIN_TOPIC_LENGTH} characters once "
-                "whitespace is collapsed"
-            )
-        if not _HAS_LETTER.search(collapsed):
-            raise ValueError("topic must contain words, not only digits or punctuation")
-        return collapsed
+        return substantive_topic(value)
 
     @property
     def normalized_topic(self) -> str:
@@ -218,3 +223,115 @@ class BenchmarkRunRead(TimestampedModel):
     topic_set_version: str
     notes: str | None
     completed_at: datetime | None
+
+
+# --- the end-to-end pipeline endpoint (stage 10) -----------------------------------
+
+ResearchDepth = Literal["quick", "medium", "deep"]
+
+
+class ResearchStartRequest(WriteModel):
+    """`POST /api/v1/research/start`: run the whole pipeline for one topic.
+
+    `depth` is how much retrieval and synthesis to pay for, not which pipeline runs —
+    that is `ResearchMode`, and this endpoint currently runs SEARCH_GROUNDED only.
+    """
+
+    topic: str = Field(
+        min_length=MIN_TOPIC_LENGTH,
+        max_length=MAX_TOPIC_LENGTH,
+        description="The research question. A question decomposes better than a keyword.",
+        examples=["Does retrieval-augmented generation reduce factual errors?"],
+    )
+    depth: ResearchDepth = Field(
+        default="medium",
+        description="How much retrieval and synthesis to spend: quick, medium or deep.",
+    )
+
+    @field_validator("topic")
+    @classmethod
+    def topic_must_be_substantive(cls, value: str) -> str:
+        return substantive_topic(value)
+
+
+class CitedSourceRead(ReadModel):
+    """One source the report's citations can resolve to.
+
+    `label` is the bracketed marker used in the report text ([S1], [S2], …), assigned
+    at evidence selection. `cited_in_report` is observed, not assumed: it records
+    whether the generated text actually used the label.
+    """
+
+    label: str
+    source_id: uuid.UUID | None = Field(
+        default=None, description="The persisted `source` row, when the run was persisted."
+    )
+    source_type: str
+    title: str | None
+    url: str | None
+    doi: str | None
+    provider: str | None
+    year: int | None
+    venue: str | None
+    evidence_depth: str
+    fingerprint: str
+    chunks_used: int = Field(ge=1, description="How many retrieved passages came from it.")
+    cited_in_report: bool
+
+
+class ProviderFailure(ReadModel):
+    """A retrieval provider that failed while the run still proceeded.
+
+    Recorded rather than hidden: a report built from one provider's results is a
+    different (and weaker) result than one built from both, and the metadata must
+    say which happened.
+    """
+
+    provider: str
+    code: str
+    message: str
+
+
+class ExecutionMetadata(ReadModel):
+    """What the run actually did and spent. Observations, never estimates."""
+
+    mode: str
+    depth: ResearchDepth
+    model: str = Field(description="The model that wrote the report, as the provider named it.")
+    embedding_model: str
+    collection: str
+
+    web_candidates: int = Field(ge=0)
+    academic_candidates: int = Field(ge=0)
+    sources_attached: int = Field(ge=0)
+    documents_processed: int = Field(ge=0)
+    documents_with_text: int = Field(ge=0)
+    chunks_indexed: int = Field(ge=0)
+    chunks_retrieved: int = Field(ge=0)
+    sources_in_evidence: int = Field(ge=0)
+    sources_cited: int = Field(ge=0)
+
+    llm_calls: int = Field(ge=0)
+    token_usage: dict[str, int] | None = Field(
+        default=None, description="Prompt/completion/total tokens; null when unreported."
+    )
+
+    timings_seconds: dict[str, float] = Field(
+        description="Wall-clock seconds per pipeline stage."
+    )
+    total_seconds: float = Field(ge=0)
+
+    provider_failures: list[ProviderFailure] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ResearchStartResponse(ReadModel):
+    """The finished run: the report, the sources its citations resolve to, and the
+    receipts."""
+
+    research_id: uuid.UUID
+    topic: str
+    status: RunStatus
+    report: str = Field(description="Markdown, with [S#] citations and a Sources section.")
+    sources: list[CitedSourceRead]
+    execution_metadata: ExecutionMetadata

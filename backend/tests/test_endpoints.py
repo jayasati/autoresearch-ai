@@ -18,9 +18,11 @@ class TestRoot:
         assert body["health_url"] == "/api/health"
         assert body["api_version_prefix"] == "/api/v1"
 
-    def test_states_that_research_is_not_implemented(self, client):
+    def test_states_what_is_and_is_not_implemented(self, client):
         """The stage marker is part of the contract while the project is unfinished."""
-        assert "no research functionality" in client.get("/").json()["stage"]
+        stage = client.get("/").json()["stage"]
+        assert "research/start" in stage
+        assert "no claim verification" in stage
 
 
 class TestHealth:
@@ -52,8 +54,9 @@ class TestSystemRoutes:
         body = client.get("/api/v1/system/capabilities").json()
         assert set(body["modes"]) == {"model_only", "hybrid", "search_grounded"}
 
-    def test_capabilities_reports_nothing_implemented_yet(self, client):
-        assert client.get("/api/v1/system/capabilities").json()["implemented"] == []
+    def test_capabilities_reports_what_actually_runs(self, client):
+        implemented = client.get("/api/v1/system/capabilities").json()["implemented"]
+        assert implemented == ["search_grounded"]
 
     def test_capabilities_names_the_credentials_still_needed(self, client):
         """So the frontend can tell the user what to put in .env, by name."""

@@ -28,5 +28,6 @@ async def capabilities(settings: SettingsDep) -> dict:
         "modes": [m.value for m in ResearchMode],
         "integrations": settings.integration_status,
         "missing_credentials": settings.missing_credentials,
-        "implemented": [],  # research capabilities; filled in as stages land
+        # Research capabilities that actually run end to end, filled in as stages land.
+        "implemented": [ResearchMode.SEARCH_GROUNDED.value],
     }

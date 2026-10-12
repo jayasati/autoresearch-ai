@@ -5,6 +5,168 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 10 — The first end-to-end pipeline (SEARCH_GROUNDED) — 2026-10-12
+
+**Goal:** `POST /api/v1/research/start` — topic in, grounded and cited report out,
+through every piece built so far:
+
+```
+topic → Tavily + Semantic Scholar → source rows → cleaning & chunking
+      → embeddings → per-run ChromaDB collection → top-k evidence
+      → OpenAI synthesis → report with [S#] citations + code-built Sources section
+```
+
+SEARCH_GROUNDED only, as specified. No claim verification yet — the citations are
+the model following instructions under a prompt that forbids uncited sentences, not
+yet checked claims; verification is the next stage and the docstrings say so.
+
+### What was implemented
+
+- `app/services/orchestration/` — `ResearchOrchestrator` (the pipeline),
+  `prompts.py` (versioned synthesis prompt, `synthesis-grounded-v1`),
+  `exceptions.py` (`NoEvidenceError` 422, `UncitedReportError` 502)
+- `POST /api/v1/research/start` (`app/api/v1/routes/research.py`), synchronous for
+  now; the response already carries `research_id`, so a later move to 202+poll will
+  not change what callers key on. Input `{topic, depth: quick|medium|deep}`; output
+  `{research_id, topic, status, report, sources, execution_metadata}`
+- `ResearchService` gains `record_report` and `attach_source` now forwards the
+  per-run retrieval facts (depth, retriever, query, rank) to the association row
+- `DEPTH_PROFILES`: quick 4+4 sources/top-4, medium 8+8/top-6, deep 12+15/top-10,
+  with matching report token budgets — so "deep" means the same thing in every run
+- Capabilities endpoint now reports `implemented: ["search_grounded"]`; the root
+  stage marker names the endpoint and what is still missing
+
+### Decisions made
+
+1. **Citations resolve by construction, not by trust.** Labels `[S1]…` are assigned
+   by code at evidence selection; the model may only cite labels that exist; and the
+   report's Sources section is **appended by code from the actual retrieved
+   sources** — the model is forbidden from writing a bibliography, so no URL in a
+   final report can be hallucinated. Labels the model invents anyway are left in
+   the text and *warned about* in the metadata, not silently scrubbed.
+2. **An uncited report is a failed run.** One retry with a sterner reminder, then
+   `UncitedReportError`. An uncited report is MODEL_ONLY wearing this mode's name.
+3. **Partial retrieval is recorded, not hidden.** One provider failing →
+   `execution_metadata.provider_failures`, run continues; both failing → the run
+   fails with the provider's own error. No sources, or no source with usable text →
+   `NoEvidenceError`; a topic with no evidence gets no report, which is the point
+   of the project.
+4. **A per-run ChromaDB collection** (`run_<id>`), so evidence retrieval can never
+   pick up another run's chunks. The global-collection alternative would have needed
+   fingerprint filtering on every query and one bug away from cross-run leakage.
+5. **Every failure after run creation marks the run `failed`** with the error's own
+   code (in a try/except that cannot mask the original error), so the API response
+   and the stored run never tell two stories.
+6. **Document/chunk rows are deliberately not persisted yet.** Chunks live in the
+   run's Chroma collection with full source metadata; the `document`/`document_chunk`
+   tables are what claim verification needs (claim→chunk links), so they land with it.
+7. **One embedder per process** (`lru_cache`), because the model takes seconds to
+   load and holds no per-run state.
+
+### Tests performed
+
+**752 backend tests, all passing** (13 new in `tests/unit/test_orchestrator.py`).
+The orchestrator tests run against a real throwaway SQLite database and a real
+tmp-dir ChromaDB, with fake providers — the wiring is what is under test, and no
+test touches the network or spends a token. Covered: the happy path (cited report,
+labelled resolvable sources, run and report persisted, honest metadata, depth caps
+evidence); partial retrieval (one provider down → recorded and survived; both down →
+run failed with the provider's code); no evidence (zero candidates; metadata-only
+papers); synthesis failures (uncited twice → failed run; uncited once → retry with
+warning; unknown labels warned about); and no-LLM-configured failing before any row
+or search is spent. Two stage-2 endpoint tests updated: the stage marker and
+`implemented` list now state what actually runs.
+
+### The real end-to-end execution (the spec's requirement)
+
+Run against the live APIs — Tavily, Semantic Scholar, OpenAI, Neon PostgreSQL —
+through the real server (`uvicorn`, `POST /api/v1/research/start`), topic *"Does
+retrieval-augmented generation reduce hallucinations in large language models?"*,
+depth `quick`:
+
+| Observation | Value |
+|---|---|
+| status / research_id | `completed`, run `8b74a60b-63c6-44c0-82fe-78b439c27307` |
+| retrieval | 4 web + 4 academic candidates, both providers succeeded, 2.4s |
+| sources attached | 8 rows in Neon (7 with text; 1 paper was metadata-only, kept and honestly unusable) |
+| indexing | 13 chunks into collection `run_8b74a60b…`, 13.4s (first-call model load included) |
+| evidence | top-4 chunks from 3 sources, 0.017s |
+| synthesis | `gpt-4o-mini-2024-07-18`, 1 call, 1,382 tokens, 5.6s |
+| report | 385 words, 3 sources all actually cited (`[S1]–[S3]`), Sources section appended; title, model and `synthesis-grounded-v1` recorded on the `report` row |
+| total | **29.0s** end to end, zero warnings, zero provider failures |
+
+Verified afterwards in the database: the run is `completed`, the report row exists
+with clean UTF-8 text (an encoding artefact in the terminal output turned out to be
+the Windows console codepage, not the data — checked character-by-character).
+
+What the execution also showed, recorded rather than smoothed over: **at quick
+depth, all selected evidence passages came through the web retrieval channel, while
+the Semantic Scholar abstracts ranked below them for the tested topic.** This is a
+preliminary observation from a single run, not a confirmed system-wide defect.
+
+### Follow-up verification of that observation (same day, no code changed)
+
+The observation was checked against the run's own data — the persisted source rows
+in PostgreSQL, and the run's ChromaDB collection re-queried deterministically (same
+embedder, same query, no API calls). Five questions, five answers:
+
+1. **Are the selected "web" sources genuinely academic?** Two of three are. S1 is an
+   MDPI journal article (mdpi.com, the "Hallucination Mitigation for RAG" review),
+   S2 is a PubMed Central paper (pmc.ncbi.nlm.nih.gov, MEGA-RAG), S3 is an AWS
+   engineering blog. So "all evidence was web" overstated it: the report is mostly
+   grounded in peer-reviewed literature that arrived *through the web channel*.
+
+2. **Do the records distinguish retrieval channel from source type?** Yes and no.
+   Every `research_source` row stores both `retriever` (`tavily` /
+   `semantic_scholar`) and the source's `source_type` (`web` / `academic`) plus
+   `evidence_depth` and rank — verified by querying the run's 8 rows. But
+   `source_type` is currently *derived from the channel* (a Tavily result is always
+   typed `web`), so the MDPI paper is typed `web`. Channel is recorded faithfully;
+   content type is channel-inferred, not content-inferred. A known modelling
+   limitation, now written down.
+
+3. **Is source diversity measured?** Not yet. `MetricKey.SOURCE_DIVERSITY` exists as
+   an enum value and in the database's metric vocabulary, and the retrieval layer
+   deduplicates precisely so the metric will not be overstated later — but nothing
+   computes it. It belongs to the evaluation stage.
+
+4. **Is the selected evidence claim-supporting, or merely similar wording?**
+   Claim-supporting, verified by reading all four passages against the report. The
+   causes-of-hallucination claim traces to the review's passage listing "data source
+   problems, query problems, retriever problems, retrieval strategy problems"; the
+   does-not-eliminate-entirely claim to two passages saying exactly that; the S3
+   claim to the AWS passage. Ranking all 13 chunks also showed the gap was
+   substantive, not lexical: the best academic chunk (sim 0.619, rank 5, just below
+   the top-4 cutoff) came from the one on-topic abstract, while the others —
+   a cardiology chatbot, a legal-reasoning framework, GraphRAG — were tangential
+   application papers (sims 0.18–0.40). For this topic, Semantic Scholar's top
+   results simply were less relevant than the web channel's; the selection did its
+   job.
+
+5. **Is any change necessary to complete this phase?** No. No concrete bug was
+   found; the evidence-selection algorithm is unchanged.
+
+One genuine flaw surfaced by reading the passages: the MEGA-RAG chunk carries
+reference-list fragments ("21. Gao Y, Xiong Y, … arXiv preprint …") from the
+provider's snippet — bibliography noise the deletion-only boilerplate stripper has
+no rule for. Harmless here, logged as a limitation for the cleaning stage.
+
+**Recommended for the evaluation phase, separately, in value order:** compute
+`SOURCE_DIVERSITY` over runs before concluding anything systematic; derive
+`source_type` from the resolved URL/DOI (an mdpi.com or PMC page is an academic
+publication whichever channel found it); full-text fetching, which makes academic
+sources competitive beyond their abstracts; then, only if measurement shows a
+systematic skew, provider-aware interleaving or MMR in evidence selection.
+
+### Next stage
+
+**Claim verification** — extract claims from the report, link each to the chunks
+that support it (which is when `document`/`document_chunk` rows land), verify, and
+compute the first real metrics. That is the stage where a citation stops being an
+instruction followed and becomes a checked fact.
+
+---
+
 ## Stage 9 — LLM service: the foundation-model boundary — 2026-10-12
 
 > Stage 8b predicted stage 9 would be the fetcher. The LLM service was built first

@@ -1,7 +1,7 @@
 # services/ — Use cases, and the transaction boundary
 
-**`research_service.py`, `retrieval/`, `processing/`, `vectorstore/` and `llm/` are
-implemented.** The rest arrive with their stages.
+**`research_service.py`, `retrieval/`, `processing/`, `vectorstore/`, `llm/` and
+`orchestration/` are implemented.** The rest arrive with their stages.
 
 This layer answers "what happened, and did *all* of it happen". Each public method is
 one atomic operation: it either completes and commits, or raises and leaves the
@@ -99,3 +99,15 @@ the provider is swappable in one place. The key never appears in logs or excepti
 usage is reported verbatim or not at all, and the retry/timeout policy is configured
 SDK machinery pinned by mocked-transport tests. No research prompts live here; see
 [`llm/README.md`](llm/README.md).
+
+## `orchestration/` — the end-to-end pipeline
+
+`ResearchOrchestrator` wires everything above into `POST /api/v1/research/start`:
+both retrieval providers concurrently, sources attached to the run, chunks indexed
+into a per-run ChromaDB collection, top-k evidence retrieved, and a grounded report
+synthesised with `[S#]` citations — whose Sources section is appended by code from
+the real retrieved sources, so no URL in a report can be hallucinated. One provider
+failing is recorded partial retrieval; both failing, no usable text, or an uncited
+report fail the run honestly (`NoEvidenceError`, `UncitedReportError`), never
+returning something that merely looks like a result. SEARCH_GROUNDED only; no
+planning, fetching, or claim verification yet.
