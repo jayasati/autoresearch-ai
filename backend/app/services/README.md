@@ -102,12 +102,16 @@ SDK machinery pinned by mocked-transport tests. No research prompts live here; s
 
 ## `orchestration/` — the end-to-end pipeline
 
-`ResearchOrchestrator` wires everything above into `POST /api/v1/research/start`:
-both retrieval providers concurrently, sources attached to the run, chunks indexed
-into a per-run ChromaDB collection, top-k evidence retrieved, and a grounded report
-synthesised with `[S#]` citations — whose Sources section is appended by code from
-the real retrieved sources, so no URL in a report can be hallucinated. One provider
-failing is recorded partial retrieval; both failing, no usable text, or an uncited
-report fail the run honestly (`NoEvidenceError`, `UncitedReportError`), never
-returning something that merely looks like a result. SEARCH_GROUNDED only; no
-planning, fetching, or claim verification yet.
+`ResearchOrchestrator` wires everything above into `POST /api/v1/research/start`,
+under one of three **experimental configurations** (standard patterns, nothing
+novel — the point is comparing them fairly): `model_only` (no retrieval, citations
+forbidden), `hybrid` (Tavily snippets as evidence in provider-rank order, no
+embeddings), and `search_grounded` (both providers, per-run ChromaDB collection,
+top-k evidence by similarity). The modes differ in exactly one function
+(`_acquire_evidence`); the synthesis prompt, citation requirement, persistence,
+status machine and failure policy are shared code that cannot tell them apart, and
+`execution_metadata.evidence_selection` records which path ran. The report's
+Sources section is appended by code from the real retrieved sources, so no URL in a
+report can be hallucinated. Partial retrieval is recorded; no usable text or an
+uncited report (in the evidence modes) fails the run honestly (`NoEvidenceError`,
+`UncitedReportError`). No planning, fetching, or claim verification yet.

@@ -5,6 +5,106 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 11 — The three research modes — 2026-10-12
+
+**Goal:** the same endpoint runs all three experimental configurations the benchmark
+will compare. **These are not novel techniques** — each is a standard pattern
+(parametric generation, search-augmented prompting, retrieval-augmented generation);
+the contribution is holding everything else constant so their differences become
+measurable.
+
+### Architecture
+
+```
+                        ┌─ MODEL_ONLY ──────── (no evidence) ──────────────┐
+topic ─ create run ─────┼─ HYBRID ──────────── Tavily → chunks in           ├─ OpenAI ─ report
+        (mode recorded) │                      provider-rank order          │  (+ sources
+                        └─ SEARCH_GROUNDED ─── Tavily + Semantic Scholar    │   section for
+                                               → ChromaDB → top-k by        │   evidence modes)
+                                               similarity ─────────────────┘
+```
+
+The modes differ in exactly one function, `_acquire_evidence`, which returns one
+`Evidence` shape whatever produced it. Everything after it — synthesis prompt and
+evidence formatting, the citation requirement and its retry, report persistence, the
+status machine, the failure policy, the depth profiles — is shared code that cannot
+tell the modes apart. That indifference is the fairness mechanism, and
+`execution_metadata.evidence_selection` records which path ran (`none` /
+`provider_rank` / `semantic_top_k`).
+
+Mode-specific honesty rules: MODEL_ONLY's prompt **forbids** citations, named
+papers, URLs and reference sections (there are no sources; inventing one would be
+fabrication), has no citation retry, and warns about any citation-like markers the
+model emits anyway. HYBRID and SEARCH_GROUNDED keep stage 10's rules unchanged. The
+API accepts `mode` case-insensitively (`MODEL_ONLY` and `model_only` are the same
+request); status for MODEL_ONLY goes PLANNING → DRAFTING with no retrieval stage,
+because pretending a retrieval stage happened would be a small lie in the run record.
+
+### The live comparison — one question, three modes, all stored
+
+Topic: *"Does intermittent fasting improve long-term weight loss outcomes?"*, depth
+`quick`, run through the real server against the live APIs. All three runs
+completed and persist in PostgreSQL with their configurations and reports:
+
+| | MODEL_ONLY | HYBRID | SEARCH_GROUNDED |
+|---|---|---|---|
+| run id | `7d174190…` | `841548a2…` | `728d7ce6…` |
+| evidence selection | none | provider_rank | semantic_top_k |
+| candidates | — | 4 web | 4 web + 4 academic |
+| chunks indexed | 0 | 0 (no embeddings) | 17 |
+| evidence passages | 0 | 4 | 4 |
+| sources cited | 0 of 0 | 3 of 3 | 4 of 4 |
+| tokens | 851 | 1,311 | 1,297 |
+| wall clock | 9.0s | 12.8s | 26.2s |
+| report | 534 words, uncited by design | 361 words, all [S#] resolve | 380 words, all [S#] resolve |
+
+Example outputs (openings, verbatim): MODEL_ONLY — "*Intermittent fasting (IF) has
+gained popularity as a dietary strategy… This report explores…*" (fluent, broad,
+zero phantom citations — the prompt rule held). HYBRID — "*…alternates between
+periods of eating and fasting… [S1]*" grounded in Geisinger, Harvard-adjacent press
+and a medical explainer, all web. SEARCH_GROUNDED — same shape, but **two of its
+four cited sources are Semantic Scholar papers**, including "Long-term Effects of
+Intermittent Fasting on Weight Loss" — directly on topic.
+
+### Differences between modes, as observed
+
+- **Cost and speed scale with grounding**: 9s/851 tokens → 13s/1,311 → 26s/1,297.
+  SEARCH_GROUNDED's extra 13s over HYBRID is embedding and indexing, not the LLM.
+- **MODEL_ONLY writes the longest, most confident report** — with nothing behind
+  it. That is precisely the behaviour the benchmark exists to measure, and why the
+  baseline must exist.
+- **HYBRID is bounded by what a search engine surfaces**: consumer-health
+  explainers, all web, ordered by the provider's idea of relevance.
+- **SEARCH_GROUNDED reached the academic literature**: 2 of 4 cited sources were
+  papers. This also closes stage 10's open observation — the all-web evidence there
+  was topic-dependent (that topic's academic candidates were tangential), not a
+  systematic channel bias. One more data point, still not a benchmark.
+
+### Known limitations
+
+- The comparison above is **one topic at quick depth** — an illustration, not an
+  evaluation. The benchmark stage owns real comparison.
+- Citations in the two evidence modes are **instructed, not verified**; claim
+  verification is still the next stage. MODEL_ONLY's factual accuracy is entirely
+  unmeasured (by design, until then).
+- HYBRID's `provider_rank` selection takes the first `top_k` chunks in candidate
+  order, so a long first snippet can crowd out later sources.
+- Snippet/abstract depth only (no fetcher); `source_type` is still channel-derived
+  (stage 10's verification); the bibliography-fragment noise in provider snippets
+  remains unhandled by the deletion-only cleaner.
+
+**Tests: 762 passing** (10 new: MODEL_ONLY's no-retrieval/no-sources/phantom-marker
+behaviour, HYBRID's web-only provider-rank path and its single-provider failure,
+case-insensitive mode, per-mode configuration recording). `ruff` and `mypy` clean.
+The capabilities endpoint now reports all three modes implemented.
+
+### Next stage
+
+Unchanged: **claim verification**, now with three modes' reports to verify against
+each other — which is the comparison the project was built for.
+
+---
+
 ## Stage 10 — The first end-to-end pipeline (SEARCH_GROUNDED) — 2026-10-12
 
 **Goal:** `POST /api/v1/research/start` — topic in, grounded and cited report out,

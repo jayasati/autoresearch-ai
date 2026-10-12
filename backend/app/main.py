@@ -28,7 +28,7 @@ from app.schemas.common import ErrorResponse, ServiceInfoResponse
 logger = logging.getLogger(__name__)
 
 STAGE = (
-    "stage-10: search-grounded research pipeline "
+    "stage-11: three research modes "
     "(POST /api/v1/research/start; no claim verification yet)"
 )
 

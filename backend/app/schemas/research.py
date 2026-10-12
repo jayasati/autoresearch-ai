@@ -233,8 +233,9 @@ ResearchDepth = Literal["quick", "medium", "deep"]
 class ResearchStartRequest(WriteModel):
     """`POST /api/v1/research/start`: run the whole pipeline for one topic.
 
-    `depth` is how much retrieval and synthesis to pay for, not which pipeline runs —
-    that is `ResearchMode`, and this endpoint currently runs SEARCH_GROUNDED only.
+    `mode` picks which experimental configuration runs — these are the three
+    configurations the benchmark will compare, nothing more novel than that.
+    `depth` is how much retrieval and synthesis to pay for within a mode.
     """
 
     topic: str = Field(
@@ -242,6 +243,13 @@ class ResearchStartRequest(WriteModel):
         max_length=MAX_TOPIC_LENGTH,
         description="The research question. A question decomposes better than a keyword.",
         examples=["Does retrieval-augmented generation reduce factual errors?"],
+    )
+    mode: ResearchMode = Field(
+        default=ResearchMode.SEARCH_GROUNDED,
+        description=(
+            "Which experimental configuration to run: model_only (no retrieval), "
+            "hybrid (web search), or search_grounded (web + academic + vector evidence)."
+        ),
     )
     depth: ResearchDepth = Field(
         default="medium",
@@ -252,6 +260,15 @@ class ResearchStartRequest(WriteModel):
     @classmethod
     def topic_must_be_substantive(cls, value: str) -> str:
         return substantive_topic(value)
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def mode_accepts_any_case(cls, value: object) -> object:
+        """`MODEL_ONLY` and `model_only` are the same request; rejecting one over
+        letter case would be pedantry at a paid API's expense."""
+        if isinstance(value, str):
+            return value.lower()
+        return value
 
 
 class CitedSourceRead(ReadModel):
@@ -298,8 +315,19 @@ class ExecutionMetadata(ReadModel):
     mode: str
     depth: ResearchDepth
     model: str = Field(description="The model that wrote the report, as the provider named it.")
-    embedding_model: str
-    collection: str
+    evidence_selection: str = Field(
+        description=(
+            "How evidence passages were chosen: 'semantic_top_k' (vector search), "
+            "'provider_rank' (search-result order), or 'none' (no evidence). Recorded "
+            "because the modes must stay comparable, and this is where they differ."
+        )
+    )
+    embedding_model: str | None = Field(
+        default=None, description="Only set when embeddings were used (search_grounded)."
+    )
+    collection: str | None = Field(
+        default=None, description="The run's ChromaDB collection, when one was created."
+    )
 
     web_candidates: int = Field(ge=0)
     academic_candidates: int = Field(ge=0)

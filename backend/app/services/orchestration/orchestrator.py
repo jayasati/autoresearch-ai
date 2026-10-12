@@ -1,36 +1,36 @@
 """
-The first end-to-end pipeline: topic in, grounded and cited report out.
+The pipeline: topic in, report out, under one of three experimental configurations.
 
-    topic
-      → Tavily + Semantic Scholar        (concurrently; one may fail, both may not)
-      → source normalisation             (SourceMetadata; rows attached to the run)
-      → document processing              (clean, chunk — stage 8)
-      → embeddings → ChromaDB            (per-run collection — stage 8b)
-      → evidence retrieval               (top-k chunks for the topic)
-      → OpenAI                           (grounded synthesis — stage 9)
-      → report with [S#] citations       (Sources section appended by CODE, not model)
+These are **experimental configurations for comparison, not novel techniques** —
+each is a standard pattern, and the point of having all three is the benchmark:
+holding topic, depth, prompt and model constant while varying only how evidence is
+acquired, so the differences that show up are attributable to exactly that.
 
-SEARCH_GROUNDED only, and honest about what that means today: evidence is snippets
-and abstracts (nothing fetches full text yet), there is no sub-question planning
-(the topic is the one query), and no claim verification (that is the next stage —
-the citations here are the model following instructions, not yet checked claims).
+    MODEL_ONLY        topic → OpenAI → report
+                      No retrieval, no sources, no citations. The ungrounded
+                      baseline: whatever the model asserts comes from its weights.
 
-Failure policy — the spec's "do not fabricate successful results" rule, enforced:
+    HYBRID            topic → Tavily → OpenAI → report + sources
+                      Web snippets, cleaned and chunked, fed as evidence in the
+                      provider's rank order ('provider_rank'). No embeddings.
 
-- One retrieval provider failing is **partial retrieval**: recorded in
-  `execution_metadata.provider_failures`, run continues. Both failing fails the run.
-- Nothing retrieved, or nothing with usable text, raises `NoEvidenceError` (422):
-  a grounded report cannot exist, so no report is returned.
-- A report whose sentences cite nothing gets one retry; a second uncited draft
-  raises `UncitedReportError`. An uncited report is the MODEL_ONLY mode wearing this
-  mode's name.
-- Every failure after run creation marks the run `failed` in the database with the
-  error's own code, so "provider was down" and "our bug" stay distinguishable.
+    SEARCH_GROUNDED   topic → Tavily + Semantic Scholar → ChromaDB → evidence
+                      → OpenAI → report + sources
+                      Both providers, chunks embedded into a per-run collection,
+                      evidence chosen by vector similarity ('semantic_top_k').
 
-The run, its sources and its report are persisted through `ResearchService`; the
-chunks live in the run's ChromaDB collection with full source metadata. Document and
-chunk *rows* are deliberately not written yet — claim verification is what needs
-claim→chunk links, so those tables arrive with it.
+What is shared — deliberately, for fairness: the depth profiles, the synthesis
+system prompt and evidence formatting (for the two evidence modes), the citation
+requirement and its retry, the report persistence, the status machine and the
+failure policy. What differs is isolated in `_acquire_evidence`, and the response's
+`execution_metadata.evidence_selection` names which path ran.
+
+Failure policy (unchanged from stage 10): a run that cannot produce what its mode
+promises fails honestly. For the evidence modes that means `NoEvidenceError` when
+nothing usable was retrieved and `UncitedReportError` after an uncited retry; every
+failure marks the run `failed` with the error's own code. MODEL_ONLY has no evidence
+to fail on, and no citation requirement — citation-like markers it emits anyway are
+warned about, because they refer to nothing.
 """
 
 import asyncio
@@ -39,8 +39,10 @@ import re
 import time
 import uuid
 from collections import Counter
-from dataclasses import dataclass
+from collections.abc import Coroutine
+from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import Any
 
 from app.core.config import Settings, get_settings
 from app.core.constants import ResearchMode, RunStatus
@@ -53,12 +55,16 @@ from app.schemas.research import (
     ResearchStartRequest,
     ResearchStartResponse,
 )
-from app.services.llm import LLMNotConfigured, LLMService
+from app.services.llm import LLMNotConfigured, LLMResponse, LLMService
 from app.services.orchestration.exceptions import NoEvidenceError, UncitedReportError
 from app.services.orchestration.prompts import (
+    MODEL_ONLY_PROMPT_VERSION,
+    MODEL_ONLY_SYSTEM,
     RETRY_REMINDER,
     SYNTHESIS_PROMPT_VERSION,
     SYNTHESIS_SYSTEM,
+    EvidencePassage,
+    build_model_only_prompt,
     build_synthesis_prompt,
     format_evidence_block,
 )
@@ -66,12 +72,10 @@ from app.services.processing import DocumentProcessor, SourceMetadata
 from app.services.research_service import ResearchService
 from app.services.retrieval import (
     AcademicCandidateSource,
-    AcademicSearchResult,
     CandidateSource,
     RetrievalError,
     SemanticScholarService,
     TavilySearchService,
-    WebSearchResult,
 )
 from app.services.vectorstore import SentenceTransformerEmbedder, VectorStore
 
@@ -85,7 +89,7 @@ Candidate = CandidateSource | AcademicCandidateSource
 @dataclass(frozen=True)
 class DepthProfile:
     """What each depth buys. The knobs, in one place, so "deep" means the same
-    thing in every run and the benchmark can hold it constant."""
+    thing in every run and the benchmark can hold it constant across modes."""
 
     web_results: int
     academic_results: int
@@ -104,6 +108,41 @@ DEPTH_PROFILES: dict[str, DepthProfile] = {
 }
 
 
+@dataclass
+class Evidence:
+    """Everything the synthesis and the response need to know about the evidence.
+
+    One shape for all modes, so the code after `_acquire_evidence` cannot care which
+    mode produced it — that indifference is what keeps the comparison fair.
+    """
+
+    selection: str  # 'semantic_top_k' | 'provider_rank' | 'none'
+    blocks: list[str] = field(default_factory=list)
+    labels: dict[str, str] = field(default_factory=dict)  # fingerprint → S#
+    meta_by_fp: dict[str, SourceMetadata] = field(default_factory=dict)
+    depth_by_fp: dict[str, str] = field(default_factory=dict)
+    chunks_used: Counter = field(default_factory=Counter)
+    source_ids: dict[str, uuid.UUID] = field(default_factory=dict)
+
+    web_candidates: int = 0
+    academic_candidates: int = 0
+    documents_processed: int = 0
+    documents_with_text: int = 0
+    chunks_indexed: int = 0
+    chunks_retrieved: int = 0
+    embedding_model: str | None = None
+    collection: str | None = None
+
+    def add_passage(self, passage: EvidencePassage) -> None:
+        fingerprint = passage.source.fingerprint
+        label = self.labels.setdefault(fingerprint, f"S{len(self.labels) + 1}")
+        self.chunks_used[fingerprint] += 1
+        self.meta_by_fp.setdefault(fingerprint, passage.source)
+        self.depth_by_fp.setdefault(fingerprint, passage.depth.value)
+        self.blocks.append(format_evidence_block(label, passage))
+        self.chunks_retrieved += 1
+
+
 @lru_cache
 def _default_embedder() -> SentenceTransformerEmbedder:
     """One embedder per process. The model takes seconds to load and holds no
@@ -112,7 +151,7 @@ def _default_embedder() -> SentenceTransformerEmbedder:
 
 
 class ResearchOrchestrator:
-    """Wires retrieval → processing → vectorstore → LLM into one run.
+    """Wires retrieval → processing → (vectorstore) → LLM into one run.
 
     Every collaborator is injectable, so the pipeline's logic is testable with fakes
     while the real wiring stays the default. Collaborators the orchestrator created
@@ -141,7 +180,7 @@ class ResearchOrchestrator:
     # --- entry point -----------------------------------------------------------
 
     async def run(self, request: ResearchStartRequest) -> ResearchStartResponse:
-        """Execute the full pipeline for one topic. Synchronous from the caller's
+        """Execute the requested mode for one topic. Synchronous from the caller's
         point of view: returns when the report exists, raises when it cannot."""
         if self.settings.llm_provider is None:
             # Checked before any row or paid call: a run that could never reach
@@ -151,9 +190,7 @@ class ResearchOrchestrator:
         profile = DEPTH_PROFILES[request.depth]
         run = self.research.create_run(
             ResearchRequest(
-                topic=request.topic,
-                mode=ResearchMode.SEARCH_GROUNDED,
-                max_sources=profile.max_sources,
+                topic=request.topic, mode=request.mode, max_sources=profile.max_sources
             )
         )
 
@@ -181,84 +218,49 @@ class ResearchOrchestrator:
         # No planner yet: the topic is the single query, and the status transitions
         # pass through PLANNING because the state machine (correctly) has no shortcut.
         self.research.advance_status(run_id, RunStatus.PLANNING)
-        self.research.advance_status(run_id, RunStatus.RETRIEVING)
 
-        # 1. Retrieval, both providers concurrently.
-        t0 = time.perf_counter()
-        candidates = await self._retrieve(request.topic, profile, failures)
-        timings["retrieval"] = round(time.perf_counter() - t0, 3)
-        if not candidates:
-            raise NoEvidenceError(
-                "Neither provider returned a source for this topic.",
-                details={"topic": request.topic, "provider_failures": len(failures)},
-            )
+        evidence = await self._acquire_evidence(
+            run_id, request, profile, timings, failures
+        )
 
-        # 2. Source normalisation: every candidate becomes a persisted, deduplicated
-        # source row linked to this run with its retrieval facts.
-        t0 = time.perf_counter()
-        source_ids = self._attach_sources(run_id, candidates)
-        timings["source_normalisation"] = round(time.perf_counter() - t0, 3)
-
-        # 3. Processing: clean and chunk whatever text the providers gave us.
-        t0 = time.perf_counter()
-        documents = self.processor.process_many(candidates)
-        chunks = [chunk for document in documents if not document.is_empty
-                  for chunk in document.chunks]
-        documents_with_text = sum(1 for document in documents if not document.is_empty)
-        timings["processing"] = round(time.perf_counter() - t0, 3)
-        if not chunks:
-            raise NoEvidenceError(
-                "Every retrieved source was metadata-only or cleaned to nothing; "
-                "there is no text to ground a report in.",
-                details={"sources": len(candidates)},
-            )
-
-        # 4. Embeddings → ChromaDB, in a collection scoped to this run so evidence
-        # retrieval can never pick up another run's chunks.
-        collection = f"run_{run_id.hex}"
-        store = self._store_for(collection)
-        t0 = time.perf_counter()
-        index_result = await asyncio.to_thread(store.index_chunks, chunks)
-        timings["indexing"] = round(time.perf_counter() - t0, 3)
-
-        # 5. Evidence retrieval.
-        t0 = time.perf_counter()
-        hits = await asyncio.to_thread(store.search, request.topic, profile.top_k)
-        timings["evidence_retrieval"] = round(time.perf_counter() - t0, 3)
-        if not hits:
-            raise NoEvidenceError("The vector search returned no passages.")
-
-        # 6. Labels: one per source, in first-retrieved order, shared by all of a
-        # source's chunks — citations point at sources, passages carry them.
-        labels: dict[str, str] = {}
-        chunks_used: Counter[str] = Counter()
-        meta_by_fp: dict[str, SourceMetadata] = {}
-        depth_by_fp: dict[str, str] = {}
-        blocks: list[str] = []
-        for hit in hits:
-            fingerprint = hit.source.fingerprint
-            label = labels.setdefault(fingerprint, f"S{len(labels) + 1}")
-            chunks_used[fingerprint] += 1
-            meta_by_fp.setdefault(fingerprint, hit.source)
-            depth_by_fp.setdefault(fingerprint, hit.depth.value)
-            blocks.append(format_evidence_block(label, hit))
-
-        # 7. Synthesis.
         self.research.advance_status(run_id, RunStatus.DRAFTING)
         t0 = time.perf_counter()
         llm = self._llm or LLMService(settings=self.settings)
         try:
-            response, used_labels = await self._synthesize(
-                request.topic, blocks, set(labels.values()), profile, llm, warnings
-            )
+            if request.mode is ResearchMode.MODEL_ONLY:
+                response = await llm.generate_text(
+                    build_model_only_prompt(request.topic),
+                    system=MODEL_ONLY_SYSTEM,
+                    max_tokens=profile.max_report_tokens,
+                )
+                used_labels: set[str] = set()
+                phantom = set(CITATION_PATTERN.findall(response.text))
+                if phantom:
+                    warnings.append(
+                        f"The model emitted citation-like markers with no evidence "
+                        f"behind them: {sorted(phantom)}. They refer to nothing."
+                    )
+                prompt_version = MODEL_ONLY_PROMPT_VERSION
+            else:
+                response, used_labels = await self._synthesize(
+                    request.topic, evidence.blocks, set(evidence.labels.values()),
+                    profile, llm, warnings,
+                )
+                prompt_version = SYNTHESIS_PROMPT_VERSION
+            if response.finish_reason == "length":
+                warnings.append("The report was truncated by the token limit.")
         finally:
             if self._llm is None:
                 await llm.aclose()
         timings["synthesis"] = round(time.perf_counter() - t0, 3)
 
-        # 8. The Sources section is appended by code from the real retrieved sources,
-        # so no URL in the final report can be a hallucination.
-        report = self._with_sources_section(response.text, labels, meta_by_fp)
+        # The Sources section is appended by code from the real retrieved sources,
+        # so no URL in a final report can be a hallucination. MODEL_ONLY has none.
+        report = response.text.rstrip() + "\n"
+        if evidence.labels:
+            report = self._with_sources_section(
+                response.text, evidence.labels, evidence.meta_by_fp
+            )
 
         title = self._report_title(response.text, request.topic)
         self.research.record_report(
@@ -266,47 +268,44 @@ class ResearchOrchestrator:
             title=title,
             markdown=report,
             model=response.model,
-            prompt_version=SYNTHESIS_PROMPT_VERSION,
+            prompt_version=prompt_version,
         )
         self.research.advance_status(run_id, RunStatus.COMPLETED)
 
         sources = [
             CitedSourceRead(
                 label=label,
-                source_id=source_ids.get(fingerprint),
-                source_type=meta_by_fp[fingerprint].source_type.value,
-                title=meta_by_fp[fingerprint].title,
-                url=meta_by_fp[fingerprint].url,
-                doi=meta_by_fp[fingerprint].doi,
-                provider=meta_by_fp[fingerprint].provider,
-                year=meta_by_fp[fingerprint].year,
-                venue=meta_by_fp[fingerprint].venue,
-                evidence_depth=depth_by_fp[fingerprint],
+                source_id=evidence.source_ids.get(fingerprint),
+                source_type=evidence.meta_by_fp[fingerprint].source_type.value,
+                title=evidence.meta_by_fp[fingerprint].title,
+                url=evidence.meta_by_fp[fingerprint].url,
+                doi=evidence.meta_by_fp[fingerprint].doi,
+                provider=evidence.meta_by_fp[fingerprint].provider,
+                year=evidence.meta_by_fp[fingerprint].year,
+                venue=evidence.meta_by_fp[fingerprint].venue,
+                evidence_depth=evidence.depth_by_fp[fingerprint],
                 fingerprint=fingerprint,
-                chunks_used=chunks_used[fingerprint],
+                chunks_used=evidence.chunks_used[fingerprint],
                 cited_in_report=label in used_labels,
             )
-            for fingerprint, label in labels.items()
+            for fingerprint, label in evidence.labels.items()
         ]
 
         metadata = ExecutionMetadata(
-            mode=ResearchMode.SEARCH_GROUNDED.value,
+            mode=request.mode.value,
             depth=request.depth,
             model=response.model,
-            embedding_model=store.embedder.model_name,
-            collection=collection,
-            web_candidates=sum(
-                1 for c in candidates if not isinstance(c, AcademicCandidateSource)
-            ),
-            academic_candidates=sum(
-                1 for c in candidates if isinstance(c, AcademicCandidateSource)
-            ),
-            sources_attached=len(source_ids),
-            documents_processed=len(documents),
-            documents_with_text=documents_with_text,
-            chunks_indexed=index_result.newly_indexed + index_result.already_present,
-            chunks_retrieved=len(hits),
-            sources_in_evidence=len(labels),
+            evidence_selection=evidence.selection,
+            embedding_model=evidence.embedding_model,
+            collection=evidence.collection,
+            web_candidates=evidence.web_candidates,
+            academic_candidates=evidence.academic_candidates,
+            sources_attached=len(evidence.source_ids),
+            documents_processed=evidence.documents_processed,
+            documents_with_text=evidence.documents_with_text,
+            chunks_indexed=evidence.chunks_indexed,
+            chunks_retrieved=evidence.chunks_retrieved,
+            sources_in_evidence=len(evidence.labels),
             sources_cited=len(used_labels),
             llm_calls=llm.calls_made,
             token_usage=(
@@ -319,10 +318,11 @@ class ResearchOrchestrator:
         )
 
         logger.info(
-            "Run %s completed: %d sources, %d chunks, %d cited, %.1fs",
+            "Run %s completed (%s): %d sources, %d passages, %d cited, %.1fs",
             run_id,
-            len(source_ids),
-            len(hits),
+            request.mode.value,
+            len(evidence.source_ids),
+            evidence.chunks_retrieved,
             len(used_labels),
             metadata.total_seconds,
         )
@@ -335,31 +335,127 @@ class ResearchOrchestrator:
             execution_metadata=metadata,
         )
 
+    # --- evidence acquisition: the one place the modes differ -------------------
+
+    async def _acquire_evidence(
+        self,
+        run_id: uuid.UUID,
+        request: ResearchStartRequest,
+        profile: DepthProfile,
+        timings: dict[str, float],
+        failures: list[ProviderFailure],
+    ) -> Evidence:
+        if request.mode is ResearchMode.MODEL_ONLY:
+            # PLANNING → DRAFTING directly; there is nothing to retrieve, and
+            # pretending otherwise would put a retrieval stage on a run that had none.
+            return Evidence(selection="none")
+
+        self.research.advance_status(run_id, RunStatus.RETRIEVING)
+        include_academic = request.mode is ResearchMode.SEARCH_GROUNDED
+
+        t0 = time.perf_counter()
+        candidates = await self._retrieve(request.topic, profile, failures, include_academic)
+        timings["retrieval"] = round(time.perf_counter() - t0, 3)
+        if not candidates:
+            raise NoEvidenceError(
+                "Retrieval returned no source for this topic.",
+                details={"topic": request.topic, "provider_failures": len(failures)},
+            )
+
+        t0 = time.perf_counter()
+        source_ids = self._attach_sources(run_id, candidates)
+        timings["source_normalisation"] = round(time.perf_counter() - t0, 3)
+
+        t0 = time.perf_counter()
+        documents = self.processor.process_many(candidates)
+        chunks = [chunk for document in documents if not document.is_empty
+                  for chunk in document.chunks]
+        timings["processing"] = round(time.perf_counter() - t0, 3)
+        if not chunks:
+            raise NoEvidenceError(
+                "Every retrieved source was metadata-only or cleaned to nothing; "
+                "there is no text to ground a report in.",
+                details={"sources": len(candidates)},
+            )
+
+        evidence = Evidence(
+            selection="semantic_top_k" if include_academic else "provider_rank",
+            source_ids=source_ids,
+            web_candidates=sum(
+                1 for c in candidates if not isinstance(c, AcademicCandidateSource)
+            ),
+            academic_candidates=sum(
+                1 for c in candidates if isinstance(c, AcademicCandidateSource)
+            ),
+            documents_processed=len(documents),
+            documents_with_text=sum(1 for d in documents if not d.is_empty),
+        )
+
+        if request.mode is ResearchMode.SEARCH_GROUNDED:
+            # Embed into a per-run collection; evidence is the top-k by similarity.
+            collection = f"run_{run_id.hex}"
+            store = self._store_for(collection)
+            t0 = time.perf_counter()
+            index_result = await asyncio.to_thread(store.index_chunks, chunks)
+            timings["indexing"] = round(time.perf_counter() - t0, 3)
+
+            t0 = time.perf_counter()
+            hits = await asyncio.to_thread(store.search, request.topic, profile.top_k)
+            timings["evidence_retrieval"] = round(time.perf_counter() - t0, 3)
+            if not hits:
+                raise NoEvidenceError("The vector search returned no passages.")
+
+            evidence.collection = collection
+            evidence.embedding_model = store.embedder.model_name
+            evidence.chunks_indexed = index_result.newly_indexed + index_result.already_present
+            for hit in hits:
+                evidence.add_passage(hit)
+        else:
+            # HYBRID: no embeddings. The same evidence budget (top_k passages), but
+            # selected by the provider's own ranking — that difference IS the
+            # experiment, and `evidence_selection` records it.
+            t0 = time.perf_counter()
+            for chunk in chunks[: profile.top_k]:
+                evidence.add_passage(chunk)
+            timings["evidence_retrieval"] = round(time.perf_counter() - t0, 3)
+
+        return evidence
+
     # --- stages ---------------------------------------------------------------
 
     async def _retrieve(
-        self, topic: str, profile: DepthProfile, failures: list[ProviderFailure]
+        self,
+        topic: str,
+        profile: DepthProfile,
+        failures: list[ProviderFailure],
+        include_academic: bool,
     ) -> list[Candidate]:
-        """Both providers, concurrently. One may fail — recorded, not hidden; both
-        failing raises, because a grounded run with no retrieval is not a run."""
+        """The mode's providers, concurrently. Some may fail — recorded, not hidden;
+        all of them failing raises, because a retrieval mode with no retrieval is
+        not that mode."""
         web = self._web or TavilySearchService(settings=self.settings)
-        academic = self._academic or SemanticScholarService(settings=self.settings)
+        searches: list[tuple[str, Coroutine[Any, Any, Any]]] = [
+            ("tavily", web.search(topic, max_results=profile.web_results))
+        ]
+
+        academic = None
+        if include_academic:
+            academic = self._academic or SemanticScholarService(settings=self.settings)
+            searches.append(
+                ("semantic_scholar", academic.search(topic, limit=profile.academic_results))
+            )
+
         try:
-            web_outcome, academic_outcome = await asyncio.gather(
-                web.search(topic, max_results=profile.web_results),
-                academic.search(topic, limit=profile.academic_results),
-                return_exceptions=True,
+            results = await asyncio.gather(
+                *(coroutine for _, coroutine in searches), return_exceptions=True
             )
         finally:
             if self._web is None:
                 await web.aclose()
-            if self._academic is None:
+            if academic is not None and self._academic is None:
                 await academic.aclose()
 
-        outcomes: list[tuple[str, WebSearchResult | AcademicSearchResult | BaseException]] = [
-            ("tavily", web_outcome),
-            ("semantic_scholar", academic_outcome),
-        ]
+        outcomes = list(zip((name for name, _ in searches), results, strict=True))
         for provider, outcome in outcomes:
             if isinstance(outcome, BaseException) and not isinstance(outcome, RetrievalError):
                 raise outcome  # our bug, not a provider failure — surface it as one
@@ -414,7 +510,7 @@ class ResearchOrchestrator:
         profile: DepthProfile,
         llm: LLMService,
         warnings: list[str],
-    ):
+    ) -> tuple[LLMResponse, set[str]]:
         """One draft, one retry if it cited nothing, then an honest failure."""
         prompt = build_synthesis_prompt(topic, blocks)
         response = await llm.generate_text(
@@ -438,8 +534,6 @@ class ResearchOrchestrator:
                 f"The report cites labels that were never provided: {sorted(unknown)}. "
                 "Those references resolve to nothing."
             )
-        if response.finish_reason == "length":
-            warnings.append("The report was truncated by the token limit.")
         return response, used
 
     # --- helpers ---------------------------------------------------------------

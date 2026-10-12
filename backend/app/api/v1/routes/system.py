@@ -29,5 +29,9 @@ async def capabilities(settings: SettingsDep) -> dict:
         "integrations": settings.integration_status,
         "missing_credentials": settings.missing_credentials,
         # Research capabilities that actually run end to end, filled in as stages land.
-        "implemented": [ResearchMode.SEARCH_GROUNDED.value],
+        "implemented": [
+            ResearchMode.MODEL_ONLY.value,
+            ResearchMode.HYBRID.value,
+            ResearchMode.SEARCH_GROUNDED.value,
+        ],
     }

@@ -11,9 +11,15 @@ writing its own bibliography — the Sources section is appended by code, from t
 actual retrieved sources, so a URL in the report can never be a hallucination.
 """
 
+from app.services.processing import TextChunk
 from app.services.vectorstore import RetrievedChunk
 
+#: Anything with text, a source and a depth can be an evidence passage. HYBRID cites
+#: processing chunks directly (provider order); SEARCH_GROUNDED cites retrieved ones.
+EvidencePassage = RetrievedChunk | TextChunk
+
 SYNTHESIS_PROMPT_VERSION = "synthesis-grounded-v1"
+MODEL_ONLY_PROMPT_VERSION = "synthesis-model-only-v1"
 
 SYNTHESIS_SYSTEM = """\
 You write research reports grounded strictly in the evidence passages you are given.
@@ -35,7 +41,7 @@ Rules, none of which may be broken:
 """
 
 
-def format_evidence_block(label: str, chunk: RetrievedChunk) -> str:
+def format_evidence_block(label: str, chunk: EvidencePassage) -> str:
     """One passage, headed by everything the model may cite it as."""
     source = chunk.source
     provenance = [source.provider or source.source_type.value]
@@ -60,3 +66,23 @@ RETRY_REMINDER = (
     "sentence must end with the bracketed label of the passage supporting it, "
     "for example: 'Caffeine improved recall in adults [S2].'"
 )
+
+
+MODEL_ONLY_SYSTEM = """\
+You write research reports from your own knowledge. No evidence is provided and no
+retrieval has happened — this is a deliberately ungrounded baseline configuration.
+
+Rules, none of which may be broken:
+1. Do NOT cite anything. No bracketed labels like [S1], no footnotes, and no
+   references, sources or bibliography section. There are no sources; inventing one
+   would be fabrication.
+2. Do NOT state specific URLs, DOIs, paper titles, author names or publication
+   venues. If you cannot name it without risking invention, do not name it.
+3. State uncertainty plainly. Where your knowledge may be incomplete, dated, or
+   contested, say so in the text.
+4. Format: Markdown. Start with a single `#` title. Then 2 to 5 `##` sections.
+"""
+
+
+def build_model_only_prompt(topic: str) -> str:
+    return f"Topic: {topic}\n\nWrite the research report now."

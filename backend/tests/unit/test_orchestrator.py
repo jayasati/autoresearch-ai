@@ -187,8 +187,10 @@ def orchestrator_factory(service_session, tmp_path):
     return build
 
 
-async def start(orchestrator, depth="medium") -> ResearchStartResponse:
-    return await orchestrator.run(ResearchStartRequest(topic=TOPIC, depth=depth))
+async def start(orchestrator, depth="medium", mode="search_grounded") -> ResearchStartResponse:
+    return await orchestrator.run(
+        ResearchStartRequest(topic=TOPIC, depth=depth, mode=mode)
+    )
 
 
 class TestHappyPath:
@@ -316,6 +318,108 @@ class TestSynthesisFailures:
 
         assert response.status is RunStatus.COMPLETED
         assert any("S9" in warning for warning in response.execution_metadata.warnings)
+
+
+class TestModelOnlyMode:
+    UNGROUNDED_REPORT = "# Caffeine and Memory\n\n## What is known\n\nSome prose, uncited.\n"
+
+    async def test_no_retrieval_happens_and_no_sources_are_returned(
+        self, orchestrator_factory
+    ):
+        web = FakeWebSearch(web_result(web_candidate()))
+        academic = FakeAcademicSearch(academic_result(academic_candidate()))
+        llm = FakeLLM(self.UNGROUNDED_REPORT)
+        orchestrator = orchestrator_factory(web=web, academic=academic, llm=llm)
+
+        response = await start(orchestrator, mode="model_only")
+
+        assert response.status is RunStatus.COMPLETED
+        assert web.calls == [] and academic.calls == []  # nothing retrieved
+        assert response.sources == []
+        assert "## Sources" not in response.report  # no section for no sources
+        assert response.execution_metadata.evidence_selection == "none"
+        assert response.execution_metadata.collection is None
+        assert response.execution_metadata.chunks_indexed == 0
+
+    async def test_the_run_and_report_persist_like_any_other(self, orchestrator_factory):
+        orchestrator = orchestrator_factory(llm=FakeLLM(self.UNGROUNDED_REPORT))
+        response = await start(orchestrator, mode="model_only")
+
+        run = orchestrator.research.get_run(response.research_id)
+        assert run.status is RunStatus.COMPLETED
+        assert run.configuration.mode.value == "model_only"
+        assert orchestrator.research.run_summary(response.research_id)["report_id"] is not None
+
+    async def test_phantom_citations_are_warned_about(self, orchestrator_factory):
+        llm = FakeLLM("# T\n\nA claim with a phantom citation [S1].\n")
+        response = await start(orchestrator_factory(llm=llm), mode="model_only")
+
+        assert any("refer to nothing" in w for w in response.execution_metadata.warnings)
+        assert response.execution_metadata.sources_cited == 0
+
+    async def test_an_uncited_report_is_correct_here_not_a_failure(
+        self, orchestrator_factory
+    ):
+        llm = FakeLLM(self.UNGROUNDED_REPORT)
+        await start(orchestrator_factory(llm=llm), mode="model_only")
+        assert llm.calls_made == 1  # no citation retry in the ungrounded baseline
+
+
+class TestHybridMode:
+    async def test_web_only_with_provider_rank_evidence(self, orchestrator_factory):
+        web = FakeWebSearch(web_result(*(web_candidate(i) for i in range(3))))
+        academic = FakeAcademicSearch(academic_result(academic_candidate()))
+        orchestrator = orchestrator_factory(web=web, academic=academic)
+
+        response = await start(orchestrator, mode="hybrid")
+
+        assert response.status is RunStatus.COMPLETED
+        assert academic.calls == []  # Semantic Scholar is not part of hybrid
+        assert all(source.source_type == "web" for source in response.sources)
+        metadata = response.execution_metadata
+        assert metadata.evidence_selection == "provider_rank"
+        assert metadata.collection is None and metadata.embedding_model is None
+        assert metadata.chunks_indexed == 0  # no embeddings in hybrid
+        assert metadata.chunks_retrieved >= 1
+
+    async def test_hybrid_requires_citations_like_search_grounded(
+        self, orchestrator_factory
+    ):
+        llm = FakeLLM("No citations.", "Still none.")
+        orchestrator = orchestrator_factory(llm=llm)
+        with pytest.raises(UncitedReportError):
+            await start(orchestrator, mode="hybrid")
+
+    async def test_the_only_provider_failing_fails_the_run(self, orchestrator_factory):
+        web = FakeWebSearch(SearchProviderUnavailable("tavily", "down"))
+        orchestrator = orchestrator_factory(web=web)
+        with pytest.raises(SearchProviderUnavailable):
+            await start(orchestrator, mode="hybrid")
+        assert orchestrator.research.list_runs()[0].status is RunStatus.FAILED
+
+    async def test_evidence_budget_matches_the_depth_profile(self, orchestrator_factory):
+        web = FakeWebSearch(web_result(*(web_candidate(i) for i in range(8))))
+        response = await start(orchestrator_factory(web=web), mode="hybrid", depth="quick")
+        assert (
+            response.execution_metadata.chunks_retrieved
+            <= DEPTH_PROFILES["quick"].top_k
+        )
+
+
+class TestModeSelection:
+    async def test_mode_is_accepted_case_insensitively(self, orchestrator_factory):
+        orchestrator = orchestrator_factory(llm=FakeLLM("# T\n\nProse.\n"))
+        response = await orchestrator.run(
+            ResearchStartRequest(topic=TOPIC, mode="MODEL_ONLY", depth="quick")
+        )
+        assert response.execution_metadata.mode == "model_only"
+
+    async def test_each_mode_records_its_configuration(self, orchestrator_factory):
+        grounded = await start(orchestrator_factory())
+        hybrid = await start(orchestrator_factory(), mode="hybrid")
+
+        assert grounded.execution_metadata.evidence_selection == "semantic_top_k"
+        assert hybrid.execution_metadata.evidence_selection == "provider_rank"
 
 
 class TestConfiguration:

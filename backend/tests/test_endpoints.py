@@ -56,7 +56,7 @@ class TestSystemRoutes:
 
     def test_capabilities_reports_what_actually_runs(self, client):
         implemented = client.get("/api/v1/system/capabilities").json()["implemented"]
-        assert implemented == ["search_grounded"]
+        assert implemented == ["model_only", "hybrid", "search_grounded"]
 
     def test_capabilities_names_the_credentials_still_needed(self, client):
         """So the frontend can tell the user what to put in .env, by name."""
