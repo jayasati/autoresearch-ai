@@ -5,6 +5,118 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 13 — Verification, citation validation and conflict detection — 2026-10-12
+
+**Goal:** the project's reason to exist. `POST /api/v1/research/{id}/verify` judges
+each extracted claim against the run's own retrieved evidence, validates citations,
+and stores conflicts — completing, for the first time, the whole chain:
+
+```
+Research → Claims → Evidence → Verification → Citation validation → Conflict detection
+```
+
+### What was implemented
+
+- `app/services/verification/` — `ClaimVerifier`. Per claim: top-4 passages from the
+  run's vector collection (queried by the claim's own text), one structured LLM call
+  (`verification-v1`), then **enforcement before persistence**:
+  - a supports/contradicts relation whose quote is not a **verbatim substring** of
+    its passage is downgraded to neutral and warned about;
+  - a verdict asserting support that is left with no quoted support becomes
+    `not_enough_evidence` with `downgraded=True` (the ARCHITECTURE mitigation, now
+    exercised for real);
+  - a reported conflict whose named passages do not hold enforced
+    supports/contradicts relations is dropped and warned about.
+- **Citation validation is structural, per the spec's rule.** A citation is `valid`
+  only when a supporting passage belongs to the **cited** source — the URL existing,
+  the paper existing, or the source being topical count for nothing. A real source
+  whose passages do not support the claim becomes `misattributed` with the reason;
+  `fabricated` was already set at extraction. The spec's five-way labels (valid /
+  partially_valid / invalid / missing / conflicting) are **derived** per claim from
+  the stored primitives and reported as `citation_assessment` — never stored, always
+  recomputable.
+- **Conflicts are stored in PostgreSQL** between the two `evidence` rows that
+  actually disagree (`conflict` table, with claim, type, confidence, detector
+  model). Descriptions state what each passage says; the prompt, the schema
+  description and this log all forbid inventing a reason why sources disagree. The
+  verifier also labels a disagreement `direct` or `nuanced` — reported, not stored,
+  since it is a framing of the same facts.
+- **Documents and chunks now persist** (the deferral stage 10 announced ends here):
+  the orchestrator stores `document` / `document_chunk` rows for both evidence
+  modes, under the processing stage's content-derived UUIDv5 chunk ids — the same
+  ids ChromaDB uses, so a vector hit becomes an `evidence` row without any mapping.
+- Per-claim failures do not sink the run: a claim whose verification fails parsing
+  twice is skipped and warned about, and re-POSTing verifies exactly the stragglers
+  (selection is "has no verdict"). Verification is SEARCH_GROUNDED-only for now
+  (`verification_unavailable` 422 otherwise) — hybrid needs embed-on-demand, and
+  model_only runs will be verified when the benchmark defines against what.
+
+### The live pipeline run (run `3b4ea704…`)
+
+Topic: *"Does vitamin D supplementation reduce the risk of respiratory infections?"*
+— picked because the literature genuinely disagrees, and it did:
+
+| Step | Result |
+|---|---|
+| research (quick) | completed, 3 sources |
+| claims | 15 extracted, 2,374 tokens |
+| verify | 15/15 verified, 0 skipped, 15 LLM calls, 33,895 tokens, 35.8s |
+| verdicts | 3 supported, 5 contradicted, 7 not_enough_evidence |
+| citations | 5 valid, 2 misattributed (and 6 claims cited nothing → `missing`) |
+| assessments | 4 valid, 2 invalid, 6 missing, 3 conflicting |
+| conflicts | **3 stored**, all `directional_disagreement`, e.g. *"P1 reports a significant protective effect of vitamin D supplementation among children; P4 states that vitamin D supplementation cannot be universally recommended for childhood ARIs and showed no significant reduction in ARI incidence."* |
+
+Verified in the database afterwards: 15 `verification_result` rows, 60 `evidence`
+rows (9 supports / 7 contradicts / 44 neutral), 3 `conflict` rows — and **all 16
+stored quote spans reproduce their quoted text exactly** from the chunk rows
+(`chunk.text[start:end] == quoted_text`, checked row by row).
+
+### What the enforcement caught, measured for the first time
+
+**7 of 15 verdicts were downgraded**: the verifier asserted support or contradiction
+with a quote that was not verbatim in the passage, and the stored verdict honestly
+became `not_enough_evidence` rather than taking the model's word. Most reported
+conflicts (8 of 11) were likewise dropped for not matching enforced relations. Two
+readings, both recorded: the verifier does overclaim — the documented risk is real
+and now has a number — and the exact-substring check is strict enough to produce
+false downgrades when the model copies a quote with normalised punctuation (em
+dashes, curly quotes). The failure direction is the safe one (never overstating
+support), so the strictness stays; a punctuation-normalising matcher that still
+yields exact offsets is a candidate improvement for the evaluation stage.
+
+### Tests performed
+
+**786 backend tests, all passing** (10 new in `test_verification.py`, driving the
+real orchestrator → extractor → verifier chain over fakes and a prompt-aware
+scripted verifier): the supported-claim happy path down to the stored quote span;
+the spec's citation rule (a claim citing the academic source while only the web
+passage supports → `misattributed`, `invalid`); the fabricated-quote downgrade; the
+missing assessment; a real conflict stored with its description; a phantom conflict
+dropped; skip-then-resume for a twice-failing claim; verify-before-extraction and
+verify-twice both refused with the reason; and the mode guard. `ruff` and `mypy`
+clean.
+
+### Known limitations
+
+- Quote enforcement is exact-substring; punctuation-normalised copying by the model
+  causes false downgrades (conservative, but lossy — see above).
+- Conflicts are detected within one claim's evidence set; cross-claim conflict
+  detection ("related claims across sources") currently happens only insofar as the
+  same passages recur across claims. A dedicated cross-claim pass belongs to the
+  evaluation stage, where related claims are grouped.
+- Verification spends ~2,300 tokens per claim (the passages ride along); a cheaper
+  screening pass before full verification is an obvious cost lever when the
+  benchmark multiplies this by many runs.
+- SEARCH_GROUNDED only, as above.
+
+### Next stage
+
+**Metrics and evaluation** — the numbers this schema was built to produce:
+hallucination rate, citation precision/recall, source diversity, coverage, cost —
+per run and compared across the three modes.
+
+---
+
 ## Stage 12 — Claim extraction — 2026-10-12
 
 **Goal:** a generated report in, a structured, typed, stored list of its factual

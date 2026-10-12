@@ -109,18 +109,30 @@ class DocumentChunkRepository(Repository[DocumentChunk]):
     model = DocumentChunk
 
     def add_chunks(
-        self, document: Document, spans: Sequence[tuple[int, int, str]]
+        self,
+        document: Document,
+        spans: Sequence[tuple[int, int, str]],
+        *,
+        ids: Sequence[uuid.UUID] | None = None,
     ) -> list[DocumentChunk]:
         """Persist chunks from `(start, end, text)` triples.
 
         Positions are assigned here so they cannot collide, and the offsets are
         stored as given — they are the foundation of every traceability claim, so
         they are never recomputed from the text.
+
+        `ids` lets the caller supply the processing stage's content-derived UUIDv5
+        chunk ids, so the vector store and the database address the same chunk by
+        the same id — which is what lets a vector hit become an `evidence` row
+        without a lookup table.
         """
         import hashlib
 
+        if ids is not None and len(ids) != len(spans):
+            raise ValueError(f"{len(ids)} ids for {len(spans)} spans")
         chunks = [
             DocumentChunk(
+                **({"id": ids[index]} if ids is not None else {}),
                 document=document,
                 position=index,
                 text=text,
@@ -178,6 +190,24 @@ class ClaimRepository(Repository[Claim]):
         return (
             self.session.execute(
                 select(Claim).where(Claim.report_id == report_id).order_by(Claim.position)
+            )
+            .scalars()
+            .all()
+        )
+
+    def list_unverified(self, report_id: uuid.UUID) -> Sequence[Claim]:
+        """Claims still awaiting a verdict, with citations loaded.
+
+        Keyed on the absence of a `verification_result`, so a verification pass that
+        was interrupted can be re-run and will pick up exactly the stragglers.
+        """
+        return (
+            self.session.execute(
+                select(Claim)
+                .where(Claim.report_id == report_id)
+                .where(~Claim.verification_result.has())
+                .order_by(Claim.position)
+                .options(selectinload(Claim.citations))
             )
             .scalars()
             .all()

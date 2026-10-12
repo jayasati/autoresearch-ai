@@ -18,10 +18,11 @@ import uuid
 
 from fastapi import APIRouter
 
-from app.schemas.evidence import ClaimExtractionResponse
+from app.schemas.evidence import ClaimExtractionResponse, VerificationRunResponse
 from app.schemas.research import ResearchStartRequest, ResearchStartResponse
 from app.services.claims import ClaimExtractor
 from app.services.orchestration import ResearchOrchestrator
+from app.services.verification import ClaimVerifier
 
 router = APIRouter()
 
@@ -41,3 +42,16 @@ async def extract_claims(research_id: uuid.UUID) -> ClaimExtractionResponse:
     once, then fail with `claim_extraction_failed` and store nothing.
     """
     return await ClaimExtractor().extract(research_id)
+
+
+@router.post("/{research_id}/verify", response_model=VerificationRunResponse)
+async def verify_claims(research_id: uuid.UUID) -> VerificationRunResponse:
+    """Verify the run's extracted claims against its own retrieved evidence.
+
+    Per claim: evidence is retrieved from the run's vector collection, judged by the
+    verifier (quotes enforced verbatim), citations validated structurally (valid
+    only when a supporting passage belongs to the cited source), and conflicts
+    stored between passages that actually disagree. Claims whose verification fails
+    twice are skipped; re-POSTing verifies exactly the stragglers.
+    """
+    return await ClaimVerifier().verify(research_id)

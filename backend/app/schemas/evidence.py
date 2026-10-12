@@ -14,6 +14,7 @@ quietly abandon them:
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field, model_validator
 
@@ -25,7 +26,7 @@ from app.core.constants import (
     EvidenceRelation,
     VerificationVerdict,
 )
-from app.schemas.base import IdentifiedModel, WriteModel
+from app.schemas.base import IdentifiedModel, ReadModel, WriteModel
 
 # Verdicts that assert something about the evidence, and therefore must cite it.
 EVIDENCE_BEARING_VERDICTS = frozenset(
@@ -300,6 +301,72 @@ class ExtractedClaimRead(IdentifiedModel):
         description="Source rows the markers resolved to; a marker that resolved to "
         "nothing is recorded as a fabricated citation instead.",
     )
+
+
+#: The spec's five-way citation assessment, derived per claim from stored
+#: primitives (citation statuses, the verdict, and whether a conflict was stored) —
+#: never stored itself, so it can always be recomputed from the facts.
+ClaimAssessment = Literal[
+    "valid", "partially_valid", "invalid", "missing", "conflicting", "not_required"
+]
+
+
+class ClaimVerificationRead(ReadModel):
+    """One claim's verification outcome, with the derived citation assessment."""
+
+    claim_id: uuid.UUID
+    claim_text: str
+    verdict: VerificationVerdict
+    confidence: float | None
+    downgraded: bool = Field(
+        description="True when the verifier asserted support without a verbatim "
+        "quote and the verdict was downgraded to not_enough_evidence."
+    )
+    rationale: str | None
+    citation_assessment: ClaimAssessment
+    citations: dict[str, str] = Field(
+        default_factory=dict, description="Marker → citation status after validation."
+    )
+    evidence_count: int = Field(ge=0)
+    conflict_id: uuid.UUID | None
+
+
+class DetectedConflictRead(ReadModel):
+    """A stored conflict, with the verifier's direct/nuanced reading.
+
+    `kind` lives only in the response: the row stores the conflict type and the
+    factual description; whether a disagreement is 'direct' or 'nuanced' is the
+    verifier's framing of the same facts.
+    """
+
+    conflict_id: uuid.UUID
+    claim_id: uuid.UUID
+    kind: Literal["direct", "nuanced"] | None
+    conflict_type: ConflictType
+    description: str
+
+
+class VerificationRunResponse(ReadModel):
+    """What one verification pass did for a run."""
+
+    research_id: uuid.UUID
+    report_id: uuid.UUID
+    claims_verified: int = Field(ge=0)
+    claims_skipped: int = Field(
+        ge=0, description="Claims whose verification failed twice; re-POST retries them."
+    )
+    verdicts: dict[str, int] = Field(default_factory=dict)
+    citation_statuses: dict[str, int] = Field(default_factory=dict)
+    assessments: dict[str, int] = Field(default_factory=dict)
+    conflicts_detected: int = Field(ge=0)
+    conflicts: list[DetectedConflictRead] = Field(default_factory=list)
+    results: list[ClaimVerificationRead] = Field(default_factory=list)
+    verifier_model: str
+    prompt_version: str
+    llm_calls: int = Field(ge=0)
+    token_usage: dict[str, int] | None = None
+    duration_seconds: float = Field(ge=0)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ClaimExtractionResponse(IdentifiedModel):

@@ -15,6 +15,7 @@ fake; nothing in the store's behaviour requires a neural model.
 """
 
 from collections.abc import Sequence
+from functools import lru_cache
 from typing import Any, Protocol, runtime_checkable
 
 from app.core.config import get_settings
@@ -75,3 +76,14 @@ class SentenceTransformerEmbedder:
 
     def embed_query(self, text: str) -> list[float]:
         return self.embed_documents([text])[0]
+
+
+@lru_cache
+def get_default_embedder() -> SentenceTransformerEmbedder:
+    """One default embedder per process.
+
+    The model takes seconds to load and holds no per-run state; every pipeline
+    stage that needs the configured embedder shares this instance rather than
+    paying the load again.
+    """
+    return SentenceTransformerEmbedder()

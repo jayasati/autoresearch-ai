@@ -20,22 +20,36 @@ import logging
 import uuid
 from collections.abc import Sequence
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.constants import CitationStatus, EvidenceDepth, ResearchMode, RunStatus
+from app.core.constants import (
+    CitationStatus,
+    EvidenceDepth,
+    EvidenceRelation,
+    ResearchMode,
+    RunStatus,
+    VerificationVerdict,
+)
 from app.core.exceptions import ConflictError, NotFoundError
+from app.db.base import utcnow
 from app.db.session import unit_of_work
-from app.models import ResearchRun, RunConfiguration
+from app.models import Document, DocumentChunk, Evidence, ResearchRun, RunConfiguration
 from app.models.report import ReportSection
 from app.repositories import (
     BenchmarkRunRepository,
     CitationRepository,
     ClaimRepository,
+    ConflictRepository,
+    DocumentChunkRepository,
+    DocumentRepository,
+    EvidenceRepository,
     ReportRepository,
     ResearchRunRepository,
     RunConfigurationRepository,
     SourceRepository,
+    VerificationResultRepository,
 )
 from app.schemas.research import ResearchRequest
 
@@ -374,6 +388,229 @@ class ResearchService:
                 len(report.sections),
             )
             return report
+
+    # --- documents and chunks ------------------------------------------------------
+
+    def record_processed_documents(
+        self,
+        run_id: uuid.UUID,
+        *,
+        documents: Sequence,
+        source_ids: dict[str, uuid.UUID],
+    ) -> int:
+        """Persist the processed documents and their chunks for a run's sources.
+
+        Chunk rows are stored under the processing stage's content-derived UUIDv5
+        ids — the same ids the vector store uses — so a vector hit addresses its
+        database row directly. Documents deduplicate by (source, content_hash), and
+        an already-stored document keeps its existing chunks: same content, same
+        ids, nothing to add. Returns how many chunk rows were newly stored.
+        """
+        with unit_of_work(self._session) as session:
+            ResearchRunRepository(session).get_or_raise(run_id)
+            document_repository = DocumentRepository(session)
+            chunk_repository = DocumentChunkRepository(session)
+            sources = SourceRepository(session)
+
+            stored = 0
+            for processed in documents:
+                if processed.is_empty:
+                    continue
+                source_id = source_ids.get(processed.source.fingerprint)
+                if source_id is None:
+                    continue
+                source = sources.get_or_raise(source_id)
+                document, created = document_repository.get_or_create(
+                    source=source,
+                    text=processed.text,
+                    depth=processed.depth,
+                    extractor=processed.extractor,
+                )
+                if created:
+                    chunk_repository.add_chunks(
+                        document,
+                        processed.spans,
+                        ids=[chunk.chunk_id for chunk in processed.chunks],
+                    )
+                    stored += len(processed.chunks)
+            if stored:
+                logger.info("Stored %d chunk rows for run %s", stored, run_id)
+            return stored
+
+    # --- verification ---------------------------------------------------------------
+
+    def claims_awaiting_verification(self, run_id: uuid.UUID) -> tuple[uuid.UUID, list[dict]]:
+        """The run's unverified claims, as plain rows safe to use outside a session."""
+        with unit_of_work(self._session) as session:
+            report = ReportRepository(session).get_for_run(run_id)
+            if report is None:
+                raise NotFoundError(
+                    f"Run {run_id} has no report.", details={"run_id": str(run_id)}
+                )
+            claims = ClaimRepository(session).list_unverified(report.id)
+            rows = [
+                {
+                    "claim_id": claim.id,
+                    "text": claim.text,
+                    "claim_type": claim.claim_type,
+                    "importance": claim.importance,
+                    "requires_citation": claim.requires_citation,
+                    "citations": [
+                        {
+                            "citation_id": citation.id,
+                            "marker": citation.marker,
+                            "status": citation.status,
+                            "source_id": citation.source_id,
+                        }
+                        for citation in claim.citations
+                    ],
+                }
+                for claim in claims
+            ]
+            return report.id, rows
+
+    def citation_status_summary(self, run_id: uuid.UUID) -> dict[str, int]:
+        """Citation outcomes for a run's report, grouped by status."""
+        with unit_of_work(self._session) as session:
+            report = ReportRepository(session).get_for_run(run_id)
+            if report is None:
+                return {}
+            counts = CitationRepository(session).count_by_status(report.id)
+            return {status.value: count for status, count in counts.items()}
+
+    def record_claim_verification(
+        self,
+        run_id: uuid.UUID,
+        claim_id: uuid.UUID,
+        *,
+        passages: Sequence[dict],
+        verdict: VerificationVerdict,
+        confidence: float | None,
+        rationale: str | None,
+        supporting_passage_chunk_id: uuid.UUID | None,
+        conflict: dict | None = None,
+        verifier_model: str | None = None,
+        prompt_version: str | None = None,
+    ) -> dict:
+        """Persist one claim's verification: evidence, verdict, citation outcomes and
+        any conflict — in a single transaction, so a claim is verified entirely or
+        not at all.
+
+        Citation validation happens here, structurally: a citation is `valid` only
+        when a **supporting** evidence passage belongs to the **cited** source — the
+        URL existing, the paper existing, or the source being topical count for
+        nothing, which is the spec's rule. A real source whose retrieved passages do
+        not support the claim becomes `misattributed`, with the reason stored.
+
+        A reported conflict is stored between the two evidence rows it names; the
+        description records what each passage says, never a guessed explanation of
+        the disagreement.
+        """
+        with unit_of_work(self._session) as session:
+            run = ResearchRunRepository(session).get_or_raise(run_id)
+            claim = ClaimRepository(session).get_or_raise(claim_id)
+            if claim.verification_result is not None:
+                raise ConflictError(
+                    f"Claim {claim_id} is already verified.",
+                    details={"claim_id": str(claim_id)},
+                )
+
+            evidence_repository = EvidenceRepository(session)
+            evidence_by_chunk: dict[uuid.UUID, Evidence] = {}
+            for passage in passages:
+                chunk = DocumentChunkRepository(session).get_or_raise(passage["chunk_id"])
+                evidence_by_chunk[chunk.id] = evidence_repository.create(
+                    claim=claim,
+                    chunk=chunk,
+                    relation=passage["relation"],
+                    similarity=passage.get("similarity"),
+                    rank=passage.get("rank"),
+                    quoted_text=passage.get("quoted_text"),
+                    quote_start_char=passage.get("quote_start_char"),
+                    quote_end_char=passage.get("quote_end_char"),
+                )
+
+            supporting_evidence = (
+                evidence_by_chunk.get(supporting_passage_chunk_id)
+                if supporting_passage_chunk_id is not None
+                else None
+            )
+            result = VerificationResultRepository(session).create(
+                claim=claim,
+                verdict=verdict,
+                supporting_evidence=supporting_evidence,
+                confidence=confidence,
+                rationale=rationale,
+                verifier_model=verifier_model,
+                prompt_version=prompt_version,
+            )
+
+            # Which source does each evidence chunk belong to? Needed to decide
+            # whether a citation's own source did any supporting.
+            chunk_sources: dict[uuid.UUID, uuid.UUID] = dict(
+                session.execute(
+                    select(DocumentChunk.id, Document.source_id)
+                    .join(Document, DocumentChunk.document_id == Document.id)
+                    .where(DocumentChunk.id.in_(evidence_by_chunk.keys()))
+                ).all()
+            )
+            supporting_chunks_by_source: dict[uuid.UUID, uuid.UUID] = {}
+            for chunk_id, evidence in evidence_by_chunk.items():
+                if evidence.relation is EvidenceRelation.SUPPORTS:
+                    source = chunk_sources.get(chunk_id)
+                    if source is not None:
+                        supporting_chunks_by_source.setdefault(source, chunk_id)
+
+            citation_outcomes: dict[str, str] = {}
+            for citation in claim.citations:
+                if citation.status is not CitationStatus.UNVALIDATED:
+                    citation_outcomes[citation.marker] = citation.status.value
+                    continue
+                supporting_chunk = (
+                    supporting_chunks_by_source.get(citation.source_id)
+                    if citation.source_id is not None
+                    else None
+                )
+                if supporting_chunk is not None:
+                    citation.status = CitationStatus.VALID
+                    citation.supporting_chunk_id = supporting_chunk
+                else:
+                    citation.status = CitationStatus.MISATTRIBUTED
+                    citation.failure_reason = (
+                        "The cited source is real, but none of its retrieved passages "
+                        "supports this claim."
+                    )
+                citation.validated_at = utcnow()
+                citation_outcomes[citation.marker] = citation.status.value
+
+            conflict_id: uuid.UUID | None = None
+            if conflict is not None:
+                evidence_a = evidence_by_chunk.get(conflict["supporting_chunk_id"])
+                evidence_b = evidence_by_chunk.get(conflict["contradicting_chunk_id"])
+                if evidence_a is not None and evidence_b is not None:
+                    stored_conflict = ConflictRepository(session).create(
+                        run=run,
+                        evidence_a=evidence_a,
+                        evidence_b=evidence_b,
+                        conflict_type=conflict["conflict_type"],
+                        description=conflict["description"],
+                        claim_id=claim.id,
+                        confidence=conflict.get("confidence"),
+                        detector_model=verifier_model,
+                    )
+                    conflict_id = stored_conflict.id
+
+            session.flush()
+            return {
+                "claim_id": claim.id,
+                "verdict": result.verdict,
+                "confidence": result.confidence,
+                "downgraded": result.downgraded,
+                "rationale": result.rationale,
+                "evidence_count": len(evidence_by_chunk),
+                "citations": citation_outcomes,
+                "conflict_id": conflict_id,
+            }
 
     # --- claims ------------------------------------------------------------------
 

@@ -16,7 +16,11 @@ wording to the query — a claim and its negation score almost identically. See
 `models.py` and README.md before reading anything more into the number.
 """
 
-from app.services.vectorstore.embedder import Embedder, SentenceTransformerEmbedder
+from app.services.vectorstore.embedder import (
+    Embedder,
+    SentenceTransformerEmbedder,
+    get_default_embedder,
+)
 from app.services.vectorstore.models import IndexResult, RetrievedChunk
 from app.services.vectorstore.store import VectorStore
 
@@ -26,4 +30,5 @@ __all__ = [
     "RetrievedChunk",
     "SentenceTransformerEmbedder",
     "VectorStore",
+    "get_default_embedder",
 ]

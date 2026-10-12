@@ -1,7 +1,8 @@
 # services/ — Use cases, and the transaction boundary
 
-**`research_service.py`, `retrieval/`, `processing/`, `vectorstore/`, `llm/` and
-`orchestration/` are implemented.** The rest arrive with their stages.
+**`research_service.py`, `retrieval/`, `processing/`, `vectorstore/`, `llm/`,
+`orchestration/`, `claims/` and `verification/` are implemented.** The rest arrive
+with their stages.
 
 This layer answers "what happened, and did *all* of it happen". Each public method is
 one atomic operation: it either completes and commits, or raises and leaves the
@@ -114,4 +115,24 @@ status machine and failure policy are shared code that cannot tell them apart, a
 Sources section is appended by code from the real retrieved sources, so no URL in a
 report can be hallucinated. Partial retrieval is recorded; no usable text or an
 uncited report (in the evidence modes) fails the run honestly (`NoEvidenceError`,
-`UncitedReportError`). No planning, fetching, or claim verification yet.
+`UncitedReportError`). No planning or fetching yet.
+
+## `claims/` — claim extraction
+
+`ClaimExtractor` turns a stored report into atomic, typed claims (seven kinds, with
+an importance rating) via structured LLM output validated by Pydantic; one retry on
+a parse failure, then a safe stop that stores nothing. Citation markers resolve
+against the run's persisted [S#] labels: resolvable → an `unvalidated` citation row,
+unresolvable → `fabricated`, structurally. One extraction per report.
+
+## `verification/` — the point of the project
+
+`ClaimVerifier` judges each claim against the run's own evidence (top-k chunks per
+claim), with enforcement the model cannot talk its way past: quotes must be verbatim
+or the relation is neutralised; support verdicts without quoted support are
+downgraded (`downgraded=True`, measured); a citation is `valid` only when a
+supporting passage belongs to the cited source; conflicts are stored only between
+passages whose enforced relations actually disagree, described by what each says —
+never by a guessed reason. Per-claim failures skip and are resumable. The spec's
+five-way assessment (valid/partially_valid/invalid/missing/conflicting) is derived
+in the response from stored primitives, never stored itself.

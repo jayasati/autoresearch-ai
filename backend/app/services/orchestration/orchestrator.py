@@ -41,7 +41,6 @@ import uuid
 from collections import Counter
 from collections.abc import Coroutine
 from dataclasses import dataclass, field
-from functools import lru_cache
 from typing import Any
 
 from app.core.config import Settings, get_settings
@@ -77,7 +76,7 @@ from app.services.retrieval import (
     SemanticScholarService,
     TavilySearchService,
 )
-from app.services.vectorstore import SentenceTransformerEmbedder, VectorStore
+from app.services.vectorstore import VectorStore, get_default_embedder
 
 logger = logging.getLogger(__name__)
 
@@ -141,13 +140,6 @@ class Evidence:
         self.depth_by_fp.setdefault(fingerprint, passage.depth.value)
         self.blocks.append(format_evidence_block(label, passage))
         self.chunks_retrieved += 1
-
-
-@lru_cache
-def _default_embedder() -> SentenceTransformerEmbedder:
-    """One embedder per process. The model takes seconds to load and holds no
-    per-run state, so reloading it for every request would be pure waste."""
-    return SentenceTransformerEmbedder()
 
 
 class ResearchOrchestrator:
@@ -378,6 +370,15 @@ class ResearchOrchestrator:
                 details={"sources": len(candidates)},
             )
 
+        # Documents and chunks are persisted under the same content-derived ids the
+        # vector store uses, so verification can turn a vector hit into an evidence
+        # row that references a real chunk row.
+        t0 = time.perf_counter()
+        self.research.record_processed_documents(
+            run_id, documents=documents, source_ids=source_ids
+        )
+        timings["document_persistence"] = round(time.perf_counter() - t0, 3)
+
         evidence = Evidence(
             selection="semantic_top_k" if include_academic else "provider_rank",
             source_ids=source_ids,
@@ -543,7 +544,7 @@ class ResearchOrchestrator:
     def _store_for(self, collection: str) -> VectorStore:
         if self._store_factory is not None:
             return self._store_factory(collection)
-        return VectorStore(embedder=_default_embedder(), collection_name=collection)
+        return VectorStore(embedder=get_default_embedder(), collection_name=collection)
 
     @staticmethod
     def _with_sources_section(
