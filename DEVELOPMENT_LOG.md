@@ -5,6 +5,145 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 8b — Vector retrieval: embeddings and semantic search — 2026-10-12
+
+> Stage 8 predicted this as "Stage 8b — fetching, embeddings and the vector store".
+> The embeddings and the vector store are here; **fetching is not** — URL-to-full-text
+> moves to the next stage.
+
+**Goal:** document chunks → embeddings → ChromaDB, and back out by meaning. Sentence
+Transformers runs the model locally; ChromaDB runs embedded and persists to disk.
+This stage installed `requirements-ml.txt` for the first time (chromadb 1.5.9,
+sentence-transformers 6.1.0, torch 2.14.1 — the install the stage-4 comment warned
+would take minutes).
+
+### What was implemented
+
+| Requirement | How |
+|---|---|
+| Configurable embedding model | `SentenceTransformerEmbedder` reads `EMBEDDING_MODEL` (settings existed since stage 4); any ST model name works |
+| Persistent ChromaDB storage | `chromadb.PersistentClient` under `CHROMA_PERSIST_DIR` (gitignored); a new store instance over the same directory sees the data, tested |
+| Store source metadata | the full `SourceMetadata` as one lossless JSON field per chunk, plus flat fields (fingerprint, type, depth, title, url, doi, year…) for filtering |
+| Store chunk IDs | the stage-8 UUIDv5 chunk ids are the ChromaDB ids |
+| Semantic search | `VectorStore.search(query, top_k)` — cosine space over L2-normalised vectors |
+| Configurable top-k | per call, defaulting to `TOP_K` (6) |
+| Return similarity information | `similarity` (= 1 − cosine distance) and `distance` on every result, bounded and descending, tested |
+| Preserve source traceability | each hit is rebuilt into a `RetrievedChunk` carrying document id, exact span, content hash, fingerprint and full source — and **re-validated**: the span arithmetic and fingerprint checks run again on what the store returned |
+| Handle duplicate chunks | ids are content-derived, so `upsert` is idempotent; `IndexResult` reports `newly_indexed` / `already_present` / `duplicates_in_batch` honestly, and the three must sum to `requested` (validator) |
+| Handle empty collections | `search` on an empty collection returns `[]` — an answer, not an error; `top_k` beyond the collection size returns what exists |
+
+### Similarity is NOT proof that a claim is true
+
+The one fact about this stage that must not be forgotten downstream, so it is stated
+in `vectorstore/README.md` (its own section), in `models.py`, on the `similarity`
+field's description — and pinned by a test. Cosine similarity measures closeness of
+**wording**: "coffee improves memory" and "coffee does not improve memory" differ by
+one token and score almost identically against a query about coffee and memory.
+`test_contradiction_scores_as_high_as_agreement` indexes a claim and its negation and
+asserts both come back as near-equal top matches. That is what makes the index useful
+— a verifier should read both — and what forbids any later stage from deriving a
+verdict's confidence from this number. Similarity decides what is worth reading;
+reading decides what is true.
+
+### Files added
+
+- `app/services/vectorstore/embedder.py`: `Embedder` protocol,
+  `SentenceTransformerEmbedder` (model loaded on first use, never at import)
+- `app/services/vectorstore/store.py`: `VectorStore` — index, search, count
+- `app/services/vectorstore/models.py`: `IndexResult`, `RetrievedChunk`
+- `app/services/vectorstore/__init__.py`, `app/services/vectorstore/README.md`
+- `tests/unit/test_vector_store.py` (21 tests)
+
+### Files changed
+
+- `app/services/README.md`: the new package; the planned-modules lines
+- `app/services/retrieval/__init__.py`: embedder/vector_store no longer planned there
+
+### Why a new package, not `retrieval/` as stage 6 planned
+
+`retrieval/__init__.py` re-exports everything eagerly, and `import torch` costs
+seconds. Putting the embedder there would make every import of the retrieval package
+pay for the ML stack — including the FastAPI app at startup and every unit test that
+touches a candidate model. `vectorstore/` imports neither torch nor chromadb until a
+model is first used or a store is first built, and a test asserts the laziness.
+
+### Tests performed
+
+**698 backend tests, all passing** (21 new). The five required scenarios:
+
+| Required | Class | Covers |
+|---|---|---|
+| indexing | `TestIndexing` | counts into the collection; empty input is a reported no-op; re-indexing adds nothing; in-batch duplicates indexed once; **persists across store instances**; a collection refuses a different embedding model |
+| querying | `TestQuerying` | closest wording ranks first; similarity bounded, descending, consistent with distance; blank query rejected; **a contradiction scores as high as agreement** |
+| metadata | `TestMetadataPreservation` | every `SourceMetadata` field survives the round trip (object equality, not samples); document id, position, exact span, text and content hash survive; ids come back as UUIDs |
+| top-k | `TestTopK` | bounds the result count; defaults to `TOP_K`; larger than the collection returns everything; below 1 rejected |
+| empty database | `TestEmptyDatabase` | empty search returns `[]`; validation still applies |
+
+ChromaDB in the tests is real (embedded, under `tmp_path`) — mocking the store's only
+collaborator would test the mock. The embedder in the tests is a deterministic
+bag-of-words fake: offline, fast, and word overlap gives the ranking the tests can
+predict. The tests prove the store's behaviour, not the neural model's quality.
+
+No test downloads a model or touches the network.
+
+### Result
+
+| Check | Result |
+|---|---|
+| `pytest` | **698 passed** in 68s |
+| `ruff check .` | All checks passed |
+| `mypy app` | Success: no issues found in 65 source files |
+| real model, embedder only | 384 dims; query "does coffee affect memory" → 0.903 vs the coffee sentence, 0.072 vs a glacier sentence |
+| real model, end to end | 3 processed chunks indexed and searched in a scratch store; query "does coffee improve memory" ranked the **caffeine** trial first (0.695) over sleep (0.350) and glaciers (0.112) — matching meaning, not words |
+| frontend | unchanged |
+
+### Decisions made
+
+1. **The store embeds; ChromaDB never does.** Chroma's default embedding function
+   would silently download its own ONNX MiniLM and could drift from `EMBEDDING_MODEL`.
+   Every add and every query passes vectors from the configured embedder, so what is
+   stored and what is asked are always comparable.
+
+2. **One collection, one model — enforced at open.** The embedder's name is written
+   into the collection metadata at creation; opening with a different model raises
+   immediately. Vectors from two models share no meaningful space, and the failure
+   would otherwise surface as quietly wrong rankings, the worst kind.
+
+3. **The full source travels as JSON inside the chunk's metadata.** Chroma metadata
+   is flat (str/int/float/bool, no None), which would force lossy flattening of a
+   17-field model with tuples and datetimes. One JSON field round-trips losslessly;
+   the flat fields beside it exist only for filtering. No database join is needed to
+   cite a hit.
+
+4. **Results are re-validated, not trusted.** `RetrievedChunk` re-runs the span and
+   fingerprint checks on what the store returned, and carries `content_hash` so a
+   caller can re-verify the text itself. The traceability invariant does not stop
+   applying because the data took a round trip through sqlite.
+
+5. **`IndexResult` counts must add up** (`newly_indexed + already_present +
+   duplicates_in_batch == requested`, by validator). An indexing report that cannot
+   be reconciled with its input is how silent data loss hides.
+
+### Known limitations
+
+- all-MiniLM-L6-v2 truncates past 256 word-pieces. Fine at `CHUNK_SIZE=900`
+  characters; a much larger chunk size would embed only each chunk's head. Stated in
+  the README rather than guarded in code, since the right guard depends on the model.
+- No deletion or re-ranking API yet; nothing needs them.
+- Windows note: embedded Chroma keeps `chroma.sqlite3` open for the process lifetime,
+  so a directory in use cannot be deleted until the process exits. Irrelevant to
+  pytest's `tmp_path` (cleaned up lazily, runs later), but worth knowing before
+  pointing a cleanup script at `data/vectorstore/`.
+
+### Next stage
+
+**Stage 9 — the fetcher.** URL to full text with politeness and timeouts
+(trafilatura is already in requirements-ml.txt), so sources stop being snippet-deep.
+After that, wiring retrieval → processing → vectorstore into the research
+orchestrator, where `evidence_depth` finally earns its keep.
+
+---
+
 ## Stage 8 — Document processing: cleaning and chunking — 2026-10-08
 
 **Goal:** source metadata plus available text in, a document and its chunks out. v1

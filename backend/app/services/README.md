@@ -1,7 +1,7 @@
 # services/ — Use cases, and the transaction boundary
 
-**`research_service.py`, `retrieval/` and `processing/` are implemented.** The rest arrive with
-their stages.
+**`research_service.py`, `retrieval/`, `processing/` and `vectorstore/` are implemented.**
+The rest arrive with their stages.
 
 This layer answers "what happened, and did *all* of it happen". Each public method is
 one atomic operation: it either completes and commits, or raises and leaves the
@@ -64,7 +64,7 @@ which is a different thing from fetching it.
 It does not sit in the transaction-owning part of this package. It makes no database
 calls at all; the orchestrator will persist what it returns.
 
-Planned alongside it: the fetcher, the embedder and the vector store.
+Planned alongside it: the fetcher.
 
 ## `processing/` — provider text to documents and chunks
 
@@ -74,3 +74,17 @@ carries its source's metadata. Cleaning only deletes and normalises, so a paper 
 abstract gets an empty document, not its title. IDs are UUIDv5, stable across runs.
 Pure and synchronous, with no database calls. The chunking strategy and its limitations
 are in [`processing/README.md`](processing/README.md).
+
+## `vectorstore/` — embeddings and semantic search
+
+`VectorStore` embeds processed chunks with a Sentence Transformers model (local, lazy-
+loaded) and keeps them in a persistent embedded ChromaDB collection; `search` returns
+the `top_k` chunks closest to a query, each carrying its similarity, its exact span,
+and the full source metadata it was indexed with — re-validated on the way out.
+Indexing is idempotent because chunk ids are content-derived, and a collection refuses
+to be opened with a different embedding model than it was built with.
+
+**Similarity ranks wording; it is not evidence that a claim is true** — a claim and
+its negation score almost identically. The contract, and the test that pins it, are in
+[`vectorstore/README.md`](vectorstore/README.md). No database calls; ChromaDB's files
+under `CHROMA_PERSIST_DIR` are its own storage, not ours.

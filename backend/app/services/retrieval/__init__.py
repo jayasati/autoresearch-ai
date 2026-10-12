@@ -19,8 +19,9 @@ abstracts when it has them and bibliographic metadata when it does not. Fetching
 or a PDF belongs to a later stage, and `evidence_depth` records which of those three
 situations a candidate is actually in.
 
-Chunking lives in `app/services/processing/`. Planned here: `fetcher.py` (URL to clean
-text), `embedder.py`, `vector_store.py`.
+Chunking lives in `app/services/processing/`; embeddings and the vector store in
+`app/services/vectorstore/`, a separate package because this one is imported eagerly
+and they pull torch. Planned here: `fetcher.py` (URL to clean text).
 """
 
 from app.services.retrieval.exceptions import (
