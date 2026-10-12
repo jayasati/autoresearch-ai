@@ -53,6 +53,13 @@ class Report(UUIDPrimaryKey, Base):
     prompt_version: Mapped[str | None] = mapped_column(String(40))
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
+    # The verification-aware final report, produced after claims were verified.
+    # A separate text, not an edit: `markdown` is immutable because claim offsets
+    # point into it, so the final report derives from it and never replaces it.
+    final_markdown: Mapped[str | None] = mapped_column(Text)
+    final_model: Mapped[str | None] = mapped_column(String(100))
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     research_run: Mapped["ResearchRun"] = relationship(back_populates="report")
     sections: Mapped[list["ReportSection"]] = relationship(
         back_populates="report",

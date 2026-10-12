@@ -35,7 +35,14 @@ from app.core.constants import (
 from app.core.exceptions import ConflictError, NotFoundError
 from app.db.base import utcnow
 from app.db.session import unit_of_work
-from app.models import Document, DocumentChunk, Evidence, ResearchRun, RunConfiguration
+from app.models import (
+    Conflict,
+    Document,
+    DocumentChunk,
+    Evidence,
+    ResearchRun,
+    RunConfiguration,
+)
 from app.models.report import ReportSection
 from app.repositories import (
     BenchmarkRunRepository,
@@ -468,6 +475,109 @@ class ResearchService:
                 for claim in claims
             ]
             return report.id, rows
+
+    def verification_summary(self, run_id: uuid.UUID) -> dict:
+        """Everything the final report and its evidence audit need, in plain data.
+
+        One read, no judgement: claims with their verdicts, rationales and citation
+        outcomes; the stored conflicts with their factual descriptions; and the
+        run's labelled sources. The audit is computed from these rows by code —
+        never asked of a model — so it can always be recomputed from the database.
+        """
+        with unit_of_work(self._session) as session:
+            report = ReportRepository(session).get_for_run(run_id)
+            if report is None:
+                raise NotFoundError(
+                    f"Run {run_id} has no report.", details={"run_id": str(run_id)}
+                )
+            claims = ClaimRepository(session).list_for_report(report.id)
+            claim_rows = []
+            for claim in claims:
+                result = claim.verification_result
+                claim_rows.append(
+                    {
+                        "claim_id": claim.id,
+                        "text": claim.text,
+                        "claim_type": claim.claim_type.value,
+                        "importance": claim.importance.value,
+                        "requires_citation": claim.requires_citation,
+                        "section": claim.report_section.heading if claim.report_section else None,
+                        "verdict": result.verdict.value if result else None,
+                        "confidence": result.confidence if result else None,
+                        "downgraded": result.downgraded if result else False,
+                        "rationale": result.rationale if result else None,
+                        "citations": {c.marker: c.status.value for c in claim.citations},
+                    }
+                )
+
+            conflicts = (
+                session.execute(
+                    select(Conflict).where(Conflict.research_run_id == run_id)
+                )
+                .scalars()
+                .all()
+            )
+            conflict_rows = [
+                {
+                    "conflict_id": conflict.id,
+                    "claim_id": conflict.claim_id,
+                    "conflict_type": conflict.conflict_type.value,
+                    "description": conflict.description,
+                }
+                for conflict in conflicts
+            ]
+
+            source_rows = []
+            for link in SourceRepository(session).links_for_run(run_id):
+                if link.citation_label:
+                    source = link.source
+                    source_rows.append(
+                        {
+                            "label": link.citation_label,
+                            "title": source.title,
+                            "url": source.url,
+                            "doi": source.doi,
+                            "venue": source.venue,
+                            "year": source.publication_year,
+                            "source_type": source.source_type.value,
+                        }
+                    )
+
+            return {
+                "report_id": report.id,
+                "draft_markdown": report.markdown,
+                "finalized": report.final_markdown is not None,
+                "topic": ResearchRunRepository(session).get_or_raise(run_id).topic,
+                "claims": claim_rows,
+                "conflicts": conflict_rows,
+                "sources": source_rows,
+            }
+
+    def record_final_report(
+        self, run_id: uuid.UUID, *, final_markdown: str, model: str | None
+    ) -> uuid.UUID:
+        """Store the verification-aware final report on the run's report row.
+
+        One per run: finalizing twice would quietly re-roll a text the user may
+        already have cited, so it is refused like every other re-roll here.
+        """
+        with unit_of_work(self._session) as session:
+            report = ReportRepository(session).get_for_run(run_id)
+            if report is None:
+                raise NotFoundError(
+                    f"Run {run_id} has no report.", details={"run_id": str(run_id)}
+                )
+            if report.final_markdown is not None:
+                raise ConflictError(
+                    f"Run {run_id} already has a final report.",
+                    details={"run_id": str(run_id)},
+                )
+            report.final_markdown = final_markdown
+            report.final_model = model
+            report.finalized_at = utcnow()
+            session.flush()
+            logger.info("Recorded final report for run %s (%d chars)", run_id, len(final_markdown))
+            return report.id
 
     def citation_status_summary(self, run_id: uuid.UUID) -> dict[str, int]:
         """Citation outcomes for a run's report, grouped by status."""

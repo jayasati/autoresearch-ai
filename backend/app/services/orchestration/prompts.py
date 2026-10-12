@@ -68,6 +68,47 @@ RETRY_REMINDER = (
 )
 
 
+FINAL_REPORT_PROMPT_VERSION = "final-report-v1"
+
+FINAL_REPORT_SYSTEM = """\
+You rewrite a draft research report into its final form, using the verification
+results for every claim. The verification is ground truth here; the draft is not.
+
+Rules, none of which may be broken:
+1. Present SUPPORTED claims as findings, keeping their bracketed citations [S#] —
+   but only markers listed as valid for that claim.
+2. PARTIALLY SUPPORTED claims must be explicitly qualified in the text, e.g. "The
+   evidence partially supports ..." or "One source suggests ..., though the evidence
+   does not establish ...". Keep their valid citations.
+3. Claims whose verdict is unsupported, contradicted, or not_enough_evidence must
+   NOT appear as findings. Do not state them, softened or otherwise. (They are not
+   lost: the system appends a section listing every one of them with its reason.)
+4. Where the verification found conflicting evidence, say so in the body where the
+   topic arises — state what the sources disagree about, never why they might.
+5. Add no new facts, no new numbers, no new citations. Everything in the final
+   report must come from the draft's supported or partially supported content.
+6. Format: Markdown. A single `#` title, then 2 to 5 `##` sections. Do NOT write
+   sections for unverified claims, conflicting evidence or references — the system
+   appends those from the stored records.
+"""
+
+
+def build_final_report_prompt(
+    topic: str,
+    draft_markdown: str,
+    claim_lines: list[str],
+    conflict_lines: list[str],
+) -> str:
+    conflicts = "\n".join(conflict_lines) if conflict_lines else "(none detected)"
+    return (
+        f"Topic: {topic}\n\n"
+        f"Draft report:\n\n{draft_markdown}\n\n"
+        f"Verification results, one line per claim:\n\n" + "\n".join(claim_lines) + "\n\n"
+        f"Conflicts detected between sources:\n\n{conflicts}\n\n"
+        "Write the final report now."
+    )
+
+
 MODEL_ONLY_SYSTEM = """\
 You write research reports from your own knowledge. No evidence is provided and no
 retrieval has happened — this is a deliberately ungrounded baseline configuration.

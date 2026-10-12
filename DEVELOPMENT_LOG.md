@@ -5,6 +5,102 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 14 — The final report and the evidence audit — 2026-10-12
+
+**Goal:** report generation now ends after verification, not before it.
+`POST /api/v1/research/{id}/finalize` produces the FINAL REPORT — supported findings
+presented, partial ones qualified, unsupported ones excluded from the body but never
+silently deleted — plus the EVIDENCE AUDIT, counted from database rows.
+
+### The division of labour is the guarantee
+
+The model writes one thing: the findings body, from supported and partially
+supported content only, keeping only valid `[S#]` citations. Everything the spec
+requires to be *reliable* is built by code from stored rows, so it holds however
+the model behaves:
+
+- **`## Unverified and contested statements`** — every claim whose verdict was
+  unsupported / contradicted / not_enough_evidence, with its verdict label, the
+  verifier's rationale ("Why: …"), and — when applicable — the note that the verdict
+  was downgraded for want of a verbatim quote. A claim the model drops from the body
+  still appears here; silent deletion is structurally impossible.
+- **`## Conflicting evidence`** — the stored conflict descriptions (what each
+  passage says, never why they might disagree), typed.
+- **`## References`** — only sources backing at least one **valid** citation. A
+  reference list padded with sources nothing valid points at would dress the report
+  up, so the academic source that contributed nothing valid earns no entry.
+- **The EVIDENCE AUDIT** — total claims; supported / partially supported /
+  unsupported / contradicted / insufficient evidence; downgraded verdicts; citation
+  coverage (claims with ≥1 citation ÷ claims requiring one); citation validity
+  (valid ÷ all citations) with the per-status counts; conflicts detected. Counted
+  with `Counter` over rows, never asked of a model, always recomputable.
+- A body that cites a marker with no valid citation behind it is caught and warned
+  about in the response, not trusted.
+
+**Storage:** migration `e8f3b52a7c91` (applied live) adds `final_markdown`,
+`final_model`, `finalized_at` to `report`. A second text on the same row, not an
+edit and not a second row: the draft stays immutable because claim offsets point
+into it, and the one-report-per-run constraint stays intact. Traceability therefore
+survives finalization — draft → claims → evidence → verdicts all keep pointing at
+the text they were computed from. One finalization per run; re-POSTing is a 409.
+Preconditions are refused with their reason: no claims yet, or N claims unverified.
+
+### The complete real query (run `e1c7c97e…`)
+
+*"Does regular meditation reduce blood pressure in adults with hypertension?"* —
+research → claims → verify → finalize, live:
+
+| Step | Result |
+|---|---|
+| research (quick) | completed, 3 sources |
+| claims | 12 extracted |
+| verify | 12/12 verified: 8 supported, 1 contradicted, 3 not_enough_evidence |
+| finalize | 4,711-char final report, 1,672 tokens, zero warnings |
+
+Audit, as returned: coverage **0.667** (8 of 12 citation-requiring claims cited
+anything), validity **0.5** (4 valid, 4 misattributed), 3 downgraded verdicts,
+0 conflicts. Final report sections: the findings body (3 sections), then
+*Unverified and contested statements* (4 claims listed with reasons), then
+*References* (valid sources only).
+
+One entry from the contested section, verbatim, because it shows the whole machine
+working: a TM blood-pressure claim is listed as **Insufficient evidence**, its
+"Why" quotes the verifier's rationale (which actually describes support!), and the
+note explains the downgrade: *"the verifier asserted support without a verbatim
+quote, so the verdict was downgraded."* The reader sees what was claimed, what the
+verifier thought, and exactly why the system refused to present it as a finding.
+
+### Tests performed
+
+**795 backend tests, all passing** (9 new in `test_final_report.py`, over the real
+run → extract → verify chain): unsupported claims listed with reasons rather than
+deleted; references restricted to validated sources; the final report persisted
+without touching the draft; audit arithmetic (coverage 0.5, validity 1.0 on a
+crafted mix) pinned; the conflicts section; rogue-marker warnings; and the three
+guards (no claims / unverified claims / already finalized). `ruff` and `mypy`
+clean; migration suite green.
+
+### Known limitations
+
+- The audit's `citation_validity` divides by all citations including `unvalidated`
+  ones from skipped claims, so a partially verified run reads lower — accurate, but
+  worth knowing when comparing runs.
+- The findings body is still model prose: it is constrained to supported content
+  and checked for rogue markers, but its faithfulness to the verified claims is not
+  itself re-verified (a second verification pass over the final report would be the
+  gold-plated version; the audit and sections make the current one honest).
+- Downgrade notes inherit the verifier's exact-substring strictness from stage 13 —
+  several "insufficient evidence" entries are really "the quote had different
+  punctuation". Same safe direction, same planned fix.
+
+### Next stage
+
+**Metrics and the benchmark** — the audit computes one run's numbers; the benchmark
+runs topics across all three modes and compares them. The `evaluation_result`
+tables and `MetricKey` vocabulary have waited for this since stage 4.
+
+---
+
 ## Stage 13 — Verification, citation validation and conflict detection — 2026-10-12
 
 **Goal:** the project's reason to exist. `POST /api/v1/research/{id}/verify` judges

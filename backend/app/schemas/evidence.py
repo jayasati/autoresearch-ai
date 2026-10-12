@@ -369,6 +369,72 @@ class VerificationRunResponse(ReadModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class EvidenceAudit(ReadModel):
+    """The audit the spec requires, counted from database rows — never estimated,
+    never asked of a model, always recomputable."""
+
+    total_claims: int = Field(ge=0)
+    supported: int = Field(ge=0)
+    partially_supported: int = Field(ge=0)
+    unsupported: int = Field(ge=0)
+    contradicted: int = Field(ge=0)
+    insufficient_evidence: int = Field(ge=0)
+    downgraded_verdicts: int = Field(
+        ge=0, description="Verdicts the verifier overclaimed and the system downgraded."
+    )
+
+    claims_requiring_citation: int = Field(ge=0)
+    claims_with_citations: int = Field(ge=0)
+    citation_coverage: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Claims with at least one citation / claims requiring one.",
+    )
+    citations_total: int = Field(ge=0)
+    citations_by_status: dict[str, int] = Field(default_factory=dict)
+    citation_validity: float | None = Field(
+        default=None, ge=0.0, le=1.0, description="Valid citations / all citations."
+    )
+    conflicts_detected: int = Field(ge=0)
+
+
+class DowngradedClaimRead(ReadModel):
+    """A claim that did not survive verification — listed, never silently deleted,
+    with enough context to understand why."""
+
+    claim_id: uuid.UUID
+    claim_text: str
+    verdict: str
+    downgraded_by_verifier: bool = Field(
+        description="True when the verifier overclaimed and the system downgraded it."
+    )
+    reason: str
+    citations: dict[str, str] = Field(default_factory=dict)
+
+
+class FinalReportResponse(ReadModel):
+    """The verification-aware final report plus its evidence audit."""
+
+    research_id: uuid.UUID
+    report_id: uuid.UUID
+    final_report: str = Field(
+        description=(
+            "Markdown: the findings body (supported and qualified content only), "
+            "then code-built sections for conflicting evidence, unverified claims "
+            "and references."
+        )
+    )
+    evidence_audit: EvidenceAudit
+    unverified_claims: list[DowngradedClaimRead] = Field(default_factory=list)
+    model: str
+    prompt_version: str
+    llm_calls: int = Field(ge=1)
+    token_usage: dict[str, int] | None = None
+    duration_seconds: float = Field(ge=0)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ClaimExtractionResponse(IdentifiedModel):
     """What claim extraction did for one run. `id` is the report's id."""
 

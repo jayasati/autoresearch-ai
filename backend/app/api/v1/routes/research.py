@@ -18,10 +18,14 @@ import uuid
 
 from fastapi import APIRouter
 
-from app.schemas.evidence import ClaimExtractionResponse, VerificationRunResponse
+from app.schemas.evidence import (
+    ClaimExtractionResponse,
+    FinalReportResponse,
+    VerificationRunResponse,
+)
 from app.schemas.research import ResearchStartRequest, ResearchStartResponse
 from app.services.claims import ClaimExtractor
-from app.services.orchestration import ResearchOrchestrator
+from app.services.orchestration import ReportFinalizer, ResearchOrchestrator
 from app.services.verification import ClaimVerifier
 
 router = APIRouter()
@@ -55,3 +59,16 @@ async def verify_claims(research_id: uuid.UUID) -> VerificationRunResponse:
     twice are skipped; re-POSTing verifies exactly the stragglers.
     """
     return await ClaimVerifier().verify(research_id)
+
+
+@router.post("/{research_id}/finalize", response_model=FinalReportResponse)
+async def finalize_report(research_id: uuid.UUID) -> FinalReportResponse:
+    """Produce the verification-aware final report and its evidence audit.
+
+    Requires every claim to be verified. The body presents supported findings and
+    qualifies partial ones; the conflicting-evidence, unverified-claims and
+    references sections are built by code from the stored rows, so no unsupported
+    claim is silently deleted and no reference can be invented. The audit's numbers
+    are counted from the database.
+    """
+    return await ReportFinalizer().finalize(research_id)

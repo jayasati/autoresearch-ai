@@ -13,17 +13,23 @@ exactly what today's citations do and do not guarantee.
 """
 
 from app.services.orchestration.exceptions import NoEvidenceError, UncitedReportError
+from app.services.orchestration.finalizer import ReportFinalizer
 from app.services.orchestration.orchestrator import (
     DEPTH_PROFILES,
     DepthProfile,
     ResearchOrchestrator,
 )
-from app.services.orchestration.prompts import SYNTHESIS_PROMPT_VERSION
+from app.services.orchestration.prompts import (
+    FINAL_REPORT_PROMPT_VERSION,
+    SYNTHESIS_PROMPT_VERSION,
+)
 
 __all__ = [
     "DEPTH_PROFILES",
     "DepthProfile",
+    "FINAL_REPORT_PROMPT_VERSION",
     "NoEvidenceError",
+    "ReportFinalizer",
     "ResearchOrchestrator",
     "SYNTHESIS_PROMPT_VERSION",
     "UncitedReportError",
