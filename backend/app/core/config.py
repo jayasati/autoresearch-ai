@@ -40,6 +40,23 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_TIMEOUT_SECONDS: int = 90
     OPENAI_MAX_RETRIES: int = 3
+    # None means "do not send the parameter": some models (the reasoning family)
+    # reject temperature outright, and the provider's default is then the right one.
+    # The benchmark will want 0.0 here, for runs that are as repeatable as the
+    # provider allows.
+    OPENAI_TEMPERATURE: float | None = None
+
+    # --- Foundation model (Azure OpenAI) ---
+    # The alternative to OPENAI_API_KEY: when the endpoint, key AND deployment name
+    # are all set, the LLM service talks to this Azure resource instead, and the
+    # deployment name is what "model" means. Azure keys are opaque strings with no
+    # `sk-` prefix, which is how one in OPENAI_API_KEY was mis-diagnosed once —
+    # hence separate, explicitly named settings. Timeout, retries and temperature
+    # are shared with the OPENAI_* settings; only the credentials differ.
+    AZURE_OPENAI_ENDPOINT: str | None = None
+    AZURE_OPENAI_API_KEY: str | None = None
+    AZURE_OPENAI_API_VERSION: str = "2024-12-01-preview"
+    AZURE_OPENAI_DEPLOYMENT_NAME: str | None = None
 
     # --- Embeddings (Sentence Transformers, local) ---
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -219,6 +236,33 @@ class Settings(BaseSettings):
         return not value.strip().lower().endswith("replace-me")
 
     @property
+    def llm_provider(self) -> Literal["azure_openai", "openai"] | None:
+        """Which foundation-model provider the credentials select, if any.
+
+        Azure wins when both are configured: setting three deliberate values
+        (endpoint, key, deployment) is a stronger statement of intent than one.
+        All three are required — an endpoint without a deployment name has nothing
+        to address a request to, and must read as "not configured", not "half works".
+        """
+        azure_complete = (
+            bool(self.AZURE_OPENAI_ENDPOINT)
+            and self._is_real_credential(self.AZURE_OPENAI_API_KEY)
+            and bool(self.AZURE_OPENAI_DEPLOYMENT_NAME)
+        )
+        if azure_complete:
+            return "azure_openai"
+        if self._is_real_credential(self.OPENAI_API_KEY):
+            return "openai"
+        return None
+
+    @property
+    def llm_default_model(self) -> str:
+        """What "model" means by default: the Azure deployment name, or OPENAI_MODEL."""
+        if self.llm_provider == "azure_openai" and self.AZURE_OPENAI_DEPLOYMENT_NAME:
+            return self.AZURE_OPENAI_DEPLOYMENT_NAME
+        return self.OPENAI_MODEL
+
+    @property
     def integration_status(self) -> dict[str, bool]:
         """Which external integrations have usable credentials.
 
@@ -226,7 +270,9 @@ class Settings(BaseSettings):
         where a key only raises rate limits, the second is embedded and local.
         """
         return {
-            "openai": self._is_real_credential(self.OPENAI_API_KEY),
+            # Either provider counts: "openai" here means "a foundation model is
+            # reachable", which is the question the capabilities endpoint answers.
+            "openai": self.llm_provider is not None,
             "tavily": self._is_real_credential(self.TAVILY_API_KEY),
             # True regardless of the key: the public API is usable without one, and a
             # key only raises the quota. Reporting False would tell the user to go and
@@ -240,15 +286,20 @@ class Settings(BaseSettings):
 
     @property
     def missing_credentials(self) -> list[str]:
-        """Names of the environment variables still needing a real value."""
-        return [
-            name
-            for name, value in (
-                ("OPENAI_API_KEY", self.OPENAI_API_KEY),
-                ("TAVILY_API_KEY", self.TAVILY_API_KEY),
-            )
-            if not self._is_real_credential(value)
-        ] + (["DATABASE_URL"] if self.database_credentials_look_unset else [])
+        """Names of the environment variables still needing a real value.
+
+        OPENAI_API_KEY is listed only when NO foundation-model provider is
+        configured — a working Azure setup must not produce a warning telling the
+        user to go and fix something that is not broken.
+        """
+        missing: list[str] = []
+        if self.llm_provider is None:
+            missing.append("OPENAI_API_KEY")
+        if not self._is_real_credential(self.TAVILY_API_KEY):
+            missing.append("TAVILY_API_KEY")
+        if self.database_credentials_look_unset:
+            missing.append("DATABASE_URL")
+        return missing
 
 
 @lru_cache

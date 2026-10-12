@@ -5,6 +5,155 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 9 — LLM service: the foundation-model boundary — 2026-10-12
+
+> Stage 8b predicted stage 9 would be the fetcher. The LLM service was built first
+> instead — the orchestrator needs both, and this one unblocks the planning and
+> verification prompts. The fetcher moves to a later stage.
+
+**Goal:** `generate_text()` and `generate_structured_output()` over the OpenAI API,
+behind an abstraction the rest of the system can depend on without knowing the vendor.
+No research generation yet — planning, verification and report prompts belong to the
+orchestration stage. This stage installed `requirements.txt`'s foundation-model layer
+for the first time (openai 3.29.0, tiktoken).
+
+### An external foundation model, not a trained one
+
+Stated explicitly, as the requirements ask: **this project uses an external, hosted
+foundation model (OpenAI's, `gpt-4o-mini` by default). It does not train a model, and
+it does not fine-tune one.** The project's claims — grounding, citation, verification,
+the benchmark — are claims about how a model is *used*: what evidence it is shown,
+what it must cite, how its output is checked, how its failures are measured. None of
+that requires owning weights, and a project of this size pretending to train an LLM
+would spend its entire budget badly reproducing what a provider already does well.
+The engineering contribution is the harness around the model, not the model.
+
+That boundary is enforced in code, not just stated: nothing outside
+`app/services/llm/` imports the OpenAI SDK. Callers depend on `LLMResponse`,
+`StructuredLLMResponse[T]`, `TokenUsage` and the `LLMError` hierarchy, so swapping
+the provider is an edit to one package.
+
+### What was implemented
+
+| Requirement | How |
+|---|---|
+| `OPENAI_API_KEY` from environment | via `Settings`; a missing or `sk-replace-me` placeholder key raises `LLMNotConfigured` at call time — the service boots without credentials, same contract as retrieval |
+| Configurable model | `OPENAI_MODEL` default, overridable per call; the response records the model that actually answered (the dated snapshot), because a benchmark must know which |
+| Configurable temperature where supported | new `OPENAI_TEMPERATURE` setting (default `None`) plus per-call override; `None` means the parameter is **not sent** — some models reject it, and the provider default is then correct |
+| Timeout | `OPENAI_TIMEOUT_SECONDS` on the client; surfaces as `LLMTimeout` |
+| Retry handling | the SDK's bounded retry (`OPENAI_MAX_RETRIES`) with `Retry-After` handling; policy pinned by tests — 429/5xx retried, 401/400 never |
+| Token usage tracking if available | `TokenUsage` verbatim from the response; `None` when unreported (absence is not zeros); the service accumulates `calls_made` / `total_usage` for budget accounting |
+| Structured response object | `LLMResponse` (text, actual model, finish_reason, usage, latency); `StructuredLLMResponse[T]` adds the validated `data` and keeps the raw JSON in `text` for auditing |
+| No API keys in logs | log lines carry model/latency/tokens only, never prompts or headers; auth failures use a fixed message naming the **setting** — OpenAI's own 401 body quotes part of the rejected key and is deliberately not echoed; pinned by `TestNoKeyLeaks` |
+| Clean abstraction | SDK types and exceptions are translated at the boundary (`_translate`); the package exports only its own models and errors |
+| Pydantic validation for structured outputs | the provider is asked for strict-schema JSON (`response_format: json_schema, strict: true`) **and** the content is validated against the caller's model; failures raise `LLMResponseInvalid`, so `data` is always a real, checked instance |
+
+Also distinguished: `LLMRefusal` (the model declined, with its stated reason) from
+`LLMResponseInvalid` (the model answered unusably). The orchestrator will need to
+treat "declined" and "broken" differently, and collapsing them now would lose that.
+
+### Azure OpenAI support (added the same day)
+
+The first real key turned out to be an **Azure OpenAI** key — which is how the
+abstraction got its first test before any orchestration exists. Azure keys are opaque
+strings with no `sk-` prefix, so one pasted into `OPENAI_API_KEY` authenticates with
+nothing; the live check failed with a 401 and the key's shape gave it away.
+
+Support added behind the same boundary: `AZURE_OPENAI_ENDPOINT` / `_API_KEY` /
+`_API_VERSION` / `_DEPLOYMENT_NAME` settings, a `Settings.llm_provider` rule (Azure
+wins when both providers are configured; a partial Azure setup — any of the three
+values missing — is *not configured*, never "half works"), and an `AsyncAzureOpenAI`
+branch in `_ensure_client`. `AsyncAzureOpenAI` subclasses `AsyncOpenAI`, so the
+request pipeline, retries, exception mapping and both public methods are identical;
+only addressing and auth differ. On Azure the deployment name is what "model" means,
+via `Settings.llm_default_model`. The service itself did not change shape — no caller
+could tell which provider answered, which is the abstraction doing its job.
+
+`integration_status["openai"]` now means "a foundation model is reachable" (either
+provider), and `missing_credentials` only names `OPENAI_API_KEY` when *no* provider
+is configured — a working Azure setup must not produce a warning telling the user to
+fix something that is not broken. The config tests that assert "not configured" now
+switch Azure off explicitly, because `Settings` also reads the developer's real .env.
+
+### Files added
+
+- `app/services/llm/service.py`: `LLMService` — the two public methods, request
+  assembly, error translation, usage accounting
+- `app/services/llm/models.py`: `TokenUsage`, `LLMResponse`, `StructuredLLMResponse[T]`
+- `app/services/llm/exceptions.py`: `LLMError` hierarchy, mirroring retrieval's
+- `app/services/llm/__init__.py`, `app/services/llm/README.md`
+- `tests/unit/test_llm_service.py` (32 tests, 5 of them Azure)
+
+### Files changed
+
+- `app/core/config.py`: `OPENAI_TEMPERATURE` (default `None`, commented); the
+  `AZURE_OPENAI_*` settings, `llm_provider` and `llm_default_model`;
+  `integration_status` / `missing_credentials` updated to the provider rule
+- `tests/test_config.py`: `TestLLMProvider` (9 tests, parametrization included);
+  four existing tests now switch Azure off explicitly
+- `app/services/README.md`: the new package
+
+### Decisions made
+
+1. **The SDK's retry machinery is configured, not reimplemented.** The one deliberate
+   divergence from retrieval, and stage 6's reasoning is why: retrieval wrote its own
+   loop because it speaks raw httpx and nobody else would do it. The OpenAI SDK
+   already implements bounded retries, `Retry-After` handling and jittered backoff
+   over the same httpx stack — duplicated retry logic is the kind of thing where a
+   bug gets fixed in one copy and lives on in the other. The *policy* is still ours:
+   settings configure it, and the tests assert it by counting real requests through
+   a mocked transport.
+
+2. **Tests drive the real SDK over `httpx.MockTransport`.** Same philosophy as the
+   Tavily and Semantic Scholar tests: the request assembly, header handling and error
+   mapping under test are the code that runs in production. The SDK accepts an
+   injected `http_client`, which makes this as clean as retrieval's version.
+
+3. **Strict JSON schema *and* client-side validation.** Strict mode makes conforming
+   output likely; validating against the actual Pydantic model makes it guaranteed.
+   Belt and braces, because `data` reaching a caller unvalidated would put the "the
+   output was checked" claim in the same category as the stage-4 enum CHECK claim —
+   documented but untrue.
+
+4. **A blank prompt raises `ValueError` before any request.** Our bug, not the
+   provider's — it must not be dressed up as an upstream failure, and it must not
+   cost a (retried) network call.
+
+### Tests performed
+
+**739 backend tests, all passing** (41 new across the two test files). All mocked; no
+test contacts the network or needs a key:
+
+| Area | Covers |
+|---|---|
+| `TestGenerateText` | response shape; the answered model recorded; configured model and prompt sent; system prompt and per-call model override; temperature omitted when None / from settings / overridden; max_tokens passthrough; blank prompt rejected with zero requests; truncation (`finish_reason: length`) reported, not hidden |
+| `TestStructuredOutput` | valid JSON → validated instance with raw text kept; request carries `json_schema` + `strict: true`; non-JSON content raises; schema-violating JSON raises; a refusal raises `LLMRefusal` with the reason |
+| `TestConfiguration` | no key → `LLMNotConfigured`, zero requests; `sk-replace-me` placeholder is not a key; the key goes into the auth header and nowhere else; 401 not retried |
+| `TestAzureProvider` | requests go to the deployment URL with the `api-key` header; the default model is the deployment name; Azure wins when both providers are configured; a partial Azure setup is not configured (zero requests); structured output works on Azure |
+| `TestLLMProvider` (config) | no credentials → no provider; plain key → openai; complete Azure → azure, counted configured, no spurious missing-credential warning; each missing Azure value → not a provider; Azure placeholder key rejected |
+| `TestRetries` | 429 retried then succeeds; persistent 429 exhausts retries (1 + `OPENAI_MAX_RETRIES` requests counted); 500 retried then succeeds; persistent 503 → `LLMProviderUnavailable`; timeout → `LLMTimeout`; 400 not retried |
+| `TestUsageTracking` | usage accumulates across calls; absent usage is `None`, not zeros |
+| `TestNoKeyLeaks` | a 401 body quoting the key does not leak it into the exception, its details, or any log line; successful-call logs never carry it |
+
+### Result
+
+| Check | Result |
+|---|---|
+| `pytest` | **739 passed** in 75s |
+| `ruff check .` | All checks passed |
+| `mypy app` | Success: no issues found in 69 source files |
+| real API call | **both methods verified live** with a plain OpenAI key: `generate_text` answered (and recorded the dated snapshot `gpt-4o-mini-2024-07-18`, not the alias), `generate_structured_output` returned a validated instance, cumulative tracking counted 2 calls / 94 tokens. Before that, two failures exercised the error mapping for real: an Azure key pasted into `OPENAI_API_KEY` → a clean 401 → `LLMAuthenticationFailed`, and an Azure endpoint that does not resolve in DNS (`openai-04.openai.azure.com`) → `LLMProviderUnavailable`. The Azure code path works up to addressing; its first successful live call is pending a correct endpoint |
+| frontend | unchanged |
+
+### Next stage
+
+**Stage 10 — the fetcher, or orchestration.** The pipeline now has retrieval,
+processing, a vector store and a model boundary; what remains before a first
+end-to-end run is the orchestrator that wires them into `POST /api/v1/research`
+(and the fetcher, which deepens evidence from snippets to full text).
+
+---
+
 ## Stage 8b — Vector retrieval: embeddings and semantic search — 2026-10-12
 
 > Stage 8 predicted this as "Stage 8b — fetching, embeddings and the vector store".

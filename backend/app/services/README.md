@@ -1,7 +1,7 @@
 # services/ — Use cases, and the transaction boundary
 
-**`research_service.py`, `retrieval/`, `processing/` and `vectorstore/` are implemented.**
-The rest arrive with their stages.
+**`research_service.py`, `retrieval/`, `processing/`, `vectorstore/` and `llm/` are
+implemented.** The rest arrive with their stages.
 
 This layer answers "what happened, and did *all* of it happen". Each public method is
 one atomic operation: it either completes and commits, or raises and leaves the
@@ -88,3 +88,14 @@ to be opened with a different embedding model than it was built with.
 its negation score almost identically. The contract, and the test that pins it, are in
 [`vectorstore/README.md`](vectorstore/README.md). No database calls; ChromaDB's files
 under `CHROMA_PERSIST_DIR` are its own storage, not ours.
+
+## `llm/` — the foundation-model boundary
+
+`LLMService.generate_text` and `generate_structured_output` call the configured
+OpenAI model; structured outputs are validated against the caller's Pydantic schema
+before they reach the caller. **The project uses an external foundation model — it
+does not train one** — and nothing outside this package imports the OpenAI SDK, so
+the provider is swappable in one place. The key never appears in logs or exceptions,
+usage is reported verbatim or not at all, and the retry/timeout policy is configured
+SDK machinery pinned by mocked-transport tests. No research prompts live here; see
+[`llm/README.md`](llm/README.md).

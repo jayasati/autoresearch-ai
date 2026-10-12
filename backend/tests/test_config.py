@@ -84,8 +84,15 @@ class TestCredentialStatus:
     did not, so it reported `openai: true` for an untouched .env.
     """
 
+    # Settings also reads the developer's real .env, so tests asserting "openai is
+    # NOT configured" must switch Azure off explicitly or the .env's Azure values
+    # would satisfy the provider rule and the assertion would test the .env.
+    NO_AZURE = {"AZURE_OPENAI_ENDPOINT": None, "AZURE_OPENAI_API_KEY": None}
+
     def test_placeholder_does_not_count_as_configured(self):
-        s = Settings(OPENAI_API_KEY="sk-replace-me", TAVILY_API_KEY="tvly-replace-me")
+        s = Settings(
+            OPENAI_API_KEY="sk-replace-me", TAVILY_API_KEY="tvly-replace-me", **self.NO_AZURE
+        )
         assert s.integration_status["openai"] is False
         assert s.integration_status["tavily"] is False
 
@@ -99,7 +106,8 @@ class TestCredentialStatus:
         assert s.integration_status["tavily"] is True
 
     def test_placeholder_check_ignores_case_and_whitespace(self):
-        assert Settings(OPENAI_API_KEY="  SK-REPLACE-ME  ").integration_status["openai"] is False
+        s = Settings(OPENAI_API_KEY="  SK-REPLACE-ME  ", **self.NO_AZURE)
+        assert s.integration_status["openai"] is False
 
     def test_keyless_integrations_are_always_available(self):
         """Semantic Scholar's API is public; ChromaDB is embedded and local."""
@@ -112,6 +120,7 @@ class TestCredentialStatus:
             OPENAI_API_KEY="sk-replace-me",
             TAVILY_API_KEY="tvly-real-key",
             DATABASE_URL="postgresql://u:realpassword@h:5432/d",
+            **self.NO_AZURE,
         )
         assert s.missing_credentials == ["OPENAI_API_KEY"]
 
@@ -131,10 +140,64 @@ class TestCredentialStatus:
 
     def test_the_two_views_never_disagree(self):
         """integration_status and missing_credentials must derive from one rule."""
-        s = Settings(OPENAI_API_KEY="sk-replace-me", TAVILY_API_KEY="tvly-real")
+        s = Settings(OPENAI_API_KEY="sk-replace-me", TAVILY_API_KEY="tvly-real", **self.NO_AZURE)
         for name in ("OPENAI_API_KEY", "TAVILY_API_KEY"):
             integration = name.split("_")[0].lower()
             assert s.integration_status[integration] is (name not in s.missing_credentials)
+
+
+class TestLLMProvider:
+    """Which foundation-model provider the credentials select.
+
+    Azure keys are opaque strings with no `sk-` prefix — one pasted into
+    OPENAI_API_KEY authenticates with nothing and is why these are separate,
+    explicitly named settings.
+    """
+
+    AZURE = {
+        "AZURE_OPENAI_ENDPOINT": "https://unit-test.openai.azure.invalid/",
+        "AZURE_OPENAI_API_KEY": "azure-unit-test-key",
+        "AZURE_OPENAI_DEPLOYMENT_NAME": "gpt-4o-deployed",
+    }
+    NO_OPENAI = {"OPENAI_API_KEY": None}
+
+    def test_no_credentials_means_no_provider(self, clean_env):
+        assert Settings(_env_file=None).llm_provider is None
+
+    def test_a_plain_key_selects_openai(self, clean_env):
+        s = Settings(OPENAI_API_KEY="sk-real", _env_file=None)
+        assert s.llm_provider == "openai"
+        assert s.llm_default_model == s.OPENAI_MODEL
+
+    def test_complete_azure_settings_select_azure(self):
+        s = Settings(**self.AZURE, **self.NO_OPENAI)
+        assert s.llm_provider == "azure_openai"
+        assert s.integration_status["openai"] is True
+        assert "OPENAI_API_KEY" not in s.missing_credentials
+
+    def test_on_azure_the_default_model_is_the_deployment(self):
+        s = Settings(**self.AZURE, **self.NO_OPENAI)
+        assert s.llm_default_model == "gpt-4o-deployed"
+
+    def test_azure_wins_when_both_are_configured(self):
+        s = Settings(**self.AZURE, OPENAI_API_KEY="sk-real")
+        assert s.llm_provider == "azure_openai"
+
+    @pytest.mark.parametrize(
+        "incomplete",
+        ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT_NAME"],
+    )
+    def test_a_partial_azure_setup_is_not_a_provider(self, incomplete):
+        """Two of three values is 'not configured', never 'half works'."""
+        s = Settings(**{**self.AZURE, incomplete: None}, **self.NO_OPENAI)
+        assert s.llm_provider is None
+        assert s.integration_status["openai"] is False
+
+    def test_an_azure_placeholder_key_does_not_count(self):
+        s = Settings(
+            **{**self.AZURE, "AZURE_OPENAI_API_KEY": "azure-replace-me"}, **self.NO_OPENAI
+        )
+        assert s.llm_provider is None
 
 
 class TestSettingsCaching:
