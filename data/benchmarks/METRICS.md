@@ -68,6 +68,19 @@ search for C/D; provider rank order for B).
   change and cached-input discounts are ignored; at these rates it is an upper
   bound. A model with no listed price yields None, never $0.00.
 
+## The final comparison (baseline vs AutoResearch)
+
+- **failure_rate** = items_failed / items_attempted, per arm. A failed cell is a
+  recorded row with its error; it is never retried into silence or dropped.
+- **absolute_difference** = autoresearch − baseline, per metric
+  (baseline = `model_only`, AutoResearch = `full_autoresearch_verified`).
+- **relative_difference** = (autoresearch − baseline) / |baseline|, only where
+  meaningful: omitted when either value is undefined or the baseline is 0, because
+  a ratio over zero asserts an infinity nobody measured.
+- **direction** classifies each difference as improved / worse / unchanged against
+  the metric's better direction (declared per metric in code), mechanically — so
+  no prose can soften a regression.
+
 ## Provenance
 
 Raw results are stored three ways, from one payload: `results.json` (full rows, run

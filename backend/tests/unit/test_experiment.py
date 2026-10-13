@@ -275,6 +275,69 @@ class TestExperimentRunner:
         assert by_arm["search_grounded"]["error"] is None  # the grid continued
         assert payload["aggregates"]["hybrid"]["items_failed"] == 1
 
+    def test_comparison_math_and_meaningfulness(self):
+        aggregates = {
+            "model_only": {
+                "claim_support_rate": {"mean": 0.0, "n": 8},
+                "citation_precision": {"mean": None, "n": 0},
+                "product_cost_usd": {"mean": 0.0003, "n": 8},
+                "unsupported_claim_rate": {"mean": 0.0, "n": 8},
+                "citation_coverage": {"mean": 0.0, "n": 8},
+                "retrieval_precision_at_k": {"mean": None, "n": 0},
+                "retrieval_recall_at_k": {"mean": None, "n": 0},
+                "retrieval_ndcg_at_k": {"mean": None, "n": 0},
+                "product_latency_seconds": {"mean": 8.0, "n": 8},
+                "product_total_tokens": {"mean": 700, "n": 8},
+                "failure_rate": 0.0,
+            },
+            "full_autoresearch_verified": {
+                "claim_support_rate": {"mean": 0.6, "n": 8},
+                "citation_precision": {"mean": 0.5, "n": 8},
+                "product_cost_usd": {"mean": 0.006, "n": 8},
+                "unsupported_claim_rate": {"mean": 0.08, "n": 8},
+                "citation_coverage": {"mean": 0.6, "n": 8},
+                "retrieval_precision_at_k": {"mean": 0.5, "n": 7},
+                "retrieval_recall_at_k": {"mean": 0.85, "n": 7},
+                "retrieval_ndcg_at_k": {"mean": 0.8, "n": 7},
+                "product_latency_seconds": {"mean": 57.0, "n": 8},
+                "product_total_tokens": {"mean": 29000, "n": 8},
+                "failure_rate": 0.0,
+            },
+        }
+        comparison = {
+            entry["metric"]: entry
+            for entry in ExperimentRunner.build_comparison(aggregates)
+        }
+
+        support = comparison["claim_support_rate"]
+        assert support["absolute_difference"] == 0.6
+        assert support["relative_difference"] is None  # zero baseline: not meaningful
+        assert support["direction"] == "improved"
+
+        cost = comparison["product_cost_usd"]
+        assert cost["absolute_difference"] == 0.0057
+        assert cost["relative_difference"] == 19.0  # (0.006-0.0003)/0.0003
+        assert cost["direction"] == "worse"  # lower is better for cost
+
+        precision = comparison["citation_precision"]
+        assert precision["baseline"] is None  # undefined for the baseline
+        assert precision["absolute_difference"] is None
+        assert precision["direction"] is None
+
+        hallucination = comparison["unsupported_claim_rate"]
+        assert hallucination["direction"] == "worse"  # 0.08 over a 0.0 baseline
+
+        assert comparison["failure_rate"]["direction"] == "unchanged"
+
+    async def test_the_test_set_writes_the_final_file_names(self, runner, service_session):
+        """The final evaluation's outputs carry the names the write-up names."""
+        payload = await runner.run_experiment("test", arms=("model_only",), limit=1)
+        output_dir = Path(payload["output_dir"])
+        assert (output_dir / "raw_results.json").exists()
+        assert (output_dir / "raw_results.csv").exists()
+        assert (output_dir / "evaluation_report.md").exists()
+        assert not (output_dir / "results.json").exists()
+
     async def test_raw_results_land_in_the_database(self, runner, service_session):
         await runner.run_experiment("development", arms=("search_grounded",), limit=1)
 

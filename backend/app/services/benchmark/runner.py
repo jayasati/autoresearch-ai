@@ -362,8 +362,78 @@ class ExperimentRunner:
                 },
             },
             "rows": rows,
-            "aggregates": self._aggregate(rows, arms),
+            "aggregates": (aggregates := self._aggregate(rows, arms)),
+            "comparison": self.build_comparison(aggregates),
         }
+
+    #: Which direction is better, per compared metric. Needed to classify a
+    #: difference as improvement or regression mechanically, from the numbers alone.
+    HIGHER_IS_BETTER = {
+        "claim_support_rate": True,
+        "citation_precision": True,
+        "citation_coverage": True,
+        "unsupported_claim_rate": False,
+        "retrieval_precision_at_k": True,
+        "retrieval_recall_at_k": True,
+        "retrieval_ndcg_at_k": True,
+        "product_latency_seconds": False,
+        "product_total_tokens": False,
+        "product_cost_usd": False,
+        "failure_rate": False,
+    }
+
+    @classmethod
+    def build_comparison(
+        cls,
+        aggregates: dict,
+        baseline_arm: str = "model_only",
+        system_arm: str = "full_autoresearch_verified",
+    ) -> list[dict]:
+        """Baseline versus AutoResearch, per metric, computed — never asserted.
+
+        absolute_difference = autoresearch − baseline.
+        relative_difference = (autoresearch − baseline) / |baseline|, only where
+        meaningful: None when either value is undefined or the baseline is 0 (a
+        ratio over zero asserts an infinity nobody measured).
+        `direction` classifies the difference against HIGHER_IS_BETTER — improved,
+        worse, or unchanged — mechanically, so no prose can soften a regression.
+        """
+        if baseline_arm not in aggregates or system_arm not in aggregates:
+            return []
+        comparison = []
+        for metric, higher_better in cls.HIGHER_IS_BETTER.items():
+            baseline_entry = aggregates[baseline_arm].get(metric)
+            system_entry = aggregates[system_arm].get(metric)
+            baseline = (
+                baseline_entry.get("mean") if isinstance(baseline_entry, dict) else baseline_entry
+            )
+            system = (
+                system_entry.get("mean") if isinstance(system_entry, dict) else system_entry
+            )
+            absolute = relative = direction = None
+            if baseline is not None and system is not None:
+                absolute = round(system - baseline, 4)
+                if baseline != 0:
+                    relative = round((system - baseline) / abs(baseline), 4)
+                if absolute == 0:
+                    direction = "unchanged"
+                else:
+                    improved = (absolute > 0) == higher_better
+                    direction = "improved" if improved else "worse"
+            comparison.append(
+                {
+                    "metric": metric,
+                    "higher_is_better": higher_better,
+                    "baseline_arm": baseline_arm,
+                    "baseline": baseline,
+                    "autoresearch_arm": system_arm,
+                    "autoresearch": system,
+                    "absolute_difference": absolute,
+                    "relative_difference": relative,
+                    "direction": direction,
+                }
+            )
+        return comparison
 
     @staticmethod
     def _aggregate(rows: list[dict], arms) -> dict:
@@ -384,9 +454,12 @@ class ExperimentRunner:
         for arm in arms:
             arm_rows = [row for row in rows if row["arm"] == arm and row["error"] is None]
             failed = [row for row in rows if row["arm"] == arm and row["error"] is not None]
+            total_cells = len(arm_rows) + len(failed)
             summary: dict[str, Any] = {
                 "items_completed": len(arm_rows),
                 "items_failed": len(failed),
+                # failure_rate = items_failed / items_attempted, per arm.
+                "failure_rate": round(len(failed) / total_cells, 4) if total_cells else None,
             }
             for metric in mean_metrics:
                 values = [row[metric] for row in arm_rows if row.get(metric) is not None]
@@ -407,9 +480,18 @@ class ExperimentRunner:
     def _write_outputs(self, payload: dict, set_name: str, started_at: datetime) -> Path:
         output_dir = self.output_root / set_name / f"{started_at:%Y%m%dT%H%M%SZ}"
         output_dir.mkdir(parents=True, exist_ok=True)
-        write_results_json(payload, output_dir / "results.json")
-        write_results_csv(payload, output_dir / "results.csv")
-        write_summary_markdown(payload, output_dir / "evaluation_summary.md")
+        # The final test-set evaluation uses the names the write-up names.
+        final = set_name == "test"
+        write_results_json(
+            payload, output_dir / ("raw_results.json" if final else "results.json")
+        )
+        write_results_csv(
+            payload, output_dir / ("raw_results.csv" if final else "results.csv")
+        )
+        write_summary_markdown(
+            payload,
+            output_dir / ("evaluation_report.md" if final else "evaluation_summary.md"),
+        )
         return output_dir
 
 
@@ -519,10 +601,48 @@ def write_summary_markdown(payload: dict, path: Path) -> None:
         for arm in arms
     ]
     lines.append("| Items | " + " | ".join(completion) + " |")
+    failure = [
+        str(aggregates[arm]["failure_rate"]) if aggregates[arm]["failure_rate"] is not None
+        else "—"
+        for arm in arms
+    ]
+    lines.append("| Failure rate | " + " | ".join(failure) + " |")
+
+    comparison = payload.get("comparison") or []
+    if comparison:
+        lines += [
+            "",
+            "## Baseline vs AutoResearch",
+            "",
+            f"Baseline: `{comparison[0]['baseline_arm']}` · AutoResearch: "
+            f"`{comparison[0]['autoresearch_arm']}`. Differences are computed, and the "
+            "direction column classifies them against each metric's better direction — "
+            "mechanically, so prose cannot soften a regression. Relative difference is "
+            "omitted where not meaningful (undefined values, or a zero baseline).",
+            "",
+            "| Metric | better is | baseline | AutoResearch | abs. diff | rel. diff | direction |",
+            "|---|---|---|---|---|---|---|",
+        ]
+        for entry in comparison:
+            lines.append(
+                "| {metric} | {better} | {baseline} | {autoresearch} | {absolute} "
+                "| {relative} | {direction} |".format(
+                    metric=entry["metric"],
+                    better="higher" if entry["higher_is_better"] else "lower",
+                    baseline="—" if entry["baseline"] is None else entry["baseline"],
+                    autoresearch="—" if entry["autoresearch"] is None else entry["autoresearch"],
+                    absolute="—" if entry["absolute_difference"] is None
+                    else entry["absolute_difference"],
+                    relative="—" if entry["relative_difference"] is None
+                    else entry["relative_difference"],
+                    direction=entry["direction"] or "—",
+                )
+            )
+
     lines += [
         "",
         "Raw per-item numbers, run ids and the relevance judge's labelled pairs are "
-        "in `results.json`; the flat table is `results.csv`. Nothing in this file "
+        "in the raw results JSON; the flat table is the CSV. Nothing in this file "
         "was computed independently of those.",
         "",
     ]

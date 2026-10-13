@@ -5,6 +5,111 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 17 — The final evaluation, on the frozen test set — 2026-10-13
+
+**The one-shot run the whole project was built toward.** Test set v1.0.0, loaded
+under its freeze (fingerprint `7f6aff0e2413` verified against the manifest before a
+single question ran), 8 items × 4 arms, gpt-4o-mini, depth quick — the same
+configuration as the development run, with **no tuning in between**: the only code
+changes since stage 16 were runner fault-tolerance and the comparison/reporting
+machinery. The benchmark questions, test set and ground truth were not modified
+(git history shows `test.json` untouched since its freeze commit), and no benchmark
+result has ever modified them.
+
+Outputs: `data/benchmarks/results/test/20261013T060512Z/` — `raw_results.json`,
+`raw_results.csv`, `evaluation_report.md`. Benchmark run `14693741…`. Every number
+below is read from those files; nothing was computed independently of them or
+edited by hand.
+
+### Per-arm results (means over defined items; n in parentheses)
+
+| Metric | model_only | hybrid | search_grounded | full_verified (D) |
+|---|---|---|---|---|
+| Claim support rate | 0.0 (7) | 0.631 (8) | 0.584 (8) | 0.671 (7) |
+| Citation precision | — | 0.487 (8) | 0.561 (8) | 0.710 (7) |
+| Citation coverage | 0.0 (7) | 0.770 (8) | 0.573 (8) | 0.687 (7) |
+| Unsupported claim rate | 0.0 (7) | 0.100 (8) | 0.086 (8) | 0.092 (7) |
+| Retrieval P@K | — | 0.679 (7) | 0.607 (7) | 0.583 (6) |
+| Retrieval R@K | — | 1.0 (7) | 1.0 (7) | 1.0 (6) |
+| Retrieval nDCG@K | — | 0.934 (7) | 0.760 (7) | 0.752 (6) |
+| Conflict detection | 0/1 | 1/1 | 1/1 | 1/1 |
+| Latency (s) | 8.96 | 20.5 | 21.3 | 79.0 |
+| Tokens | 738 | 1,439 | 1,443 | 28,298 |
+| Cost (USD) | 0.0003 | 0.0004 | 0.0004 | 0.0058 |
+| Failure rate | 0.125 | 0.0 | 0.0 | 0.125 |
+
+### Baseline vs AutoResearch (model_only vs full_autoresearch_verified)
+
+Mechanically classified by the generated report; reproduced verbatim:
+
+| Metric | baseline | AutoResearch | abs. diff | rel. diff | direction |
+|---|---|---|---|---|---|
+| claim_support_rate | 0.0 | 0.671 | +0.671 | — (zero baseline) | **improved** |
+| citation_coverage | 0.0 | 0.687 | +0.687 | — | **improved** |
+| citation_precision | undefined | 0.710 | — | — | — (baseline cites nothing) |
+| unsupported_claim_rate | 0.0 | 0.092 | +0.092 | — | **worse** |
+| latency (s) | 8.96 | 79.0 | +70.0 | +7.8× | **worse** |
+| tokens | 738 | 28,298 | +27,560 | +37.4× | **worse** |
+| cost (USD) | 0.0003 | 0.0058 | +0.0055 | +18.3× | **worse** |
+| failure_rate | 0.125 | 0.125 | 0.0 | 0.0 | unchanged |
+
+### Where AutoResearch improved
+
+- **Verifiability, which is the thesis.** The baseline produced **zero** claims
+  supported by checkable evidence across all seven measured questions; AutoResearch
+  supported 67% of its claims with validated citations and covered 69% of
+  citation-requiring claims. The baseline's number is not an artefact — it is the
+  measured property of answering from parametric memory.
+- **Conflict detection.** Every retrieval arm caught the planted literature
+  conflict (1/1); the baseline cannot see conflicts in evidence it does not retrieve
+  (0/1).
+- **Citation precision rises along the pipeline** (hybrid 0.487 → grounded 0.561 →
+  full 0.710). Suggestive of the verification stage earning its keep — but at n=7–8
+  this gradient is within plausible run variance and is noted, not claimed.
+
+### Where it did not improve, or performed worse
+
+- **Unsupported claim rate: the baseline "wins" at 0.0 — and that is the designed
+  trap of reading one metric alone.** A system that cites nothing cannot be
+  contradicted by its citations; its claims land in not-enough-evidence (support
+  0.0), not in hallucination. AutoResearch's 0.092 means roughly one claim in eleven
+  was actively contradicted or unsupported by the evidence it itself cited —
+  a real defect rate, honestly on the record.
+- **Cost, massively.** 8.8× latency, 38× tokens, 19× cost over the baseline. The
+  checked report costs real money; anyone deploying this chooses verifiability over
+  cheapness knowingly. (Still $0.006/question at mini prices.)
+- **Retrieval metrics favour hybrid** (P@K 0.679, nDCG 0.934 vs grounded ~0.60/0.76):
+  web snippets phrased by search engines match the dataset's expected-evidence
+  statements better than mixed web+academic pools. This measures
+  relevance-to-expectations, not source quality — but it is a result, not a flaw to
+  explain away.
+- **Failure rate tied at 0.125** — one cell each for A and D, both
+  `psycopg.OperationalError` from Neon dropping in-flight connections, both recorded
+  as error rows by the stage-16 hardening. Pipeline-attributable failures: zero in
+  all arms.
+
+### Possible explanations, offered as hypotheses
+
+- The test set is deliberately harder than development (false premises,
+  insufficient-evidence traps, contested literature), and the support rates dropped
+  accordingly (dev C: 0.709 → test C: 0.584).
+- C vs D reversed between runs (dev: C>D by 0.13; test: D>C by 0.09): same mode,
+  independent runs — run-to-run variance dominates at n=8, exactly as stage 16
+  warned. No C-vs-D claim survives this experiment; repeats would be needed.
+- The citation-precision gradient could reflect verification pressure or could be
+  the same variance; distinguishing them needs repeated runs, which are future work.
+
+### Verdict, no larger than the data
+
+On this frozen 8-item set, single pass: **AutoResearch turns unverifiable prose into
+mostly-verified, citation-backed claims and detects evidentiary conflict — at
+roughly 19× the cost and 9× the latency, and with ~9% of its claims failing its own
+verification.** It is not "better" in any single-number sense, and no such number
+exists in the outputs; it is better at the thing it was built for, measurably, and
+worse at being cheap, measurably.
+
+---
+
 ## Stage 16 — The controlled experiment runner, and the first real numbers — 2026-10-13
 
 **Goal:** four arms over the same questions, same model, same settings, same
