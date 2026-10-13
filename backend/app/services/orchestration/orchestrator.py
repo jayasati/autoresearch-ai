@@ -171,9 +171,12 @@ class ResearchOrchestrator:
 
     # --- entry point -----------------------------------------------------------
 
-    async def run(self, request: ResearchStartRequest) -> ResearchStartResponse:
+    async def run(
+        self, request: ResearchStartRequest, benchmark_run_id: uuid.UUID | None = None
+    ) -> ResearchStartResponse:
         """Execute the requested mode for one topic. Synchronous from the caller's
-        point of view: returns when the report exists, raises when it cannot."""
+        point of view: returns when the report exists, raises when it cannot.
+        `benchmark_run_id` groups the run into an experiment, nothing more."""
         if self.settings.llm_provider is None:
             # Checked before any row or paid call: a run that could never reach
             # synthesis should not spend two providers' quota finding sources.
@@ -182,7 +185,10 @@ class ResearchOrchestrator:
         profile = DEPTH_PROFILES[request.depth]
         run = self.research.create_run(
             ResearchRequest(
-                topic=request.topic, mode=request.mode, max_sources=profile.max_sources
+                topic=request.topic,
+                mode=request.mode,
+                max_sources=profile.max_sources,
+                benchmark_run_id=benchmark_run_id,
             )
         )
 

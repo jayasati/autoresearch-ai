@@ -96,9 +96,14 @@ class TestTheCommittedSets:
 class TestTheFreeze:
     @pytest.fixture
     def copied_dataset(self, tmp_path) -> Settings:
-        """The real files, copied where a test may safely corrupt them."""
+        """The real dataset files, copied where a test may safely corrupt them.
+
+        Files only: the directory also holds `results/` subdirectories once
+        experiments have run, and those are not part of the dataset.
+        """
         for path in benchmark_directory().iterdir():
-            shutil.copy(path, tmp_path / path.name)
+            if path.is_file():
+                shutil.copy(path, tmp_path / path.name)
         return Settings(BENCHMARK_DATA_DIR=str(tmp_path), APP_ENV="test")
 
     def test_the_committed_test_set_matches_its_manifest(self):

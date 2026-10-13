@@ -5,6 +5,112 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 16 — The controlled experiment runner, and the first real numbers — 2026-10-13
+
+**Goal:** four arms over the same questions, same model, same settings, same
+evaluation methodology — measured, stored raw, and summarised with **no overall
+score anywhere**.
+
+### What was implemented
+
+- `app/services/benchmark/metrics.py` — the eleven metrics as exact formulas, one
+  function each, with `data/benchmarks/METRICS.md` carrying the same formula lines
+  and a test (`TestFormulasMatchTheDocumentation`) that stops code and documentation
+  drifting. Undefined is None, never zero; every ratio reports its terms;
+  `metrics-v1` is stamped on every stored row.
+- `app/services/benchmark/relevance.py` — retrieval ground truth: a fixed LLM judge
+  (`relevance-judge-v1`) marks which retrieved passages establish which of the
+  item's `expected_evidence` statements, identical for every arm, answering over
+  indices so it can invent nothing; its raw pairs are stored in results.json.
+  P@K / R@K / nDCG@K are computed **only where that ground truth exists**.
+- `app/services/benchmark/runner.py` — the runner: arms A `model_only`, B `hybrid`,
+  C `search_grounded`, D `full_autoresearch_verified` (C plus extraction,
+  verification and the final report *as the product*). Every arm is evaluated
+  identically — claims extracted and verified against the run's own evidence; for
+  A–C that work is overhead billed separately, because charging C for verification
+  it does not perform would blur exactly the C-versus-D comparison. Outputs:
+  `results.json`, `results.csv`, `evaluation_summary.md`, plus `evaluation_result`
+  rows and a grouping `benchmark_run` row.
+- Verification generalised to all modes: hybrid runs verify against a collection
+  rebuilt on demand from the persisted chunk rows (same content-derived ids);
+  model_only claims take the no-evidence path with zero LLM calls.
+  `VerificationUnavailable` is gone.
+
+### Two infrastructure failures, and what they changed
+
+The first attempt died on a Neon cold-start connect timeout; the second died at 11
+of 32 cells when Neon closed in-flight connections (`pool_pre_ping` was already on —
+nothing saves a query that is mid-flight when the server hangs up). The fix that
+stuck: **any exception in a cell becomes a recorded error row and the grid
+continues**, plus a backoff probe that waits for the database to answer before the
+next cell so one outage cannot cascade. Attempt 3 took a third Neon drop mid-run and
+lost exactly one cell (`dev-normal_research-01 × hybrid`, recorded as
+`internal_error`), finishing the other 31. The two dead attempts remain in the
+database as incomplete benchmark rows — crash records, not embarrassments.
+
+### The results (development set v1.0.0, 8 items × 4 arms, gpt-4o-mini, depth quick)
+
+Output directory: `data/benchmarks/results/development/20261012T181824Z/`.
+Benchmark run `9c67e694…`. Means over items where defined (n in parentheses):
+
+| Metric | model_only | hybrid | search_grounded | full_verified |
+|---|---|---|---|---|
+| Claim support rate | **0.0** (8) | 0.688 (7) | 0.709 (8) | 0.574 (8) |
+| Citation precision | — | 0.657 (7) | 0.589 (8) | 0.539 (8) |
+| Citation coverage | 0.0 (8) | 0.691 (7) | 0.650 (8) | 0.614 (8) |
+| Unsupported claim rate | 0.0 (8) | 0.055 (7) | 0.022 (8) | 0.083 (8) |
+| Retrieval P@K | — | 0.625 (6) | 0.500 (7) | 0.536 (7) |
+| Retrieval R@K | — | 0.917 (6) | 0.857 (7) | 0.857 (7) |
+| Retrieval nDCG@K | — | 0.987 (6) | 0.810 (7) | 0.772 (7) |
+| Conflict detection | 0/1 | 1/1 | 1/1 | 1/1 |
+| Latency (s) | 7.8 | 13.1 | 16.8 | **57.4** |
+| Tokens | 692 | 1,332 | 1,358 | **29,921** |
+| Cost (USD) | 0.0003 | 0.0004 | 0.0004 | **0.0061** |
+| Items | 8/8 | 7/8 | 8/8 | 8/8 |
+
+### What the numbers say — and what they do not
+
+- **The baseline behaves exactly as predicted.** model_only: zero verifiable claims,
+  zero citation coverage, and zero on both hallucination *and* support — with no
+  evidence, nothing can be supported or contradicted; its claims land in
+  "insufficient evidence". That its unsupported-claim rate is 0.0 is why no single
+  metric may be read alone, and why there is no composite score.
+- **Grounding buys verifiability, verification costs real money.** The retrieval
+  arms support ~60–70% of their claims; arm D's product costs ~22× C's tokens and
+  ~3.4× its latency — the price of checked citations.
+- **C versus D is also a variance measurement.** They run the same pipeline, so
+  their support-rate gap (0.709 vs 0.574) at n=8 is largely run-to-run variance —
+  fresh retrieval, fresh synthesis, fresh verification. Reading that gap as "D is
+  worse" would be exactly the mistake small benchmarks invite. A real comparison
+  needs repeats; that is a finding about the experiment, recorded here.
+- **Hybrid's retrieval scored best against expected_evidence** (P@K 0.625, nDCG
+  0.987): web snippets, selected by a search engine for topicality, match the
+  dataset's expected-statement phrasing better than the mixed web+academic pool.
+  Relevance-to-expectations is not source quality — the metric measures what it
+  measures.
+- **Conflict detection: every retrieval arm caught the vitamin D disagreement (1/1);
+  model_only cannot detect conflicts in evidence it does not have (0/1).**
+- All of this is one quick-depth pass over 8 development items with 1 cell lost to
+  infrastructure. These numbers tune the pipeline; they prove nothing yet. The
+  frozen test set stays untouched until final evaluation, per stage 15's governance.
+
+### Tests and integrity
+
+**832 backend tests passing** (16 new: the formula values hand-computed, the
+code-docs agreement test, runner smoke over the full fake chain, the no-overall-
+score check, DB storage, the crashing-cell isolation test, hybrid/model_only
+verification paths). One test fixture learned that `data/benchmarks/` now contains
+`results/` subdirectories. `ruff` and `mypy` clean. **No result was invented or
+hand-edited**: every number above is read from the generated files, which were
+written by the runner from the same payload stored in the database.
+
+### Next stage
+
+Repeats for variance, the validation-set pass for threshold tuning, and then — once,
+per the freeze — the final test-set evaluation.
+
+---
+
 ## Stage 15 — Benchmark dataset infrastructure — 2026-10-12
 
 **Goal:** the measuring instrument, finished before the first measurement. Three

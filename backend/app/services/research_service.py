@@ -36,12 +36,15 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.db.base import utcnow
 from app.db.session import unit_of_work
 from app.models import (
+    BenchmarkRun,
     Conflict,
     Document,
     DocumentChunk,
     Evidence,
     ResearchRun,
+    ResearchSource,
     RunConfiguration,
+    Source,
 )
 from app.models.report import ReportSection
 from app.repositories import (
@@ -51,6 +54,7 @@ from app.repositories import (
     ConflictRepository,
     DocumentChunkRepository,
     DocumentRepository,
+    EvaluationResultRepository,
     EvidenceRepository,
     ReportRepository,
     ResearchRunRepository,
@@ -443,6 +447,109 @@ class ResearchService:
             if stored:
                 logger.info("Stored %d chunk rows for run %s", stored, run_id)
             return stored
+
+    # --- benchmark experiments ------------------------------------------------------
+
+    def create_benchmark_run(
+        self, *, name: str, topic_set: str, topic_set_version: str, notes: str | None = None
+    ) -> uuid.UUID:
+        """One experiment grouping, so comparison tables can never mix experiments."""
+        with unit_of_work(self._session) as session:
+            benchmark = BenchmarkRun(
+                name=name,
+                topic_set=topic_set,
+                topic_set_version=topic_set_version,
+                notes=notes,
+            )
+            session.add(benchmark)
+            session.flush()
+            logger.info(
+                "Created benchmark run %s (%s@%s)", benchmark.id, topic_set, topic_set_version
+            )
+            return benchmark.id
+
+    def complete_benchmark_run(self, benchmark_run_id: uuid.UUID) -> None:
+        with unit_of_work(self._session) as session:
+            benchmark = BenchmarkRunRepository(session).get_or_raise(benchmark_run_id)
+            benchmark.completed_at = utcnow()
+            session.flush()
+
+    def record_metrics(
+        self, run_id: uuid.UUID, *, entries: Sequence[dict], metrics_version: str
+    ) -> int:
+        """Store measured metrics for one run, all in one transaction.
+
+        Each entry carries its `metric_key` and `value` (plus optional numerator,
+        denominator, unit, notes). The version is stored with every row: if a
+        formula changes, old numbers measured something else and must stay
+        distinguishable rather than be overwritten.
+        """
+        with unit_of_work(self._session) as session:
+            run = ResearchRunRepository(session).get_or_raise(run_id)
+            repository = EvaluationResultRepository(session)
+            for entry in entries:
+                repository.record(
+                    run=run,
+                    metric_key=entry["metric_key"],
+                    value=entry["value"],
+                    metrics_version=metrics_version,
+                    numerator=entry.get("numerator"),
+                    denominator=entry.get("denominator"),
+                    unit=entry.get("unit"),
+                    notes=entry.get("notes"),
+                )
+            return len(entries)
+
+    def persisted_chunks_for_run(self, run_id: uuid.UUID) -> list:
+        """The run's stored chunks, rebuilt as processing `TextChunk`s.
+
+        Lets verification index a run's evidence on demand when no vector collection
+        exists (hybrid runs never built one; a search_grounded collection may have
+        been cleaned up). The chunk ids are the stored ones — the same
+        content-derived UUIDv5s the vector store uses — so evidence rows keep
+        resolving either way.
+        """
+        from app.services.processing import SourceMetadata, TextChunk
+
+        with unit_of_work(self._session) as session:
+            rows = session.execute(
+                select(DocumentChunk, Document, Source)
+                .join(Document, DocumentChunk.document_id == Document.id)
+                .join(Source, Document.source_id == Source.id)
+                .join(ResearchSource, ResearchSource.source_id == Source.id)
+                .where(ResearchSource.research_run_id == run_id)
+                .order_by(Document.id, DocumentChunk.position)
+            ).all()
+            chunks = []
+            for chunk, document, source in rows:
+                metadata = SourceMetadata(
+                    source_type=source.source_type,
+                    fingerprint=source.fingerprint,
+                    title=source.title,
+                    url=source.url,
+                    canonical_url=source.canonical_url,
+                    doi=source.doi,
+                    external_id=source.external_id,
+                    authors=tuple(source.authors or ()),
+                    year=source.publication_year,
+                    venue=source.venue,
+                    citation_count=source.citation_count,
+                )
+                chunks.append(
+                    TextChunk(
+                        chunk_id=chunk.id,
+                        document_id=document.id,
+                        position=chunk.position,
+                        text=chunk.text,
+                        start_char=chunk.start_char,
+                        end_char=chunk.end_char,
+                        content_hash=chunk.content_hash,
+                        source_fingerprint=source.fingerprint,
+                        source=metadata,
+                        depth=document.depth,
+                    )
+                )
+            return chunks
 
     # --- verification ---------------------------------------------------------------
 

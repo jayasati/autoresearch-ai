@@ -1,0 +1,553 @@
+"""
+The controlled experiment runner.
+
+    for each benchmark question × arm:
+        product phase     run the arm's pipeline (what a user would get, and pay for)
+        evaluation phase  the SAME methodology for every arm: extract claims, verify
+                          them against the run's own evidence, judge retrieval
+                          relevance against the item's expected_evidence
+        measure           the eleven metrics, from stored rows and run receipts
+
+Four arms over the same questions:
+
+    A  model_only                  topic → LLM → report
+    B  hybrid                      topic → web search → LLM → report
+    C  search_grounded             topic → web + academic → RAG → LLM → report
+    D  full_autoresearch_verified  C + claim extraction + verification + final report
+                                   *as the product* (their cost and latency count)
+
+Held constant, recorded in every results file: the model and generation settings
+(one Settings object for every run), the evaluation methodology (same extractor,
+verifier, judge and prompt versions for every arm), the benchmark set (its version
+and content fingerprint are stamped into the results). For arms A–C the evaluation's
+claims/verification work is **overhead, billed separately** in the results — charging
+C's product budget for verification it does not perform would blur exactly the
+C-versus-D comparison the experiment exists to make.
+
+Honesty rules, enforced here:
+- No arbitrary overall score exists anywhere in the outputs.
+- A failed item×arm is recorded with its error and null metrics — never retried into
+  silence, never dropped, never invented.
+- Raw results are stored (results.json carries run ids, every per-item number, the
+  judge's raw pairs) and per-run metric rows land in `evaluation_result`; the
+  summary is derived from the same payload that is written to disk.
+- The final test set is NOT the default; running it is an explicit choice governed
+  by data/benchmarks/README.md.
+"""
+
+import argparse
+import asyncio
+import csv
+import json
+import logging
+from datetime import UTC, datetime
+from pathlib import Path
+from statistics import mean
+from typing import Any
+
+from app.core.config import Settings, get_settings
+from app.core.constants import MetricKey, ResearchMode
+from app.core.exceptions import AppError
+from app.schemas.benchmark import BenchmarkItem, BenchmarkSet
+from app.schemas.research import ResearchStartRequest
+from app.services.benchmark import metrics as formulas
+from app.services.benchmark.dataset import load_set
+from app.services.benchmark.relevance import RELEVANCE_JUDGE_VERSION, judge_relevance
+from app.services.claims import CLAIM_EXTRACTION_PROMPT_VERSION, ClaimExtractor
+from app.services.llm import LLMService
+from app.services.orchestration import (
+    DEPTH_PROFILES,
+    ReportFinalizer,
+    ResearchOrchestrator,
+)
+from app.services.research_service import ResearchService
+from app.services.verification import VERIFICATION_PROMPT_VERSION, ClaimVerifier
+
+logger = logging.getLogger(__name__)
+
+ARMS = ("model_only", "hybrid", "search_grounded", "full_autoresearch_verified")
+ARM_TO_MODE: dict[str, ResearchMode] = {
+    "model_only": ResearchMode.MODEL_ONLY,
+    "hybrid": ResearchMode.HYBRID,
+    "search_grounded": ResearchMode.SEARCH_GROUNDED,
+    "full_autoresearch_verified": ResearchMode.SEARCH_GROUNDED,
+}
+
+#: evaluation_result rows written per run, where a MetricKey exists for the metric.
+DB_METRIC_KEYS = {
+    "claim_support_rate": MetricKey.CLAIM_SUPPORT_RATE,
+    "unsupported_claim_rate": MetricKey.HALLUCINATION_RATE,
+    "citation_precision": MetricKey.CITATION_PRECISION,
+    "conflicts_detected": MetricKey.CONFLICTS_DETECTED,
+    "product_total_tokens": MetricKey.TOTAL_TOKENS,
+    "product_cost_usd": MetricKey.COST_USD,
+    "product_latency_seconds": MetricKey.WALL_CLOCK_SECONDS,
+}
+
+
+class ExperimentRunner:
+    """Runs one benchmark set through the four arms and writes the results."""
+
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        *,
+        research_service: ResearchService | None = None,
+        orchestrator: ResearchOrchestrator | None = None,
+        extractor: ClaimExtractor | None = None,
+        verifier: ClaimVerifier | None = None,
+        finalizer: ReportFinalizer | None = None,
+        judge_llm: LLMService | None = None,
+        depth: str = "quick",
+        output_root: str | None = None,
+    ) -> None:
+        self.settings = settings or get_settings()
+        self.research = research_service or ResearchService(settings=self.settings)
+        self.orchestrator = orchestrator or ResearchOrchestrator(settings=self.settings)
+        self.extractor = extractor or ClaimExtractor(settings=self.settings)
+        self.verifier = verifier or ClaimVerifier(settings=self.settings)
+        self.finalizer = finalizer or ReportFinalizer(settings=self.settings)
+        self._judge_llm = judge_llm
+        self.depth = depth
+        self.output_root = Path(
+            output_root or f"{self.settings.BENCHMARK_DATA_DIR}/results"
+        )
+
+    # --- the experiment ------------------------------------------------------------
+
+    async def run_experiment(
+        self,
+        set_name: str = "development",
+        arms: tuple[str, ...] = ARMS,
+        limit: int | None = None,
+    ) -> dict:
+        benchmark_set = load_set(set_name, self.settings)
+        items = benchmark_set.items[:limit] if limit else benchmark_set.items
+        started_at = datetime.now(UTC)
+        benchmark_run_id = self.research.create_benchmark_run(
+            name=f"experiment-{started_at:%Y%m%dT%H%M%SZ}",
+            topic_set=benchmark_set.name,
+            topic_set_version=benchmark_set.version,
+            notes=f"arms={','.join(arms)} depth={self.depth} items={len(items)}",
+        )
+        logger.info(
+            "Experiment %s: %d items × %d arms on %s v%s",
+            benchmark_run_id,
+            len(items),
+            len(arms),
+            benchmark_set.name,
+            benchmark_set.version,
+        )
+
+        rows: list[dict] = []
+        for item in items:
+            for arm in arms:
+                rows.append(await self._run_cell(item, arm, benchmark_run_id))
+
+        self.research.complete_benchmark_run(benchmark_run_id)
+        payload = self._payload(benchmark_set, items, arms, rows, benchmark_run_id, started_at)
+        output_dir = self._write_outputs(payload, benchmark_set.name, started_at)
+        payload["output_dir"] = str(output_dir)
+        logger.info("Experiment complete; outputs in %s", output_dir)
+        return payload
+
+    async def _run_cell(self, item: BenchmarkItem, arm: str, benchmark_run_id) -> dict:
+        """One question through one arm, measured. Failures become recorded rows."""
+        row: dict[str, Any] = {
+            "question_id": item.question_id,
+            "category": item.category.value,
+            "difficulty": item.difficulty,
+            "arm": arm,
+            "error": None,
+        }
+        try:
+            # --- product phase -------------------------------------------------
+            run = await self.orchestrator.run(
+                ResearchStartRequest(
+                    topic=item.question, mode=ARM_TO_MODE[arm], depth=self.depth
+                ),
+                benchmark_run_id=benchmark_run_id,
+            )
+            row["research_id"] = str(run.research_id)
+            row["model"] = run.execution_metadata.model
+            product_latency = run.execution_metadata.total_seconds
+            product_usage = dict(run.execution_metadata.token_usage or {})
+
+            is_full_arm = arm == "full_autoresearch_verified"
+
+            # --- claims + verification: product for D, evaluation overhead for A-C
+            extraction = await self.extractor.extract(run.research_id)
+            verification = await self.verifier.verify(run.research_id)
+            pipeline_latency = extraction.duration_seconds + verification.duration_seconds
+            pipeline_usage = _add_usage(extraction.token_usage, verification.token_usage)
+
+            if is_full_arm:
+                final = await self.finalizer.finalize(run.research_id)
+                product_latency += pipeline_latency + final.duration_seconds
+                product_usage = _add_usage(
+                    _add_usage(product_usage, pipeline_usage), final.token_usage
+                )
+                evaluation_usage: dict[str, int] = {}
+                evaluation_latency = 0.0
+            else:
+                evaluation_usage = pipeline_usage
+                evaluation_latency = pipeline_latency
+
+            # --- measurement ---------------------------------------------------
+            summary = self.research.verification_summary(run.research_id)
+            audit = ReportFinalizer._audit(summary["claims"], summary["conflicts"])
+
+            row.update(
+                total_claims=audit.total_claims,
+                verdicts={
+                    "supported": audit.supported,
+                    "partially_supported": audit.partially_supported,
+                    "unsupported": audit.unsupported,
+                    "contradicted": audit.contradicted,
+                    "not_enough_evidence": audit.insufficient_evidence,
+                },
+                claim_support_rate=formulas.claim_support_rate(
+                    _verdict_counts(audit)
+                ),
+                unsupported_claim_rate=formulas.unsupported_claim_rate(
+                    _verdict_counts(audit)
+                ),
+                citation_precision=formulas.citation_precision(audit.citations_by_status),
+                citation_coverage=formulas.citation_coverage(
+                    audit.claims_with_citations, audit.claims_requiring_citation
+                ),
+                citations_by_status=audit.citations_by_status,
+                conflicts_detected=audit.conflicts_detected,
+                conflict_expected=item.expected_behavior.expect_conflicts,
+                downgraded_verdicts=audit.downgraded_verdicts,
+                claims_skipped_in_verification=verification.claims_skipped,
+            )
+
+            row.update(await self._retrieval_metrics(item, run, arm))
+
+            row.update(
+                product_latency_seconds=round(product_latency, 3),
+                evaluation_latency_seconds=round(evaluation_latency, 3),
+                product_tokens=product_usage or None,
+                evaluation_tokens=evaluation_usage or None,
+                product_total_tokens=product_usage.get("total_tokens", 0),
+                product_cost_usd=formulas.estimated_cost_usd(
+                    row["model"],
+                    product_usage.get("prompt_tokens", 0),
+                    product_usage.get("completion_tokens", 0),
+                ),
+                evaluation_cost_usd=formulas.estimated_cost_usd(
+                    row["model"],
+                    evaluation_usage.get("prompt_tokens", 0),
+                    evaluation_usage.get("completion_tokens", 0),
+                ),
+            )
+            self._store_metrics(run.research_id, row)
+        except AppError as exc:
+            row["error"] = {"code": exc.code, "message": exc.message}
+            logger.warning("%s × %s failed: %s", item.question_id, arm, exc.message)
+        except Exception as exc:  # noqa: BLE001 - one cell must not sink the grid
+            # Observed live: Neon closed in-flight connections mid-experiment and a
+            # single OperationalError killed the remaining 21 cells. A cell failure
+            # of any kind becomes a recorded row; the grid continues.
+            row["error"] = {
+                "code": "internal_error",
+                "message": f"{type(exc).__name__}: {str(exc)[:300]}",
+            }
+            logger.exception("%s × %s crashed; recorded and continuing", item.question_id, arm)
+            await self._await_database_recovery()
+        return row
+
+    @staticmethod
+    async def _await_database_recovery(attempts: int = 6) -> None:
+        """After a cell dies on a database blip, wait for the database to answer
+        before starting the next cell — otherwise one outage cascades into a column
+        of identical error rows that measured nothing."""
+        from sqlalchemy import text
+
+        from app.db.session import get_engine
+
+        for attempt in range(1, attempts + 1):
+            try:
+                with get_engine().connect() as connection:
+                    connection.execute(text("SELECT 1"))
+                return
+            except Exception:  # noqa: BLE001 - probing, not handling
+                wait = min(5 * attempt, 30)
+                logger.warning(
+                    "Database not answering (attempt %d/%d); waiting %ds",
+                    attempt,
+                    attempts,
+                    wait,
+                )
+                await asyncio.sleep(wait)
+
+    async def _retrieval_metrics(self, item: BenchmarkItem, run, arm: str) -> dict:
+        """P@K, R@K, nDCG@K — only where ground truth exists and the arm retrieves."""
+        empty = {
+            "retrieval_precision_at_k": None,
+            "retrieval_recall_at_k": None,
+            "retrieval_ndcg_at_k": None,
+            "retrieval_k": None,
+            "relevance_pairs": None,
+        }
+        if arm == "model_only" or not item.expected_evidence:
+            return empty
+
+        k = DEPTH_PROFILES[self.depth].top_k
+        ranked = self.research.persisted_chunks_for_run(run.research_id)
+        if arm in ("search_grounded", "full_autoresearch_verified"):
+            # Replay the run's own deterministic evidence ranking.
+            store = self.verifier._evidence_store(run.research_id, ResearchMode.SEARCH_GROUNDED)
+            assert store is not None  # only MODEL_ONLY yields no store
+            hits = await asyncio.to_thread(store.search, item.question, k)
+            passages = [hit.text for hit in hits]
+        else:
+            passages = [chunk.text for chunk in ranked[:k]]
+        if not passages:
+            return empty
+
+        judge = self._judge_llm or LLMService(settings=self.settings)
+        try:
+            judged = await judge_relevance(judge, item.expected_evidence, passages)
+        finally:
+            if self._judge_llm is None:
+                await judge.aclose()
+        if judged is None:
+            return empty
+        relevant, covered, raw_pairs = judged
+        return {
+            "retrieval_precision_at_k": formulas.precision_at_k(relevant, k),
+            "retrieval_recall_at_k": formulas.recall_at_k(
+                len(covered), len(item.expected_evidence)
+            ),
+            "retrieval_ndcg_at_k": formulas.ndcg_at_k(relevant, k),
+            "retrieval_k": k,
+            "relevance_pairs": raw_pairs,
+        }
+
+    def _store_metrics(self, research_id, row: dict) -> None:
+        entries = []
+        for name, key in DB_METRIC_KEYS.items():
+            value = row.get(name)
+            if value is not None:
+                entries.append({"metric_key": key, "value": float(value)})
+        self.research.record_metrics(
+            research_id, entries=entries, metrics_version=formulas.METRICS_VERSION
+        )
+
+    # --- outputs --------------------------------------------------------------------
+
+    def _payload(
+        self, benchmark_set: BenchmarkSet, items, arms, rows, benchmark_run_id, started_at
+    ) -> dict:
+        return {
+            "experiment": {
+                "benchmark_run_id": str(benchmark_run_id),
+                "started_at": started_at.isoformat(),
+                "set": benchmark_set.name,
+                "set_version": benchmark_set.version,
+                "set_fingerprint": benchmark_set.fingerprint,
+                "items": [item.question_id for item in items],
+                "arms": list(arms),
+                "constants": {
+                    "model": self.settings.llm_default_model,
+                    "temperature": self.settings.OPENAI_TEMPERATURE,
+                    "depth": self.depth,
+                    "depth_profile": DEPTH_PROFILES[self.depth].__dict__,
+                    "metrics_version": formulas.METRICS_VERSION,
+                    "extraction_prompt": CLAIM_EXTRACTION_PROMPT_VERSION,
+                    "verification_prompt": VERIFICATION_PROMPT_VERSION,
+                    "relevance_judge": RELEVANCE_JUDGE_VERSION,
+                },
+            },
+            "rows": rows,
+            "aggregates": self._aggregate(rows, arms),
+        }
+
+    @staticmethod
+    def _aggregate(rows: list[dict], arms) -> dict:
+        """Per-arm means over non-null values, with n — and nothing combined."""
+        mean_metrics = (
+            "claim_support_rate",
+            "citation_precision",
+            "citation_coverage",
+            "unsupported_claim_rate",
+            "retrieval_precision_at_k",
+            "retrieval_recall_at_k",
+            "retrieval_ndcg_at_k",
+            "product_latency_seconds",
+            "product_total_tokens",
+            "product_cost_usd",
+        )
+        aggregates: dict[str, dict] = {}
+        for arm in arms:
+            arm_rows = [row for row in rows if row["arm"] == arm and row["error"] is None]
+            failed = [row for row in rows if row["arm"] == arm and row["error"] is not None]
+            summary: dict[str, Any] = {
+                "items_completed": len(arm_rows),
+                "items_failed": len(failed),
+            }
+            for metric in mean_metrics:
+                values = [row[metric] for row in arm_rows if row.get(metric) is not None]
+                summary[metric] = {
+                    "mean": round(mean(values), 4) if values else None,
+                    "n": len(values),
+                }
+            expected = [row for row in arm_rows if row.get("conflict_expected")]
+            detected = [row for row in expected if row.get("conflicts_detected", 0) > 0]
+            summary["conflict_detection_rate"] = {
+                "value": formulas.conflict_detection_rate(len(detected), len(expected)),
+                "detected": len(detected),
+                "expected": len(expected),
+            }
+            aggregates[arm] = summary
+        return aggregates
+
+    def _write_outputs(self, payload: dict, set_name: str, started_at: datetime) -> Path:
+        output_dir = self.output_root / set_name / f"{started_at:%Y%m%dT%H%M%SZ}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        write_results_json(payload, output_dir / "results.json")
+        write_results_csv(payload, output_dir / "results.csv")
+        write_summary_markdown(payload, output_dir / "evaluation_summary.md")
+        return output_dir
+
+
+def _add_usage(a: dict | None, b: dict | None) -> dict:
+    a, b = a or {}, b or {}
+    return {
+        key: a.get(key, 0) + b.get(key, 0)
+        for key in ("prompt_tokens", "completion_tokens", "total_tokens")
+    }
+
+
+def _verdict_counts(audit) -> dict[str, int]:
+    return {
+        "supported": audit.supported,
+        "partially_supported": audit.partially_supported,
+        "unsupported": audit.unsupported,
+        "contradicted": audit.contradicted,
+        "not_enough_evidence": audit.insufficient_evidence,
+    }
+
+
+# --- writers (pure functions over the payload; nothing is recomputed) ----------------
+
+CSV_COLUMNS = (
+    "question_id", "category", "difficulty", "arm", "research_id", "error",
+    "total_claims", "claim_support_rate", "citation_precision", "citation_coverage",
+    "unsupported_claim_rate", "conflicts_detected", "conflict_expected",
+    "retrieval_precision_at_k", "retrieval_recall_at_k", "retrieval_ndcg_at_k",
+    "retrieval_k", "downgraded_verdicts", "product_latency_seconds",
+    "evaluation_latency_seconds", "product_total_tokens", "product_cost_usd",
+    "evaluation_cost_usd",
+)
+
+
+def write_results_json(payload: dict, path: Path) -> None:
+    path.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8")
+
+
+def write_results_csv(payload: dict, path: Path) -> None:
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS, extrasaction="ignore")
+        writer.writeheader()
+        for row in payload["rows"]:
+            flat = dict(row)
+            if flat.get("error"):
+                flat["error"] = flat["error"]["code"]
+            writer.writerow(flat)
+
+
+def write_summary_markdown(payload: dict, path: Path) -> None:
+    experiment = payload["experiment"]
+    aggregates = payload["aggregates"]
+    arms = experiment["arms"]
+    lines = [
+        "# Evaluation summary",
+        "",
+        f"- Benchmark set: **{experiment['set']} v{experiment['set_version']}** "
+        f"(fingerprint `{experiment['set_fingerprint'][:12]}`)",
+        f"- Items: {len(experiment['items'])} × arms: {', '.join(arms)}",
+        f"- Started: {experiment['started_at']}  ·  benchmark_run: "
+        f"`{experiment['benchmark_run_id']}`",
+        "- Constants: " + ", ".join(
+            f"{key}={value}" for key, value in experiment["constants"].items()
+            if key != "depth_profile"
+        ),
+        "",
+        "Per-arm means over items where the metric is defined (n in parentheses). "
+        "**There is deliberately no overall score**: each metric answers one "
+        "question, and the formulas are in `data/benchmarks/METRICS.md` and "
+        "`app/services/benchmark/metrics.py`.",
+        "",
+    ]
+
+    metric_rows = (
+        ("Claim support rate", "claim_support_rate"),
+        ("Citation precision", "citation_precision"),
+        ("Citation coverage", "citation_coverage"),
+        ("Unsupported claim rate", "unsupported_claim_rate"),
+        ("Retrieval precision@K", "retrieval_precision_at_k"),
+        ("Retrieval recall@K", "retrieval_recall_at_k"),
+        ("Retrieval nDCG@K", "retrieval_ndcg_at_k"),
+        ("Product latency (s)", "product_latency_seconds"),
+        ("Product tokens", "product_total_tokens"),
+        ("Product cost (USD)", "product_cost_usd"),
+    )
+    header = "| Metric | " + " | ".join(arms) + " |"
+    lines += [header, "|" + "---|" * (len(arms) + 1)]
+    for label, key in metric_rows:
+        cells = []
+        for arm in arms:
+            entry = aggregates[arm][key]
+            cells.append(
+                f"{entry['mean']} (n={entry['n']})" if entry["mean"] is not None else "—"
+            )
+        lines.append(f"| {label} | " + " | ".join(cells) + " |")
+    conflict_cells = []
+    for arm in arms:
+        entry = aggregates[arm]["conflict_detection_rate"]
+        conflict_cells.append(
+            f"{entry['value']} ({entry['detected']}/{entry['expected']})"
+            if entry["value"] is not None
+            else "—"
+        )
+    lines.append("| Conflict detection rate | " + " | ".join(conflict_cells) + " |")
+    completion = [
+        f"{aggregates[arm]['items_completed']} ok / {aggregates[arm]['items_failed']} failed"
+        for arm in arms
+    ]
+    lines.append("| Items | " + " | ".join(completion) + " |")
+    lines += [
+        "",
+        "Raw per-item numbers, run ids and the relevance judge's labelled pairs are "
+        "in `results.json`; the flat table is `results.csv`. Nothing in this file "
+        "was computed independently of those.",
+        "",
+    ]
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+async def _main() -> None:
+    parser = argparse.ArgumentParser(description="Run the controlled experiment.")
+    parser.add_argument(
+        "--set", default="development", choices=("development", "validation", "test")
+    )
+    parser.add_argument("--arms", default=",".join(ARMS))
+    parser.add_argument("--depth", default="quick", choices=tuple(DEPTH_PROFILES))
+    parser.add_argument("--limit", type=int, default=None)
+    args = parser.parse_args()
+    if args.set == "test":
+        print("NOTE: the frozen test set runs once per final configuration; see "
+              "data/benchmarks/README.md before proceeding.")
+    runner = ExperimentRunner(depth=args.depth)
+    payload = await runner.run_experiment(
+        set_name=args.set, arms=tuple(args.arms.split(",")), limit=args.limit
+    )
+    print(f"outputs: {payload['output_dir']}")
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    asyncio.run(_main())

@@ -43,7 +43,7 @@ from app.schemas.evidence import (
 from app.services.llm import LLMResponseInvalid, LLMService
 from app.services.research_service import ResearchService
 from app.services.vectorstore import RetrievedChunk, VectorStore, get_default_embedder
-from app.services.verification.exceptions import NothingToVerify, VerificationUnavailable
+from app.services.verification.exceptions import NothingToVerify
 from app.services.verification.models import ClaimVerificationModel, ConflictReport
 from app.services.verification.prompts import (
     VERIFICATION_PROMPT_VERSION,
@@ -84,10 +84,7 @@ class ClaimVerifier:
             raise NotFoundError(
                 f"Run {research_id} has no report.", details={"run_id": str(research_id)}
             )
-        if run.configuration.mode is not ResearchMode.SEARCH_GROUNDED:
-            raise VerificationUnavailable(
-                details={"run_id": str(research_id), "mode": run.configuration.mode.value}
-            )
+        mode = run.configuration.mode
 
         report_id, claim_rows = self.research.claims_awaiting_verification(research_id)
         if not claim_rows:
@@ -99,7 +96,7 @@ class ClaimVerifier:
                 details={"run_id": str(research_id), "claims_total": total},
             )
 
-        store = self._store_for(f"run_{research_id.hex}")
+        store = self._evidence_store(research_id, mode)
         llm = self._llm or LLMService(settings=self.settings)
         warnings: list[str] = []
         semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
@@ -168,12 +165,16 @@ class ClaimVerifier:
         self,
         run_id: uuid.UUID,
         row: dict,
-        store: VectorStore,
+        store: VectorStore | None,
         llm: LLMService,
         warnings: list[str],
     ) -> dict | None:
         claim_id, claim_text = row["claim_id"], row["text"]
-        hits = await asyncio.to_thread(store.search, claim_text, TOP_K_PER_CLAIM)
+        hits = (
+            await asyncio.to_thread(store.search, claim_text, TOP_K_PER_CLAIM)
+            if store is not None
+            else []
+        )
 
         if not hits:
             # Nothing retrieved for this claim at all: recorded as such, with no
@@ -400,6 +401,30 @@ class ClaimVerifier:
             evidence_count=result["evidence_count"],
             conflict_id=result["conflict_id"],
         )
+
+    def _evidence_store(self, research_id: uuid.UUID, mode: ResearchMode) -> VectorStore | None:
+        """The store claims are verified against, built per mode.
+
+        SEARCH_GROUNDED runs usually have their per-run collection on disk; HYBRID
+        runs never built one. Either way, an empty collection is rebuilt on demand
+        from the persisted chunk rows — the ids are the same content-derived UUIDv5s,
+        so evidence rows resolve identically. MODEL_ONLY retrieved nothing, so there
+        is nothing to verify against and every claim takes the no-evidence path;
+        that emptiness is the baseline's measured property, not an error.
+        """
+        if mode is ResearchMode.MODEL_ONLY:
+            return None
+        store = self._store_for(f"run_{research_id.hex}")
+        if store.count() == 0:
+            chunks = self.research.persisted_chunks_for_run(research_id)
+            if chunks:
+                store.index_chunks(chunks)
+                logger.info(
+                    "Rebuilt collection for run %s from %d stored chunks",
+                    research_id,
+                    len(chunks),
+                )
+        return store
 
     def _store_for(self, collection: str) -> VectorStore:
         if self._store_factory is not None:

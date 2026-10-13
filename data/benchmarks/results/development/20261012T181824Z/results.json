@@ -1,0 +1,1934 @@
+{
+  "experiment": {
+    "benchmark_run_id": "9c67e694-d49c-41ef-9803-33e63c7b8859",
+    "started_at": "2026-10-12T18:18:24.710075+00:00",
+    "set": "development",
+    "set_version": "1.0.0",
+    "set_fingerprint": "27a3ec16f52f318d88d165ff7f96fc620eb59be2dfb2ee500e281d12844e7c67",
+    "items": [
+      "dev-normal_research-01",
+      "dev-multi_paper_synthesis-01",
+      "dev-conflicting_literature-01",
+      "dev-numerical_claims-01",
+      "dev-citation_verification-01",
+      "dev-insufficient_evidence-01",
+      "dev-false_premise-01",
+      "dev-current_information-01"
+    ],
+    "arms": [
+      "model_only",
+      "hybrid",
+      "search_grounded",
+      "full_autoresearch_verified"
+    ],
+    "constants": {
+      "model": "gpt-4o-mini",
+      "temperature": null,
+      "depth": "quick",
+      "depth_profile": {
+        "web_results": 4,
+        "academic_results": 4,
+        "top_k": 4,
+        "max_report_tokens": 900
+      },
+      "metrics_version": "metrics-v1",
+      "extraction_prompt": "claim-extraction-v1",
+      "verification_prompt": "verification-v1",
+      "relevance_judge": "relevance-judge-v1"
+    }
+  },
+  "rows": [
+    {
+      "question_id": "dev-normal_research-01",
+      "category": "normal_research",
+      "difficulty": "easy",
+      "arm": "model_only",
+      "error": null,
+      "research_id": "c564ccf0-1e63-4467-a7fa-3fc172d30f59",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 23,
+      "verdicts": {
+        "supported": 0,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 23
+      },
+      "claim_support_rate": 0.0,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": null,
+      "citation_coverage": 0.0,
+      "citations_by_status": {},
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": null,
+      "retrieval_recall_at_k": null,
+      "retrieval_ndcg_at_k": null,
+      "retrieval_k": null,
+      "relevance_pairs": null,
+      "product_latency_seconds": 15.078,
+      "evaluation_latency_seconds": 53.999,
+      "product_tokens": {
+        "prompt_tokens": 205,
+        "completion_tokens": 547,
+        "total_tokens": 752
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 1486,
+        "completion_tokens": 1003,
+        "total_tokens": 2489
+      },
+      "product_total_tokens": 752,
+      "product_cost_usd": 0.000359,
+      "evaluation_cost_usd": 0.000825
+    },
+    {
+      "question_id": "dev-normal_research-01",
+      "category": "normal_research",
+      "difficulty": "easy",
+      "arm": "hybrid",
+      "error": {
+        "code": "internal_error",
+        "message": "OperationalError: (psycopg.OperationalError) failed to resolve host 'ep-young-sky-b3w81acd-pooler.c-4.ap-southeast-1.aws.neon.tech': [Errno 11001] getaddrinfo failed\n(Background on this error at: https://sqlalche.me/e/21/e3q8)"
+      },
+      "research_id": "ea3192f8-0a90-4c2c-8f6a-fd6d61e7479b",
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "question_id": "dev-normal_research-01",
+      "category": "normal_research",
+      "difficulty": "easy",
+      "arm": "search_grounded",
+      "error": null,
+      "research_id": "df124614-5883-4800-97b2-4d5b4a91ba23",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 12,
+      "verdicts": {
+        "supported": 11,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 1
+      },
+      "claim_support_rate": 0.9167,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 0.8,
+      "citation_coverage": 1.0,
+      "citations_by_status": {
+        "valid": 12,
+        "misattributed": 3
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 1,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.75,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 0.9675,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 0,
+          "statement_index": 1
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 1
+        },
+        {
+          "passage_index": 3,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 3,
+          "statement_index": 1
+        }
+      ],
+      "product_latency_seconds": 40.8,
+      "evaluation_latency_seconds": 37.553,
+      "product_tokens": {
+        "prompt_tokens": 886,
+        "completion_tokens": 351,
+        "total_tokens": 1237
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 22184,
+        "completion_tokens": 2926,
+        "total_tokens": 25110
+      },
+      "product_total_tokens": 1237,
+      "product_cost_usd": 0.000344,
+      "evaluation_cost_usd": 0.005083
+    },
+    {
+      "question_id": "dev-normal_research-01",
+      "category": "normal_research",
+      "difficulty": "easy",
+      "arm": "full_autoresearch_verified",
+      "error": null,
+      "research_id": "552a8a6b-514d-4f87-8f54-78ce55ccd30b",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 10,
+      "verdicts": {
+        "supported": 10,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 0
+      },
+      "claim_support_rate": 1.0,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 0.8182,
+      "citation_coverage": 0.8,
+      "citations_by_status": {
+        "valid": 9,
+        "misattributed": 2
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.75,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 0.9675,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 1
+        },
+        {
+          "passage_index": 3,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 53.578,
+      "evaluation_latency_seconds": 0.0,
+      "product_tokens": {
+        "prompt_tokens": 21011,
+        "completion_tokens": 3271,
+        "total_tokens": 24282
+      },
+      "evaluation_tokens": null,
+      "product_total_tokens": 24282,
+      "product_cost_usd": 0.005114,
+      "evaluation_cost_usd": 0.0
+    },
+    {
+      "question_id": "dev-multi_paper_synthesis-01",
+      "category": "multi_paper_synthesis",
+      "difficulty": "medium",
+      "arm": "model_only",
+      "error": null,
+      "research_id": "ad9e49a7-9961-4b7c-af11-936322eca14c",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 24,
+      "verdicts": {
+        "supported": 0,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 24
+      },
+      "claim_support_rate": 0.0,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": null,
+      "citation_coverage": 0.0,
+      "citations_by_status": {},
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": null,
+      "retrieval_recall_at_k": null,
+      "retrieval_ndcg_at_k": null,
+      "retrieval_k": null,
+      "relevance_pairs": null,
+      "product_latency_seconds": 7.272,
+      "evaluation_latency_seconds": 36.248,
+      "product_tokens": {
+        "prompt_tokens": 208,
+        "completion_tokens": 581,
+        "total_tokens": 789
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 1520,
+        "completion_tokens": 1257,
+        "total_tokens": 2777
+      },
+      "product_total_tokens": 789,
+      "product_cost_usd": 0.00038,
+      "evaluation_cost_usd": 0.000982
+    },
+    {
+      "question_id": "dev-multi_paper_synthesis-01",
+      "category": "multi_paper_synthesis",
+      "difficulty": "medium",
+      "arm": "hybrid",
+      "error": null,
+      "research_id": "2e12e6db-26cf-45fc-8c47-fd6b52d5fde6",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 9,
+      "verdicts": {
+        "supported": 6,
+        "partially_supported": 0,
+        "unsupported": 1,
+        "contradicted": 0,
+        "not_enough_evidence": 2
+      },
+      "claim_support_rate": 0.6667,
+      "unsupported_claim_rate": 0.1111,
+      "citation_precision": 1.0,
+      "citation_coverage": 0.6667,
+      "citations_by_status": {
+        "valid": 6
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 1,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.5,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 1.0,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 1
+        }
+      ],
+      "product_latency_seconds": 10.812,
+      "evaluation_latency_seconds": 30.729,
+      "product_tokens": {
+        "prompt_tokens": 1028,
+        "completion_tokens": 280,
+        "total_tokens": 1308
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 18022,
+        "completion_tokens": 1715,
+        "total_tokens": 19737
+      },
+      "product_total_tokens": 1308,
+      "product_cost_usd": 0.000322,
+      "evaluation_cost_usd": 0.003732
+    },
+    {
+      "question_id": "dev-multi_paper_synthesis-01",
+      "category": "multi_paper_synthesis",
+      "difficulty": "medium",
+      "arm": "search_grounded",
+      "error": null,
+      "research_id": "23c65fbc-d30d-4b6d-94bb-fe94a0e02871",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 9,
+      "verdicts": {
+        "supported": 7,
+        "partially_supported": 0,
+        "unsupported": 1,
+        "contradicted": 0,
+        "not_enough_evidence": 1
+      },
+      "claim_support_rate": 0.7778,
+      "unsupported_claim_rate": 0.1111,
+      "citation_precision": 1.0,
+      "citation_coverage": 0.6667,
+      "citations_by_status": {
+        "valid": 6
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.5,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 0.8772,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 3,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 3,
+          "statement_index": 1
+        }
+      ],
+      "product_latency_seconds": 12.182,
+      "evaluation_latency_seconds": 28.877,
+      "product_tokens": {
+        "prompt_tokens": 1028,
+        "completion_tokens": 236,
+        "total_tokens": 1264
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 17950,
+        "completion_tokens": 1757,
+        "total_tokens": 19707
+      },
+      "product_total_tokens": 1264,
+      "product_cost_usd": 0.000296,
+      "evaluation_cost_usd": 0.003747
+    },
+    {
+      "question_id": "dev-multi_paper_synthesis-01",
+      "category": "multi_paper_synthesis",
+      "difficulty": "medium",
+      "arm": "full_autoresearch_verified",
+      "error": null,
+      "research_id": "55923406-a552-4019-bc7c-cd344a6f5d01",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 8,
+      "verdicts": {
+        "supported": 6,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 2
+      },
+      "claim_support_rate": 0.75,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 1.0,
+      "citation_coverage": 0.625,
+      "citations_by_status": {
+        "valid": 5
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.5,
+      "retrieval_recall_at_k": 0.5,
+      "retrieval_ndcg_at_k": 0.8772,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 3,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 43.584,
+      "evaluation_latency_seconds": 0.0,
+      "product_tokens": {
+        "prompt_tokens": 18362,
+        "completion_tokens": 2189,
+        "total_tokens": 20551
+      },
+      "evaluation_tokens": null,
+      "product_total_tokens": 20551,
+      "product_cost_usd": 0.004068,
+      "evaluation_cost_usd": 0.0
+    },
+    {
+      "question_id": "dev-conflicting_literature-01",
+      "category": "conflicting_literature",
+      "difficulty": "hard",
+      "arm": "model_only",
+      "error": null,
+      "research_id": "bc32919e-0ccd-4467-a7ca-2158f6c1a923",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 20,
+      "verdicts": {
+        "supported": 0,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 20
+      },
+      "claim_support_rate": 0.0,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": null,
+      "citation_coverage": 0.0,
+      "citations_by_status": {},
+      "conflicts_detected": 0,
+      "conflict_expected": true,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": null,
+      "retrieval_recall_at_k": null,
+      "retrieval_ndcg_at_k": null,
+      "retrieval_k": null,
+      "relevance_pairs": null,
+      "product_latency_seconds": 7.084,
+      "evaluation_latency_seconds": 28.575,
+      "product_tokens": {
+        "prompt_tokens": 204,
+        "completion_tokens": 476,
+        "total_tokens": 680
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 1415,
+        "completion_tokens": 1018,
+        "total_tokens": 2433
+      },
+      "product_total_tokens": 680,
+      "product_cost_usd": 0.000316,
+      "evaluation_cost_usd": 0.000823
+    },
+    {
+      "question_id": "dev-conflicting_literature-01",
+      "category": "conflicting_literature",
+      "difficulty": "hard",
+      "arm": "hybrid",
+      "error": null,
+      "research_id": "3d81b754-b502-4bbb-8c92-f903453bf345",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 10,
+      "verdicts": {
+        "supported": 7,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 1,
+        "not_enough_evidence": 2
+      },
+      "claim_support_rate": 0.7,
+      "unsupported_claim_rate": 0.1,
+      "citation_precision": 0.5,
+      "citation_coverage": 0.8,
+      "citations_by_status": {
+        "misattributed": 7,
+        "valid": 7
+      },
+      "conflicts_detected": 1,
+      "conflict_expected": true,
+      "downgraded_verdicts": 1,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.5,
+      "retrieval_recall_at_k": 0.5,
+      "retrieval_ndcg_at_k": 1.0,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 11.86,
+      "evaluation_latency_seconds": 34.293,
+      "product_tokens": {
+        "prompt_tokens": 970,
+        "completion_tokens": 374,
+        "total_tokens": 1344
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 20653,
+        "completion_tokens": 2942,
+        "total_tokens": 23595
+      },
+      "product_total_tokens": 1344,
+      "product_cost_usd": 0.00037,
+      "evaluation_cost_usd": 0.004863
+    },
+    {
+      "question_id": "dev-conflicting_literature-01",
+      "category": "conflicting_literature",
+      "difficulty": "hard",
+      "arm": "search_grounded",
+      "error": null,
+      "research_id": "f3737501-0b0b-4dab-9620-c55db1a5bd3c",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 15,
+      "verdicts": {
+        "supported": 11,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 4
+      },
+      "claim_support_rate": 0.7333,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 0.4286,
+      "citation_coverage": 0.4667,
+      "citations_by_status": {
+        "valid": 3,
+        "misattributed": 4
+      },
+      "conflicts_detected": 1,
+      "conflict_expected": true,
+      "downgraded_verdicts": 3,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.25,
+      "retrieval_recall_at_k": 0.5,
+      "retrieval_ndcg_at_k": 0.6309,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 16.885,
+      "evaluation_latency_seconds": 45.551,
+      "product_tokens": {
+        "prompt_tokens": 1016,
+        "completion_tokens": 508,
+        "total_tokens": 1524
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 30187,
+        "completion_tokens": 4622,
+        "total_tokens": 34809
+      },
+      "product_total_tokens": 1524,
+      "product_cost_usd": 0.000457,
+      "evaluation_cost_usd": 0.007301
+    },
+    {
+      "question_id": "dev-conflicting_literature-01",
+      "category": "conflicting_literature",
+      "difficulty": "hard",
+      "arm": "full_autoresearch_verified",
+      "error": null,
+      "research_id": "0d0084c7-f782-42b5-9357-cb5d6c697ca5",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 15,
+      "verdicts": {
+        "supported": 6,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 6,
+        "not_enough_evidence": 3
+      },
+      "claim_support_rate": 0.4,
+      "unsupported_claim_rate": 0.4,
+      "citation_precision": 0.2857,
+      "citation_coverage": 0.4667,
+      "citations_by_status": {
+        "valid": 2,
+        "misattributed": 5
+      },
+      "conflicts_detected": 2,
+      "conflict_expected": true,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.25,
+      "retrieval_recall_at_k": 0.5,
+      "retrieval_ndcg_at_k": 0.6309,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 71.736,
+      "evaluation_latency_seconds": 0.0,
+      "product_tokens": {
+        "prompt_tokens": 33315,
+        "completion_tokens": 5857,
+        "total_tokens": 39172
+      },
+      "evaluation_tokens": null,
+      "product_total_tokens": 39172,
+      "product_cost_usd": 0.008511,
+      "evaluation_cost_usd": 0.0
+    },
+    {
+      "question_id": "dev-numerical_claims-01",
+      "category": "numerical_claims",
+      "difficulty": "medium",
+      "arm": "model_only",
+      "error": null,
+      "research_id": "fbf85bc2-6ce3-419f-81ec-73ccbfcfa763",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 22,
+      "verdicts": {
+        "supported": 0,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 22
+      },
+      "claim_support_rate": 0.0,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": null,
+      "citation_coverage": 0.0,
+      "citations_by_status": {},
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": null,
+      "retrieval_recall_at_k": null,
+      "retrieval_ndcg_at_k": null,
+      "retrieval_k": null,
+      "relevance_pairs": null,
+      "product_latency_seconds": 7.626,
+      "evaluation_latency_seconds": 32.738,
+      "product_tokens": {
+        "prompt_tokens": 205,
+        "completion_tokens": 495,
+        "total_tokens": 700
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 1434,
+        "completion_tokens": 1076,
+        "total_tokens": 2510
+      },
+      "product_total_tokens": 700,
+      "product_cost_usd": 0.000328,
+      "evaluation_cost_usd": 0.000861
+    },
+    {
+      "question_id": "dev-numerical_claims-01",
+      "category": "numerical_claims",
+      "difficulty": "medium",
+      "arm": "hybrid",
+      "error": null,
+      "research_id": "431af3ca-ccb4-46e1-8fa6-be0908410e51",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 14,
+      "verdicts": {
+        "supported": 8,
+        "partially_supported": 1,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 5
+      },
+      "claim_support_rate": 0.6429,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 0.5556,
+      "citation_coverage": 0.6429,
+      "citations_by_status": {
+        "misattributed": 4,
+        "valid": 5
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 3,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.5,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 0.9197,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 0,
+          "statement_index": 1
+        },
+        {
+          "passage_index": 2,
+          "statement_index": 1
+        }
+      ],
+      "product_latency_seconds": 13.96,
+      "evaluation_latency_seconds": 43.502,
+      "product_tokens": {
+        "prompt_tokens": 1044,
+        "completion_tokens": 472,
+        "total_tokens": 1516
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 28538,
+        "completion_tokens": 3248,
+        "total_tokens": 31786
+      },
+      "product_total_tokens": 1516,
+      "product_cost_usd": 0.00044,
+      "evaluation_cost_usd": 0.006229
+    },
+    {
+      "question_id": "dev-numerical_claims-01",
+      "category": "numerical_claims",
+      "difficulty": "medium",
+      "arm": "search_grounded",
+      "error": null,
+      "research_id": "154993f3-def9-49d6-a386-16cc277c5d73",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 16,
+      "verdicts": {
+        "supported": 9,
+        "partially_supported": 2,
+        "unsupported": 0,
+        "contradicted": 1,
+        "not_enough_evidence": 4
+      },
+      "claim_support_rate": 0.6875,
+      "unsupported_claim_rate": 0.0625,
+      "citation_precision": 0.5714,
+      "citation_coverage": 0.375,
+      "citations_by_status": {
+        "valid": 4,
+        "misattributed": 3
+      },
+      "conflicts_detected": 1,
+      "conflict_expected": false,
+      "downgraded_verdicts": 4,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.5,
+      "retrieval_recall_at_k": 0.5,
+      "retrieval_ndcg_at_k": 1.0,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 1
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 1
+        }
+      ],
+      "product_latency_seconds": 13.1,
+      "evaluation_latency_seconds": 43.697,
+      "product_tokens": {
+        "prompt_tokens": 1037,
+        "completion_tokens": 415,
+        "total_tokens": 1452
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 30870,
+        "completion_tokens": 3803,
+        "total_tokens": 34673
+      },
+      "product_total_tokens": 1452,
+      "product_cost_usd": 0.000405,
+      "evaluation_cost_usd": 0.006912
+    },
+    {
+      "question_id": "dev-numerical_claims-01",
+      "category": "numerical_claims",
+      "difficulty": "medium",
+      "arm": "full_autoresearch_verified",
+      "error": null,
+      "research_id": "8ad2136c-71c3-47d1-8b01-717ffc5513d3",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 20,
+      "verdicts": {
+        "supported": 12,
+        "partially_supported": 0,
+        "unsupported": 2,
+        "contradicted": 1,
+        "not_enough_evidence": 5
+      },
+      "claim_support_rate": 0.6,
+      "unsupported_claim_rate": 0.15,
+      "citation_precision": 0.6,
+      "citation_coverage": 0.5,
+      "citations_by_status": {
+        "valid": 6,
+        "misattributed": 4
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 5,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.75,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 1.0,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 1
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 1
+        },
+        {
+          "passage_index": 2,
+          "statement_index": 1
+        }
+      ],
+      "product_latency_seconds": 75.665,
+      "evaluation_latency_seconds": 0.0,
+      "product_tokens": {
+        "prompt_tokens": 41544,
+        "completion_tokens": 5490,
+        "total_tokens": 47034
+      },
+      "evaluation_tokens": null,
+      "product_total_tokens": 47034,
+      "product_cost_usd": 0.009526,
+      "evaluation_cost_usd": 0.0
+    },
+    {
+      "question_id": "dev-citation_verification-01",
+      "category": "citation_verification",
+      "difficulty": "easy",
+      "arm": "model_only",
+      "error": null,
+      "research_id": "57f93796-efa6-45e3-8a66-62bd7115795b",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 21,
+      "verdicts": {
+        "supported": 0,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 21
+      },
+      "claim_support_rate": 0.0,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": null,
+      "citation_coverage": 0.0,
+      "citations_by_status": {},
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": null,
+      "retrieval_recall_at_k": null,
+      "retrieval_ndcg_at_k": null,
+      "retrieval_k": null,
+      "relevance_pairs": null,
+      "product_latency_seconds": 7.06,
+      "evaluation_latency_seconds": 30.083,
+      "product_tokens": {
+        "prompt_tokens": 207,
+        "completion_tokens": 494,
+        "total_tokens": 701
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 1433,
+        "completion_tokens": 1031,
+        "total_tokens": 2464
+      },
+      "product_total_tokens": 701,
+      "product_cost_usd": 0.000327,
+      "evaluation_cost_usd": 0.000834
+    },
+    {
+      "question_id": "dev-citation_verification-01",
+      "category": "citation_verification",
+      "difficulty": "easy",
+      "arm": "hybrid",
+      "error": null,
+      "research_id": "35cde806-4a44-4c85-a9a4-ada89e380857",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 7,
+      "verdicts": {
+        "supported": 6,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 1
+      },
+      "claim_support_rate": 0.8571,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 0.8,
+      "citation_coverage": 0.7143,
+      "citations_by_status": {
+        "valid": 4,
+        "misattributed": 1
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 1,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.75,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 1.0,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 2,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 14.177,
+      "evaluation_latency_seconds": 24.267,
+      "product_tokens": {
+        "prompt_tokens": 994,
+        "completion_tokens": 298,
+        "total_tokens": 1292
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 14484,
+        "completion_tokens": 1878,
+        "total_tokens": 16362
+      },
+      "product_total_tokens": 1292,
+      "product_cost_usd": 0.000328,
+      "evaluation_cost_usd": 0.003299
+    },
+    {
+      "question_id": "dev-citation_verification-01",
+      "category": "citation_verification",
+      "difficulty": "easy",
+      "arm": "search_grounded",
+      "error": null,
+      "research_id": "92b17207-46af-48bf-a409-4025e361d317",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 11,
+      "verdicts": {
+        "supported": 6,
+        "partially_supported": 1,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 4
+      },
+      "claim_support_rate": 0.6364,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 0.25,
+      "citation_coverage": 0.8182,
+      "citations_by_status": {
+        "misattributed": 9,
+        "valid": 3
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 4,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.75,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 1.0,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 2,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 14.641,
+      "evaluation_latency_seconds": 34.688,
+      "product_tokens": {
+        "prompt_tokens": 990,
+        "completion_tokens": 361,
+        "total_tokens": 1351
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 22019,
+        "completion_tokens": 2623,
+        "total_tokens": 24642
+      },
+      "product_total_tokens": 1351,
+      "product_cost_usd": 0.000365,
+      "evaluation_cost_usd": 0.004877
+    },
+    {
+      "question_id": "dev-citation_verification-01",
+      "category": "citation_verification",
+      "difficulty": "easy",
+      "arm": "full_autoresearch_verified",
+      "error": null,
+      "research_id": "317d1efa-0c63-4cc8-9509-94fa8aefea95",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 12,
+      "verdicts": {
+        "supported": 1,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 11
+      },
+      "claim_support_rate": 0.0833,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 0.0,
+      "citation_coverage": 0.5833,
+      "citations_by_status": {
+        "misattributed": 8
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 10,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.5,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 0.6934,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 2,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 57.079,
+      "evaluation_latency_seconds": 0.0,
+      "product_tokens": {
+        "prompt_tokens": 25930,
+        "completion_tokens": 3185,
+        "total_tokens": 29115
+      },
+      "evaluation_tokens": null,
+      "product_total_tokens": 29115,
+      "product_cost_usd": 0.005801,
+      "evaluation_cost_usd": 0.0
+    },
+    {
+      "question_id": "dev-insufficient_evidence-01",
+      "category": "insufficient_evidence",
+      "difficulty": "medium",
+      "arm": "model_only",
+      "error": null,
+      "research_id": "39e57e6b-e9c2-4f1b-885e-51f48d72bcda",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 15,
+      "verdicts": {
+        "supported": 0,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 15
+      },
+      "claim_support_rate": 0.0,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": null,
+      "citation_coverage": 0.0,
+      "citations_by_status": {},
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": null,
+      "retrieval_recall_at_k": null,
+      "retrieval_ndcg_at_k": null,
+      "retrieval_k": null,
+      "relevance_pairs": null,
+      "product_latency_seconds": 6.083,
+      "evaluation_latency_seconds": 22.863,
+      "product_tokens": {
+        "prompt_tokens": 203,
+        "completion_tokens": 444,
+        "total_tokens": 647
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 1383,
+        "completion_tokens": 730,
+        "total_tokens": 2113
+      },
+      "product_total_tokens": 647,
+      "product_cost_usd": 0.000297,
+      "evaluation_cost_usd": 0.000645
+    },
+    {
+      "question_id": "dev-insufficient_evidence-01",
+      "category": "insufficient_evidence",
+      "difficulty": "medium",
+      "arm": "hybrid",
+      "error": null,
+      "research_id": "5422adfb-6719-4cfb-ab4b-ff1e4828b49f",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 10,
+      "verdicts": {
+        "supported": 3,
+        "partially_supported": 1,
+        "unsupported": 1,
+        "contradicted": 0,
+        "not_enough_evidence": 5
+      },
+      "claim_support_rate": 0.4,
+      "unsupported_claim_rate": 0.1,
+      "citation_precision": 0.5,
+      "citation_coverage": 0.4,
+      "citations_by_status": {
+        "misattributed": 2,
+        "valid": 2
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 1,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": null,
+      "retrieval_recall_at_k": null,
+      "retrieval_ndcg_at_k": null,
+      "retrieval_k": null,
+      "relevance_pairs": null,
+      "product_latency_seconds": 13.937,
+      "evaluation_latency_seconds": 31.529,
+      "product_tokens": {
+        "prompt_tokens": 948,
+        "completion_tokens": 354,
+        "total_tokens": 1302
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 20148,
+        "completion_tokens": 2092,
+        "total_tokens": 22240
+      },
+      "product_total_tokens": 1302,
+      "product_cost_usd": 0.000355,
+      "evaluation_cost_usd": 0.004277
+    },
+    {
+      "question_id": "dev-insufficient_evidence-01",
+      "category": "insufficient_evidence",
+      "difficulty": "medium",
+      "arm": "search_grounded",
+      "error": null,
+      "research_id": "174a97d9-db53-4451-81e9-906bcc54abe6",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 11,
+      "verdicts": {
+        "supported": 6,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 5
+      },
+      "claim_support_rate": 0.5455,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 0.375,
+      "citation_coverage": 0.4545,
+      "citations_by_status": {
+        "valid": 3,
+        "misattributed": 5
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 2,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": null,
+      "retrieval_recall_at_k": null,
+      "retrieval_ndcg_at_k": null,
+      "retrieval_k": null,
+      "relevance_pairs": null,
+      "product_latency_seconds": 12.286,
+      "evaluation_latency_seconds": 32.447,
+      "product_tokens": {
+        "prompt_tokens": 1013,
+        "completion_tokens": 302,
+        "total_tokens": 1315
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 22057,
+        "completion_tokens": 2348,
+        "total_tokens": 24405
+      },
+      "product_total_tokens": 1315,
+      "product_cost_usd": 0.000333,
+      "evaluation_cost_usd": 0.004717
+    },
+    {
+      "question_id": "dev-insufficient_evidence-01",
+      "category": "insufficient_evidence",
+      "difficulty": "medium",
+      "arm": "full_autoresearch_verified",
+      "error": null,
+      "research_id": "c7e9762f-fccd-461c-931a-89a290f8d2dc",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 9,
+      "verdicts": {
+        "supported": 2,
+        "partially_supported": 1,
+        "unsupported": 1,
+        "contradicted": 0,
+        "not_enough_evidence": 5
+      },
+      "claim_support_rate": 0.3333,
+      "unsupported_claim_rate": 0.1111,
+      "citation_precision": 0.3333,
+      "citation_coverage": 0.4444,
+      "citations_by_status": {
+        "misattributed": 4,
+        "valid": 2
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 3,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": null,
+      "retrieval_recall_at_k": null,
+      "retrieval_ndcg_at_k": null,
+      "retrieval_k": null,
+      "relevance_pairs": null,
+      "product_latency_seconds": 51.13,
+      "evaluation_latency_seconds": 0.0,
+      "product_tokens": {
+        "prompt_tokens": 20806,
+        "completion_tokens": 2657,
+        "total_tokens": 23463
+      },
+      "evaluation_tokens": null,
+      "product_total_tokens": 23463,
+      "product_cost_usd": 0.004715,
+      "evaluation_cost_usd": 0.0
+    },
+    {
+      "question_id": "dev-false_premise-01",
+      "category": "false_premise",
+      "difficulty": "medium",
+      "arm": "model_only",
+      "error": null,
+      "research_id": "b141e6e0-6d16-43c6-b4d7-311e5a7f4973",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 23,
+      "verdicts": {
+        "supported": 0,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 23
+      },
+      "claim_support_rate": 0.0,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": null,
+      "citation_coverage": 0.0,
+      "citations_by_status": {},
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": null,
+      "retrieval_recall_at_k": null,
+      "retrieval_ndcg_at_k": null,
+      "retrieval_k": null,
+      "relevance_pairs": null,
+      "product_latency_seconds": 7.677,
+      "evaluation_latency_seconds": 34.662,
+      "product_tokens": {
+        "prompt_tokens": 211,
+        "completion_tokens": 540,
+        "total_tokens": 751
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 1479,
+        "completion_tokens": 1188,
+        "total_tokens": 2667
+      },
+      "product_total_tokens": 751,
+      "product_cost_usd": 0.000356,
+      "evaluation_cost_usd": 0.000935
+    },
+    {
+      "question_id": "dev-false_premise-01",
+      "category": "false_premise",
+      "difficulty": "medium",
+      "arm": "hybrid",
+      "error": null,
+      "research_id": "9a2014e6-b632-435b-b03f-64c2e1ae5c29",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 13,
+      "verdicts": {
+        "supported": 12,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 1,
+        "not_enough_evidence": 0
+      },
+      "claim_support_rate": 0.9231,
+      "unsupported_claim_rate": 0.0769,
+      "citation_precision": 0.8,
+      "citation_coverage": 0.6154,
+      "citations_by_status": {
+        "misattributed": 2,
+        "valid": 8
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.75,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 1.0,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 2,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 14.535,
+      "evaluation_latency_seconds": 39.485,
+      "product_tokens": {
+        "prompt_tokens": 836,
+        "completion_tokens": 439,
+        "total_tokens": 1275
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 23847,
+        "completion_tokens": 2964,
+        "total_tokens": 26811
+      },
+      "product_total_tokens": 1275,
+      "product_cost_usd": 0.000389,
+      "evaluation_cost_usd": 0.005355
+    },
+    {
+      "question_id": "dev-false_premise-01",
+      "category": "false_premise",
+      "difficulty": "medium",
+      "arm": "search_grounded",
+      "error": null,
+      "research_id": "afa954a4-fb67-4b01-9b05-aee7dd0f1cb9",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 16,
+      "verdicts": {
+        "supported": 14,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 2
+      },
+      "claim_support_rate": 0.875,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 1.0,
+      "citation_coverage": 0.5,
+      "citations_by_status": {
+        "valid": 8
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 2,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.25,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 0.5,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 2,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 13.152,
+      "evaluation_latency_seconds": 44.198,
+      "product_tokens": {
+        "prompt_tokens": 918,
+        "completion_tokens": 485,
+        "total_tokens": 1403
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 29399,
+        "completion_tokens": 3707,
+        "total_tokens": 33106
+      },
+      "product_total_tokens": 1403,
+      "product_cost_usd": 0.000429,
+      "evaluation_cost_usd": 0.006634
+    },
+    {
+      "question_id": "dev-false_premise-01",
+      "category": "false_premise",
+      "difficulty": "medium",
+      "arm": "full_autoresearch_verified",
+      "error": null,
+      "research_id": "94f4a477-fe9c-46cd-936e-a3e33397467d",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 13,
+      "verdicts": {
+        "supported": 12,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 1
+      },
+      "claim_support_rate": 0.9231,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 0.7778,
+      "citation_coverage": 0.6923,
+      "citations_by_status": {
+        "valid": 7,
+        "misattributed": 2
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 1,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.25,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 0.5,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 2,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 60.917,
+      "evaluation_latency_seconds": 0.0,
+      "product_tokens": {
+        "prompt_tokens": 26604,
+        "completion_tokens": 3892,
+        "total_tokens": 30496
+      },
+      "evaluation_tokens": null,
+      "product_total_tokens": 30496,
+      "product_cost_usd": 0.006326,
+      "evaluation_cost_usd": 0.0
+    },
+    {
+      "question_id": "dev-current_information-01",
+      "category": "current_information",
+      "difficulty": "easy",
+      "arm": "model_only",
+      "error": null,
+      "research_id": "038793a1-fe12-499e-a317-8e031a9d1e73",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 15,
+      "verdicts": {
+        "supported": 0,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 15
+      },
+      "claim_support_rate": 0.0,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": null,
+      "citation_coverage": 0.0,
+      "citations_by_status": {},
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 0,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": null,
+      "retrieval_recall_at_k": null,
+      "retrieval_ndcg_at_k": null,
+      "retrieval_k": null,
+      "relevance_pairs": null,
+      "product_latency_seconds": 4.83,
+      "evaluation_latency_seconds": 22.519,
+      "product_tokens": {
+        "prompt_tokens": 209,
+        "completion_tokens": 310,
+        "total_tokens": 519
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 1249,
+        "completion_tokens": 708,
+        "total_tokens": 1957
+      },
+      "product_total_tokens": 519,
+      "product_cost_usd": 0.000217,
+      "evaluation_cost_usd": 0.000612
+    },
+    {
+      "question_id": "dev-current_information-01",
+      "category": "current_information",
+      "difficulty": "easy",
+      "arm": "hybrid",
+      "error": null,
+      "research_id": "7d871914-218e-45b2-a676-06cb4212855d",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 8,
+      "verdicts": {
+        "supported": 5,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 3
+      },
+      "claim_support_rate": 0.625,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 0.4444,
+      "citation_coverage": 1.0,
+      "citations_by_status": {
+        "valid": 4,
+        "misattributed": 5
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 3,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.75,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 1.0,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 0,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 2,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 12.31,
+      "evaluation_latency_seconds": 25.538,
+      "product_tokens": {
+        "prompt_tokens": 1088,
+        "completion_tokens": 201,
+        "total_tokens": 1289
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 16902,
+        "completion_tokens": 1615,
+        "total_tokens": 18517
+      },
+      "product_total_tokens": 1289,
+      "product_cost_usd": 0.000284,
+      "evaluation_cost_usd": 0.003504
+    },
+    {
+      "question_id": "dev-current_information-01",
+      "category": "current_information",
+      "difficulty": "easy",
+      "arm": "search_grounded",
+      "error": null,
+      "research_id": "d0892a6b-8d09-49f4-80ad-c1ddbfddc1ab",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 12,
+      "verdicts": {
+        "supported": 6,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 6
+      },
+      "claim_support_rate": 0.5,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 0.2857,
+      "citation_coverage": 0.9167,
+      "citations_by_status": {
+        "valid": 4,
+        "misattributed": 10
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 6,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.5,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 0.6934,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 2,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 11.447,
+      "evaluation_latency_seconds": 35.319,
+      "product_tokens": {
+        "prompt_tokens": 1112,
+        "completion_tokens": 205,
+        "total_tokens": 1317
+      },
+      "evaluation_tokens": {
+        "prompt_tokens": 24760,
+        "completion_tokens": 2396,
+        "total_tokens": 27156
+      },
+      "product_total_tokens": 1317,
+      "product_cost_usd": 0.00029,
+      "evaluation_cost_usd": 0.005152
+    },
+    {
+      "question_id": "dev-current_information-01",
+      "category": "current_information",
+      "difficulty": "easy",
+      "arm": "full_autoresearch_verified",
+      "error": null,
+      "research_id": "3cf24b25-dfda-408c-88e9-5b4857ae9f27",
+      "model": "gpt-4o-mini-2024-07-18",
+      "total_claims": 10,
+      "verdicts": {
+        "supported": 5,
+        "partially_supported": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "not_enough_evidence": 5
+      },
+      "claim_support_rate": 0.5,
+      "unsupported_claim_rate": 0.0,
+      "citation_precision": 0.5,
+      "citation_coverage": 0.8,
+      "citations_by_status": {
+        "valid": 5,
+        "misattributed": 5
+      },
+      "conflicts_detected": 0,
+      "conflict_expected": false,
+      "downgraded_verdicts": 5,
+      "claims_skipped_in_verification": 0,
+      "retrieval_precision_at_k": 0.75,
+      "retrieval_recall_at_k": 1.0,
+      "retrieval_ndcg_at_k": 0.7328,
+      "retrieval_k": 4,
+      "relevance_pairs": [
+        {
+          "passage_index": 1,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 2,
+          "statement_index": 0
+        },
+        {
+          "passage_index": 3,
+          "statement_index": 0
+        }
+      ],
+      "product_latency_seconds": 45.48,
+      "evaluation_latency_seconds": 0.0,
+      "product_tokens": {
+        "prompt_tokens": 22924,
+        "completion_tokens": 2332,
+        "total_tokens": 25256
+      },
+      "evaluation_tokens": null,
+      "product_total_tokens": 25256,
+      "product_cost_usd": 0.004838,
+      "evaluation_cost_usd": 0.0
+    }
+  ],
+  "aggregates": {
+    "model_only": {
+      "items_completed": 8,
+      "items_failed": 0,
+      "claim_support_rate": {
+        "mean": 0.0,
+        "n": 8
+      },
+      "citation_precision": {
+        "mean": null,
+        "n": 0
+      },
+      "citation_coverage": {
+        "mean": 0.0,
+        "n": 8
+      },
+      "unsupported_claim_rate": {
+        "mean": 0.0,
+        "n": 8
+      },
+      "retrieval_precision_at_k": {
+        "mean": null,
+        "n": 0
+      },
+      "retrieval_recall_at_k": {
+        "mean": null,
+        "n": 0
+      },
+      "retrieval_ndcg_at_k": {
+        "mean": null,
+        "n": 0
+      },
+      "product_latency_seconds": {
+        "mean": 7.8388,
+        "n": 8
+      },
+      "product_total_tokens": {
+        "mean": 692.375,
+        "n": 8
+      },
+      "product_cost_usd": {
+        "mean": 0.0003,
+        "n": 8
+      },
+      "conflict_detection_rate": {
+        "value": 0.0,
+        "detected": 0,
+        "expected": 1
+      }
+    },
+    "hybrid": {
+      "items_completed": 7,
+      "items_failed": 1,
+      "claim_support_rate": {
+        "mean": 0.6878,
+        "n": 7
+      },
+      "citation_precision": {
+        "mean": 0.6571,
+        "n": 7
+      },
+      "citation_coverage": {
+        "mean": 0.6913,
+        "n": 7
+      },
+      "unsupported_claim_rate": {
+        "mean": 0.0554,
+        "n": 7
+      },
+      "retrieval_precision_at_k": {
+        "mean": 0.625,
+        "n": 6
+      },
+      "retrieval_recall_at_k": {
+        "mean": 0.9167,
+        "n": 6
+      },
+      "retrieval_ndcg_at_k": {
+        "mean": 0.9866,
+        "n": 6
+      },
+      "product_latency_seconds": {
+        "mean": 13.0844,
+        "n": 7
+      },
+      "product_total_tokens": {
+        "mean": 1332.2857,
+        "n": 7
+      },
+      "product_cost_usd": {
+        "mean": 0.0004,
+        "n": 7
+      },
+      "conflict_detection_rate": {
+        "value": 1.0,
+        "detected": 1,
+        "expected": 1
+      }
+    },
+    "search_grounded": {
+      "items_completed": 8,
+      "items_failed": 0,
+      "claim_support_rate": {
+        "mean": 0.709,
+        "n": 8
+      },
+      "citation_precision": {
+        "mean": 0.5888,
+        "n": 8
+      },
+      "citation_coverage": {
+        "mean": 0.6497,
+        "n": 8
+      },
+      "unsupported_claim_rate": {
+        "mean": 0.0217,
+        "n": 8
+      },
+      "retrieval_precision_at_k": {
+        "mean": 0.5,
+        "n": 7
+      },
+      "retrieval_recall_at_k": {
+        "mean": 0.8571,
+        "n": 7
+      },
+      "retrieval_ndcg_at_k": {
+        "mean": 0.8099,
+        "n": 7
+      },
+      "product_latency_seconds": {
+        "mean": 16.8116,
+        "n": 8
+      },
+      "product_total_tokens": {
+        "mean": 1357.875,
+        "n": 8
+      },
+      "product_cost_usd": {
+        "mean": 0.0004,
+        "n": 8
+      },
+      "conflict_detection_rate": {
+        "value": 1.0,
+        "detected": 1,
+        "expected": 1
+      }
+    },
+    "full_autoresearch_verified": {
+      "items_completed": 8,
+      "items_failed": 0,
+      "claim_support_rate": {
+        "mean": 0.5737,
+        "n": 8
+      },
+      "citation_precision": {
+        "mean": 0.5394,
+        "n": 8
+      },
+      "citation_coverage": {
+        "mean": 0.614,
+        "n": 8
+      },
+      "unsupported_claim_rate": {
+        "mean": 0.0826,
+        "n": 8
+      },
+      "retrieval_precision_at_k": {
+        "mean": 0.5357,
+        "n": 7
+      },
+      "retrieval_recall_at_k": {
+        "mean": 0.8571,
+        "n": 7
+      },
+      "retrieval_ndcg_at_k": {
+        "mean": 0.7717,
+        "n": 7
+      },
+      "product_latency_seconds": {
+        "mean": 57.3961,
+        "n": 8
+      },
+      "product_total_tokens": {
+        "mean": 29921.125,
+        "n": 8
+      },
+      "product_cost_usd": {
+        "mean": 0.0061,
+        "n": 8
+      },
+      "conflict_detection_rate": {
+        "value": 1.0,
+        "detected": 1,
+        "expected": 1
+      }
+    }
+  }
+}

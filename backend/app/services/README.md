@@ -4,15 +4,28 @@
 `orchestration/`, `claims/`, `verification/` and `benchmark/` are implemented.**
 The rest arrive with their stages.
 
-## `benchmark/` — the dataset and its freeze
+## `benchmark/` — the dataset, its freeze, and the experiment runner
 
 `load_set()` loads and validates the three question sets in `data/benchmarks/`
 (development, validation, and the **frozen** test set); for the test set it enforces
 the freeze manifest's canonical content hash and refuses a set that no longer
 matches (`FrozenSetViolation`). The ground-truth methodology — four named tiers,
 and the rule that benchmark results never modify the test set — is in
-[`data/benchmarks/README.md`](../../../data/benchmarks/README.md). No results live
-here; this is the instrument, not the measurement.
+[`data/benchmarks/README.md`](../../../data/benchmarks/README.md).
+
+`runner.py` is the controlled experiment: four arms (model_only, hybrid,
+search_grounded, full_autoresearch_verified) over the same questions, same model,
+same settings, same evaluation methodology — every arm's report gets claims
+extracted and verified against its own evidence, retrieval relevance is judged by a
+fixed LLM judge against each item's expected_evidence, and the eleven metrics'
+exact formulas live in `metrics.py` and
+[`data/benchmarks/METRICS.md`](../../../data/benchmarks/METRICS.md) (a test keeps
+them agreeing). Outputs: `results.json`, `results.csv`, `evaluation_summary.md`
+under `data/benchmarks/results/`, plus `evaluation_result` rows per run. There is
+deliberately no overall score, failures are recorded rows rather than retried into
+silence, and results are never hand-edited — a wrong number means fixing code and
+re-running into a new dated directory. Run it:
+`python -m app.services.benchmark.runner --set development`.
 
 This layer answers "what happened, and did *all* of it happen". Each public method is
 one atomic operation: it either completes and commits, or raises and leaves the

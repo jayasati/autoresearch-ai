@@ -16,10 +16,12 @@ from app.services.benchmark.dataset import (
     load_set,
     write_freeze_manifest,
 )
+from app.services.benchmark.metrics import METRICS_VERSION
 
 __all__ = [
     "BenchmarkDatasetError",
     "FrozenSetViolation",
+    "METRICS_VERSION",
     "SET_NAMES",
     "benchmark_directory",
     "load_freeze_manifest",

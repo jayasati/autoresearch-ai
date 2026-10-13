@@ -15,7 +15,7 @@ enforced relations disagree) live in code, not in the prompt alone — the verif
 hallucinating is a documented project risk.
 """
 
-from app.services.verification.exceptions import NothingToVerify, VerificationUnavailable
+from app.services.verification.exceptions import NothingToVerify
 from app.services.verification.models import (
     ClaimVerificationModel,
     ConflictReport,
@@ -37,5 +37,4 @@ __all__ = [
     "PassageAssessment",
     "TOP_K_PER_CLAIM",
     "VERIFICATION_PROMPT_VERSION",
-    "VerificationUnavailable",
 ]

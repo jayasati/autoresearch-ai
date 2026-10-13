@@ -41,7 +41,6 @@ from app.services.verification import (
     ConflictReport,
     NothingToVerify,
     PassageAssessment,
-    VerificationUnavailable,
 )
 from tests.unit.test_claim_extraction import FakeStructuredLLM, claim, extraction
 from tests.unit.test_orchestrator import (
@@ -383,29 +382,81 @@ class TestResumabilityAndGuards:
         with pytest.raises(NothingToVerify, match="already verified"):
             await verifier(llm).verify(run_response.research_id)
 
-    async def test_only_search_grounded_runs_can_be_verified(
+    async def test_hybrid_runs_verify_against_a_rebuilt_collection(
         self, service_session, tmp_path
     ):
+        """Hybrid never built a vector collection; verification rebuilds one on
+        demand from the persisted chunk rows, under the same content-derived ids."""
+        test_settings = settings()
+        store_factory = lambda name: VectorStore(  # noqa: E731
+            embedder=BagOfWordsEmbedder(),
+            persist_dir=str(tmp_path / "chroma"),
+            collection_name=name,
+        )
+        orchestrator = ResearchOrchestrator(
+            settings=test_settings,
+            research_service=ResearchService(settings=test_settings),
+            web_search=FakeWebSearch(web_result(web_candidate())),
+            academic_search=FakeAcademicSearch(academic_result(academic_candidate())),
+            store_factory=store_factory,
+            llm=FakeLLM(CITED_REPORT),
+        )
+        hybrid = await orchestrator.run(
+            ResearchStartRequest(topic=TOPIC, depth="quick", mode="hybrid")
+        )
+        web_label = next(s.label for s in hybrid.sources if s.source_type == "web")
+        await ClaimExtractor(
+            settings=test_settings,
+            research_service=ResearchService(settings=test_settings),
+            llm=FakeStructuredLLM(extraction(claim(SUPPORTED_CLAIM, labels=[web_label]))),
+        ).extract(hybrid.research_id)
+
+        verifier = ClaimVerifier(
+            settings=test_settings,
+            research_service=ResearchService(settings=test_settings),
+            store_factory=store_factory,
+            llm=FakeVerifierLLM().on(
+                "caffeine intake", lambda p: judge(p, support_containing=WEB_QUOTE)
+            ),
+        )
+        result = await verifier.verify(hybrid.research_id)
+
+        assert result.claims_verified == 1
+        assert result.results[0].evidence_count >= 1  # rebuilt collection had chunks
+        assert result.results[0].citations == {web_label: "valid"}
+
+    async def test_model_only_runs_verify_to_not_enough_evidence(
+        self, service_session, tmp_path
+    ):
+        """MODEL_ONLY retrieved nothing: every claim takes the no-evidence path with
+        no LLM calls — the baseline's emptiness is measured, not errored."""
         test_settings = settings()
         orchestrator = ResearchOrchestrator(
             settings=test_settings,
             research_service=ResearchService(settings=test_settings),
             web_search=FakeWebSearch(web_result(web_candidate())),
             academic_search=FakeAcademicSearch(academic_result(academic_candidate())),
-            store_factory=lambda name: VectorStore(
-                embedder=BagOfWordsEmbedder(),
-                persist_dir=str(tmp_path / "chroma"),
-                collection_name=name,
-            ),
-            llm=FakeLLM(CITED_REPORT),
+            llm=FakeLLM("# T\n\n## Claims\n\nAn ungrounded assertion of fact.\n"),
         )
-        hybrid = await orchestrator.run(
-            ResearchStartRequest(topic=TOPIC, depth="quick", mode="hybrid")
+        run = await orchestrator.run(
+            ResearchStartRequest(topic=TOPIC, depth="quick", mode="model_only")
         )
-        verifier = ClaimVerifier(
+        await ClaimExtractor(
             settings=test_settings,
             research_service=ResearchService(settings=test_settings),
-            llm=FakeVerifierLLM(),
-        )
-        with pytest.raises(VerificationUnavailable):
-            await verifier.verify(hybrid.research_id)
+            llm=FakeStructuredLLM(
+                extraction(claim("An ungrounded assertion of fact is made.", labels=[]))
+            ),
+        ).extract(run.research_id)
+
+        verifier_llm = FakeVerifierLLM()  # must never be called
+        result = await ClaimVerifier(
+            settings=test_settings,
+            research_service=ResearchService(settings=test_settings),
+            llm=verifier_llm,
+        ).verify(run.research_id)
+
+        assert result.claims_verified == 1
+        assert result.verdicts == {"not_enough_evidence": 1}
+        assert verifier_llm.calls_made == 0
+        assert result.results[0].evidence_count == 0
