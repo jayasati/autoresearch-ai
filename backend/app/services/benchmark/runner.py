@@ -52,6 +52,15 @@ from app.schemas.benchmark import BenchmarkItem, BenchmarkSet
 from app.schemas.research import ResearchStartRequest
 from app.services.benchmark import metrics as formulas
 from app.services.benchmark.dataset import load_set
+from app.services.benchmark.external_judge import (
+    EXTERNAL_JUDGE_VERSION,
+    judge_claims_against_pool,
+)
+from app.services.benchmark.external_pool import (
+    POOL_VERSION,
+    PoolUnavailable,
+    load_or_build_pool,
+)
 from app.services.benchmark.relevance import RELEVANCE_JUDGE_VERSION, judge_relevance
 from app.services.claims import CLAIM_EXTRACTION_PROMPT_VERSION, ClaimExtractor
 from app.services.llm import LLMService
@@ -100,6 +109,9 @@ class ExperimentRunner:
         judge_llm: LLMService | None = None,
         depth: str = "quick",
         output_root: str | None = None,
+        pool_store_factory=None,
+        pool_web_search=None,
+        pool_academic_search=None,
     ) -> None:
         self.settings = settings or get_settings()
         self.research = research_service or ResearchService(settings=self.settings)
@@ -108,6 +120,9 @@ class ExperimentRunner:
         self.verifier = verifier or ClaimVerifier(settings=self.settings)
         self.finalizer = finalizer or ReportFinalizer(settings=self.settings)
         self._judge_llm = judge_llm
+        self._pool_store_factory = pool_store_factory
+        self._pool_web_search = pool_web_search
+        self._pool_academic_search = pool_academic_search
         self.depth = depth
         self.output_root = Path(
             output_root or f"{self.settings.BENCHMARK_DATA_DIR}/results"
@@ -224,6 +239,7 @@ class ExperimentRunner:
             )
 
             row.update(await self._retrieval_metrics(item, run, arm))
+            row.update(await self._external_evaluation(item, summary))
 
             row.update(
                 product_latency_seconds=round(product_latency, 3),
@@ -326,6 +342,68 @@ class ExperimentRunner:
             "relevance_pairs": raw_pairs,
         }
 
+    async def _external_evaluation(self, item: BenchmarkItem, summary: dict) -> dict:
+        """metrics-v2: judge every eligible claim against the question's external
+        pool — identical pool, judge and enforcement for every arm (arm-blind by
+        construction: only claim text and pool passages reach the judge).
+
+        No cap on the development set: every extracted claim is judged. A pool or
+        judging failure yields an explicit status with None metrics, never zeros.
+        """
+        unavailable = {
+            "external_support_rate": None,
+            "external_contradiction_rate": None,
+            "external_judged": None,
+            "external_judging_failures": None,
+            "external_pool_hash": None,
+        }
+        claims = [
+            {"claim_id": claim["claim_id"], "text": claim["text"]}
+            for claim in summary["claims"]
+        ]
+        if not claims:
+            return {**unavailable, "external": {"status": "no_claims"}}
+        try:
+            pool, store = await load_or_build_pool(
+                item.question_id,
+                item.question,
+                settings=self.settings,
+                store_factory=self._pool_store_factory,
+                web_search=self._pool_web_search,
+                academic_search=self._pool_academic_search,
+            )
+        except PoolUnavailable as exc:
+            logger.warning("External pool unavailable for %s: %s", item.question_id, exc.reason)
+            return {
+                **unavailable,
+                "external": {"status": "unavailable", "reason": exc.reason},
+            }
+
+        llm = self._judge_llm or LLMService(settings=self.settings)
+        try:
+            outcome = await judge_claims_against_pool(llm, store, claims)
+        finally:
+            if self._judge_llm is None:
+                await llm.aclose()
+
+        return {
+            "external": {
+                "status": "judged",
+                "pool_version": pool.pool_version,
+                "pool_hash": pool.content_hash,
+                "pool_chunks": pool.chunk_count,
+                "pool_sources": pool.source_count,
+                **outcome,
+            },
+            "external_pool_hash": pool.content_hash,
+            "external_support_rate": formulas.external_support_rate(outcome["verdicts"]),
+            "external_contradiction_rate": formulas.external_contradiction_rate(
+                outcome["verdicts"]
+            ),
+            "external_judged": outcome["judged"],
+            "external_judging_failures": outcome["judging_failures"],
+        }
+
     def _store_metrics(self, research_id, row: dict) -> None:
         entries = []
         for name, key in DB_METRIC_KEYS.items():
@@ -356,9 +434,12 @@ class ExperimentRunner:
                     "depth": self.depth,
                     "depth_profile": DEPTH_PROFILES[self.depth].__dict__,
                     "metrics_version": formulas.METRICS_VERSION,
+                    "metrics_v2_version": formulas.METRICS_V2_VERSION,
                     "extraction_prompt": CLAIM_EXTRACTION_PROMPT_VERSION,
                     "verification_prompt": VERIFICATION_PROMPT_VERSION,
                     "relevance_judge": RELEVANCE_JUDGE_VERSION,
+                    "external_judge": EXTERNAL_JUDGE_VERSION,
+                    "pool_version": POOL_VERSION,
                 },
             },
             "rows": rows,
@@ -397,6 +478,8 @@ class ExperimentRunner:
         "retrieval_precision_at_k": True,
         "retrieval_recall_at_k": True,
         "retrieval_ndcg_at_k": True,
+        "external_support_rate": True,
+        "external_contradiction_rate": False,
         "product_latency_seconds": False,
         "product_total_tokens": False,
         "product_cost_usd": False,
@@ -501,6 +584,8 @@ class ExperimentRunner:
             "retrieval_precision_at_k",
             "retrieval_recall_at_k",
             "retrieval_ndcg_at_k",
+            "external_support_rate",
+            "external_contradiction_rate",
             "product_latency_seconds",
             "product_total_tokens",
             "product_cost_usd",
@@ -575,7 +660,9 @@ CSV_COLUMNS = (
     "total_claims", "claim_support_rate", "citation_precision", "citation_coverage",
     "unsupported_claim_rate", "conflicts_detected", "conflict_expected",
     "retrieval_precision_at_k", "retrieval_recall_at_k", "retrieval_ndcg_at_k",
-    "retrieval_k", "downgraded_verdicts", "product_latency_seconds",
+    "retrieval_k", "external_support_rate", "external_contradiction_rate",
+    "external_judged", "external_judging_failures", "external_pool_hash",
+    "downgraded_verdicts", "product_latency_seconds",
     "evaluation_latency_seconds", "product_total_tokens", "product_cost_usd",
     "evaluation_cost_usd",
 )
@@ -650,6 +737,8 @@ def write_summary_markdown(payload: dict, path: Path) -> None:
         ("Retrieval precision@K", "retrieval_precision_at_k"),
         ("Retrieval recall@K", "retrieval_recall_at_k"),
         ("Retrieval nDCG@K", "retrieval_ndcg_at_k"),
+        ("External support rate (pool, v2)", "external_support_rate"),
+        ("External contradiction rate (pool, v2)", "external_contradiction_rate"),
         ("Product latency (s)", "product_latency_seconds"),
         ("Product tokens", "product_total_tokens"),
         ("Product cost (USD)", "product_cost_usd"),

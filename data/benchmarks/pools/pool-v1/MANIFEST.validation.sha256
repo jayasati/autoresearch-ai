@@ -1,0 +1,9 @@
+﻿# Immutable artifact manifest - validation pools, created 2026-10-13 (stage 21). The original development-pool manifest (MANIFEST.sha256) is untouched.
+9693adfb870ae1c707ce59b9f67d2233407bfa569fd1ceb7f0f24a8a94d5a0f5  val-citation_verification-01.json
+ffd511dd6eeaf5ccc83b706e1c88cedd240b4b3ebc4c73b07aea7219292e1853  val-conflicting_literature-01.json
+207bbb78c1c719d44b7a8fd3361348e764dad003b7552e53a0152e5b13bfcf5b  val-current_information-01.json
+4638f6896b4e14fac583864d86e0fd9d8605c8efa01b96166b7188fc56e8f607  val-false_premise-01.json
+7523cbfe437f141956821c9cee43efcec7916e2a83bc57d6325bfb78a0fe42dc  val-insufficient_evidence-01.json
+926bb9828992f1316b2328006d73dd917c7602b17cb7aa2f6c658fb87004fcd8  val-multi_paper_synthesis-01.json
+9e6079e9c06676d05748aec41405171daf1fb46c7959303cbb53cbec2203f5da  val-normal_research-01.json
+4631f4e4b9759a522a46fa7bfad37e8764b644eaed198ffa2b2fd7d7491bc977  val-numerical_claims-01.json

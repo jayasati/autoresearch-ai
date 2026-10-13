@@ -1,0 +1,9 @@
+﻿# Immutable artifact manifest - created 2026-10-13 (stage 20 gate 1). Any change to these files is detectable against this manifest.
+f5d7fc01fb68f9c1119e2bdea055a2d125120c3353e78b9586af8c1418eb6e39  dev-citation_verification-01.json
+d29d1053cb8978604eb48a05cd50f3c5c88f3366fa75818d92a8db191fa2b888  dev-conflicting_literature-01.json
+136604bb5b827d23c7291a175e9579386834bae7a4f25420f989fa1e7aaa6fb0  dev-current_information-01.json
+b079d067c605ee3d5d801d9d810329169354494ac5428766d6595c07e6df85e0  dev-false_premise-01.json
+37f626fecec741b14eabaf1e6db6a0f3d32fe316cd031f2d6ea588a3ad5d46c7  dev-insufficient_evidence-01.json
+03f0d7b6a782e577d86ec10bd1df6e1d452ab1c236d72249e89f1057f9bee490  dev-multi_paper_synthesis-01.json
+e5ecc30783e7fbc2e2d6b4a73762deaa426df9655aa7f92c979c9b386bf27dde  dev-normal_research-01.json
+d1b1c87912b53c2921f55fe0d6117d461aac4906ad7734be3644d1830301502d  dev-numerical_claims-01.json

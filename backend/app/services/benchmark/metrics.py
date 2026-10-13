@@ -25,6 +25,11 @@ import math
 
 METRICS_VERSION = "metrics-v1"
 
+#: Version for the external-pool metrics introduced by protocol v2 (Part 3a). The
+#: v1 version string and every v1 definition below stay untouched: v1 rows measured
+#: something else and remain comparable only to themselves.
+METRICS_V2_VERSION = "metrics-v2"
+
 #: USD per token, from the provider's published prices. "Estimated" because
 #: published prices change and cached-input discounts are ignored; the estimate is
 #: an upper bound at these rates.
@@ -109,6 +114,37 @@ def ndcg_at_k(relevance: list[bool], k: int) -> float | None:
     ideal = sorted(inspected, reverse=True)
     idcg = sum(rel / math.log2(index + 2) for index, rel in enumerate(ideal))
     return round(dcg / idcg, 4) if idcg else None
+
+
+def external_support_rate(external_verdicts: dict[str, int]) -> float | None:
+    """external_support_rate = (supported + partially_supported) / claims_judged
+
+    Judged against the evaluator's external evidence pool, identically for every
+    arm. This measures **support from the evaluator's retrieved pool, not
+    ground-truth factual accuracy**: a true claim the pool happens not to contain
+    counts as not_enough_evidence, never as false. Denominator: claims the external
+    judge returned a verdict for; claims whose judging failed are excluded and
+    counted separately. None when nothing was judged — including when the pool was
+    unavailable — never an artificial zero.
+    """
+    judged = sum(external_verdicts.values())
+    return _ratio(
+        external_verdicts.get("supported", 0)
+        + external_verdicts.get("partially_supported", 0),
+        judged,
+    )
+
+
+def external_contradiction_rate(external_verdicts: dict[str, int]) -> float | None:
+    """external_contradiction_rate = contradicted / claims_judged
+
+    Contradictions **against the evaluator's pool, not all hallucinations**: a
+    fabricated claim about something the pool does not cover lands in
+    not_enough_evidence and is not counted here. Same denominator, exclusions and
+    None-semantics as external_support_rate.
+    """
+    judged = sum(external_verdicts.values())
+    return _ratio(external_verdicts.get("contradicted", 0), judged)
 
 
 def conflict_detection_rate(items_detected: int, items_expected: int) -> float | None:

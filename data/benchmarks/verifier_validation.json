@@ -1,0 +1,116 @@
+{
+  "version": "1.1.0",
+  "created": "2026-10-13",
+  "description": "Manually labeled validation cases for the external claim judge. Each case fixes a claim, a small passage pool, and the verdict a correct judge must reach. Labels were authored by hand from the passage text alone; case 5 exists to pin the rule that ABSENCE FROM THE POOL IS NOT FALSITY: a true claim the pool does not cover must land in not_enough_evidence, never contradicted.",
+  "cases": [
+    {
+      "case_id": "val-supported-01",
+      "claim": "The trial reported a 12% reduction in hospital admissions in the treatment group.",
+      "passages": [
+        {"title": "Trial results summary", "text": "In the randomized trial, the treatment group showed a 12% reduction in hospital admissions compared with placebo over 24 months, a statistically significant difference."},
+        {"title": "Unrelated methods note", "text": "Participants were recruited from twelve outpatient clinics and followed quarterly."}
+      ],
+      "expected_verdict": "supported",
+      "label_basis": "Passage 1 states the claim's exact figure and direction verbatim."
+    },
+    {
+      "case_id": "val-partial-01",
+      "claim": "The intervention reduced hospital admissions by 12% in all age groups.",
+      "passages": [
+        {"title": "Trial results summary", "text": "The treatment group showed a 12% reduction in hospital admissions overall; in participants over 70, however, the reduction was not statistically significant."},
+        {"title": "Recruitment note", "text": "Participants were recruited from twelve outpatient clinics."}
+      ],
+      "expected_verdict": "partially_supported",
+      "label_basis": "The overall 12% figure is supported; the 'all age groups' clause is explicitly not established for the over-70 subgroup."
+    },
+    {
+      "case_id": "val-contradicted-01",
+      "claim": "The study found that the supplement improved marathon finishing times.",
+      "passages": [
+        {"title": "Supplement trial", "text": "Marathon finishing times did not improve with supplementation; the supplement group was on average 40 seconds slower than placebo, a non-significant difference in the opposite direction."},
+        {"title": "Adherence note", "text": "Adherence to the supplementation protocol exceeded 90% in both groups."}
+      ],
+      "expected_verdict": "contradicted",
+      "label_basis": "Passage 1 states the opposite of the claim: no improvement, direction reversed."
+    },
+    {
+      "case_id": "val-insufficient-01",
+      "claim": "Daily meditation lowers systolic blood pressure by at least 8 mmHg in hypertensive adults.",
+      "passages": [
+        {"title": "Meditation overview", "text": "Meditation practices have grown in popularity and are studied for a range of stress-related outcomes. Programs vary widely in duration and technique."},
+        {"title": "Hypertension background", "text": "Hypertension affects roughly one in three adults and is a major risk factor for cardiovascular disease."}
+      ],
+      "expected_verdict": "not_enough_evidence",
+      "label_basis": "Both passages are topical but neither states anything about meditation's effect size on blood pressure."
+    },
+    {
+      "case_id": "val-true-but-absent-01",
+      "claim": "Water boils at approximately 100 degrees Celsius at sea-level atmospheric pressure.",
+      "passages": [
+        {"title": "Espresso extraction", "text": "Espresso machines extract coffee at around nine bars of pressure, with brew temperatures typically between 90 and 96 degrees Celsius."},
+        {"title": "Kettle market report", "text": "Electric kettle sales grew steadily, with consumers favouring models with temperature presets."}
+      ],
+      "expected_verdict": "not_enough_evidence",
+      "label_basis": "The claim is true in the world, but no passage in the pool states it. Absence from the pool must yield not_enough_evidence, never contradicted - this case exists to pin that rule."
+    },
+    {
+      "case_id": "val-numeric-mismatch-01",
+      "claim": "The vaccine was 95% effective against symptomatic infection in the trial.",
+      "passages": [
+        {"title": "Trial efficacy report", "text": "Vaccine efficacy against symptomatic infection was 66% in the primary analysis, with confidence intervals from 57% to 74%."},
+        {"title": "Safety summary", "text": "No serious safety concerns were identified during the follow-up period."}
+      ],
+      "expected_verdict": "contradicted",
+      "label_basis": "The passage states a materially different efficacy figure (66% vs the claimed 95%) for the same outcome in the same trial framing."
+    },
+    {
+      "case_id": "val-supported-02",
+      "claim": "The cohort study followed participants for a median of eight years and recorded dietary intake annually.",
+      "passages": [
+        {"title": "Cohort methods", "text": "Participants were followed for a median of eight years. Dietary intake was recorded with a validated food-frequency questionnaire administered annually."},
+        {"title": "Cohort funding note", "text": "The study was funded by a national research council grant."}
+      ],
+      "expected_verdict": "supported",
+      "label_basis": "Both halves of the claim (follow-up duration and annual dietary recording) are stated verbatim in the methods passage."
+    },
+    {
+      "case_id": "val-partial-02",
+      "claim": "The medication lowered LDL cholesterol by 30% and eliminated cardiovascular risk.",
+      "passages": [
+        {"title": "Lipid trial outcomes", "text": "The medication lowered LDL cholesterol by 30% versus baseline. Cardiovascular events were reduced but not eliminated; residual risk remained substantial in all treatment groups."}
+      ],
+      "expected_verdict": "partially_supported",
+      "label_basis": "The 30% LDL reduction is stated exactly; the elimination of cardiovascular risk is explicitly negated ('reduced but not eliminated')."
+    },
+    {
+      "case_id": "val-contradicted-02",
+      "claim": "Screen time among teenagers declined steadily between 2015 and 2020.",
+      "passages": [
+        {"title": "Adolescent media survey", "text": "Average daily screen time among teenagers rose each year from 2015 to 2020, with the largest single-year increase recorded in 2020."},
+        {"title": "Survey methodology", "text": "The survey sampled approximately 3,000 adolescents annually using a consistent instrument."}
+      ],
+      "expected_verdict": "contradicted",
+      "label_basis": "The passage states the opposite direction over the same period: rose each year rather than declined steadily."
+    },
+    {
+      "case_id": "val-insufficient-02",
+      "claim": "The retraining programme doubled the employment rate of participants within one year.",
+      "passages": [
+        {"title": "Programme description", "text": "The retraining programme offers six-month courses in software testing and logistics, with roughly 400 participants enrolled each cohort."},
+        {"title": "Labour market overview", "text": "Regional unemployment fell modestly during the study period amid broad economic recovery."}
+      ],
+      "expected_verdict": "not_enough_evidence",
+      "label_basis": "Passages describe the programme and the labour market but state no employment outcome for participants; the modest regional decline neither supports nor contradicts a doubling claim."
+    },
+    {
+      "case_id": "val-true-but-absent-02",
+      "claim": "The human heart has four chambers.",
+      "passages": [
+        {"title": "Exercise physiology note", "text": "Regular aerobic exercise improves stroke volume and resting heart rate over time."},
+        {"title": "Hospital staffing report", "text": "Cardiology departments reported increased outpatient volumes last year."}
+      ],
+      "expected_verdict": "not_enough_evidence",
+      "label_basis": "A textbook-true anatomical fact that no passage in the pool states. Absence from the pool must yield not_enough_evidence, never contradicted - second anchor for the absence-is-not-falsity rule."
+    }
+  ]
+}

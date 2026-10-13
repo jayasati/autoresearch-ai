@@ -88,6 +88,42 @@ is not a quality signal). The generated report marks these cells with † and a
 footnote. They demonstrate the definition of the metric; the empirical content of
 the experiment lives in the differences among the retrieval arms.
 
+## External-pool metrics (metrics-v2, protocol Part 3a — development set only)
+
+v2 adds an evaluation that every arm faces identically: one **evaluator-owned
+external evidence pool per (question_id, pool_version)**, built from the question
+alone (never from any arm's report), cached as exact passages + metadata at
+`data/benchmarks/pools/<pool_version>/<question_id>.json` with a canonical content
+hash. A cached pool is **never silently refreshed**: if the cache file exists it is
+used, byte-for-byte; a new pool requires a new pool_version. Every arm's claims are
+judged against the same pool, **arm-blind** (the judge sees claim text and pool
+passages only), with the same verifier prompt version and the same verbatim-quote
+enforcement as run-owned verification.
+
+Terminology, precisely: these metrics measure support and contradiction **relative
+to what the evaluator could retrieve** — not ground-truth factual accuracy, and not
+all hallucinations. A true claim absent from the pool is `not_enough_evidence`,
+never false.
+
+- **external_support_rate** = (supported + partially_supported) / claims_judged.
+- **external_contradiction_rate** = contradicted / claims_judged.
+- *Eligible claims:* every claim extracted from the arm's report (no cap on the
+  development set — all eligible claims are judged; if a cap is ever needed, the
+  rule is a deterministic, position-independent sample: order claims by
+  sha256(claim_id), take the first N — identical rule for every arm).
+- *Denominator:* claims the judge returned a verdict for. A claim whose judging
+  fails validation twice is excluded and counted in `external_judging_failures`.
+- *Empty denominator / failure behaviour:* pool unavailable (providers failed, or
+  no usable text) → the row records `external: {status: "unavailable", reason}` and
+  both metrics are None; judged == 0 → None. **Never an artificial zero.**
+- *Storage:* per-claim external verdicts (claim_id, verdict, confidence,
+  downgraded, quote) live in the raw results JSON next to the pool hash; per-arm
+  aggregates in the summary. Database `evaluation_result` rows for v2 are deferred:
+  the `metric_key` enum has no external members yet and extending it requires a
+  migration — recorded here so the gap is a decision, not an oversight.
+- *Self-grounding metrics are unchanged* and remain metrics-v1; v1 and v2 numbers
+  are never mixed in one table without their version labels.
+
 ## The final comparison (baseline vs AutoResearch)
 
 - **failure_rate** = items_failed / items_attempted, per arm. A failed cell is a

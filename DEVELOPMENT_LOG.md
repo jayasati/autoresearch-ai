@@ -5,6 +5,194 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 20 — Validation gates, judge validation at 9/11, and the conflict root-cause — 2026-10-13
+
+Pre-validation gates, all delivered without tuning anything: the stage-19
+development artifact and the eight pool caches pinned by sha256 manifests
+(`MANIFEST.sha256`); the validation protocol locked in
+`docs/VALIDATION_PROTOCOL.md` (dataset identity, run matrix, constants,
+exclusions, failure policy, exact commands); the labeled judge-validation set
+expanded 6 → 11 cases (v1.1.0) and re-run live — **9/11**: perfect on supported,
+contradicted, insufficient and both true-but-absent cases, **0/2 on compound
+partial-support** (both judged contradicted when one conjunct is explicitly
+negated), a measured judge characteristic kept visible rather than tuned away,
+arm-blind and therefore fair, mitigated in-pipeline by extraction's atomicity.
+
+**Conflict detection 1/1 → 0/1, root-caused from stored rows:** stage 16's cells
+each had 1–4 claims whose evidence straddled the disagreement (supports and
+contradicts on the *same claim*) → conflicts stored; stage 19's cells all had
+contradicting evidence (3–5 relations) that never co-occurred with support on one
+claim → zero stored, correctly per the within-claim design. Detection is sensitive
+to the claim/chunk draw; a report-level cross-claim pass is future work, not a
+change made now.
+
+## Stage 21 — The validation run — 2026-10-13
+
+Approved and executed exactly per `docs/VALIDATION_PROTOCOL.md`: `SELECT 1`
+verified first; the one approved runner command; validation v1.0.0 (fingerprint
+`43d63fb1c0bc`) unmodified; no prior artifact touched (both manifests re-verified
+afterwards: 11/11 files intact; the 8 new validation pools verified 8/8 against
+their canonical hashes); frozen test set untouched; nothing committed.
+
+**Benchmark run `a42c2de3…`, outputs `results/validation/20261013T105346Z/`.
+32/32 cells completed, zero failures — the first fully clean grid.**
+
+| Metric (means, n=8 everywhere) | model_only | hybrid | search_grounded | full_verified |
+|---|---|---|---|---|
+| Self-grounding support (v1) | 0.0† | 0.615 | 0.584 | 0.619 |
+| Citation precision (v1) | — | 0.715 | 0.682 | 0.758 |
+| Citation coverage (v1) | 0.0† | 0.728 | 0.700 | 0.722 |
+| Unsupported claim rate (v1) | 0.0† | 0.220 | 0.192 | 0.218 |
+| **External support (v2)** | **0.460** | **0.587** | 0.573 | 0.556 |
+| **External contradiction (v2)** | 0.127 | 0.172 | 0.125 | **0.159** |
+| Conflict detection | 0/1 | 1/1 | 1/1 | 1/1 |
+| Latency / tokens / cost | 7.9s / 720 / $0.0003 | 14.1s / 1331 / $0.0004 | 20.6s / 1278 / $0.0004 | 79.7s / 26656 / $0.0056 |
+
+Readings, no larger than the data:
+
+- **The external gap replicates at the same magnitude as development**: baseline
+  0.460 vs full system 0.556 (+0.096; dev was +0.117). The retrieval arms cluster
+  within ~0.03 of each other — indistinguishable at n=8.
+- **AutoResearch's external contradiction rate is WORSE than the baseline's here**
+  (0.159 vs 0.127, +25% relative) — mechanically classified and reported as such.
+  With the judge's measured partial-support behaviour (compound claims fall to
+  contradicted), arms that assert more specific, citable claims may absorb more
+  pool contradictions; that is a hypothesis, the number is a fact.
+- **Conflict detection hit 1/1 for every retrieval arm** — confirming stage 20's
+  analysis that stage 19's 0/1 was draw variance, not a regression.
+- Unsupported-claim rates (v1) roughly doubled versus the frozen-test run
+  (~0.20 vs ~0.09): the validation topics (alcohol J-curve, LK-99, the Stanford
+  Prison Experiment) elicit more contradicted claims. Set difficulty differs;
+  cross-set comparison is not licensed.
+- No matched-items table was emitted because no cells failed — subsets identical.
+
+Interpretation rule honoured: these are validation results that inform protocol
+readiness; they are not final-test results, no factual-accuracy claim is made from
+external supportability, and no statistical-superiority claim is made at n=8. The
+frozen final test set remains reserved pending explicit separate approval, as does
+any commit.
+
+### Contradiction-level inspection (approved follow-up; no verifier change made)
+
+Every externally-contradicted claim in the validation run was read against its
+judge quote (baseline: 17 of 148 judged; full system: 13 of 87). The artifacts are
+pinned (new manifests over the validation results directory and the eight
+validation pools; the stage-20 manifests untouched and re-verified). Patterns, with
+counts from the records:
+
+1. **Contested-topic cross-contradiction dominates.** The alcohol/heart item alone
+   contributes 7 of the baseline's 17 and 3 of the system's 13. The pool honestly
+   contains both sides ("No form or amount of alcohol lowers your risk…" alongside
+   "moderate drinking may lower the risk…"), so claims on *either* side draw a
+   contradiction from the opposite passage. On genuinely contested topics,
+   external_contradiction partially measures the **pool's internal conflict**, not
+   claim falsity — a metric semantic worth a sentence in any write-up.
+2. **Meta-claims confuse the judge.** Several of the full system's contradicted
+   claims are statements *about the evidence landscape* ("One passage explicitly
+   states that blue-light glasses do not improve reaction time…", "The evidence on
+   the benefits … is conflicting") — judged contradicted by one side of the very
+   conflict they describe. The full pipeline's reports discuss evidence explicitly,
+   so it plausibly absorbs more of these; that is a hypothesis consistent with the
+   records.
+3. **A few plain judge errors**, now on record: a baseline claim that moderate
+   drinking "can potentially lead to high blood pressure" was marked contradicted
+   by a quote saying moderate drinking "may increase blood pressure" (the quote
+   agrees); a "30–60%" range claim was contradicted by a quote stating 58% (inside
+   the range).
+4. **Genuine corrections exist and work as designed**: the baseline's LK-99
+   revolution claim is contradicted by the pool's failed-replication passage —
+   exactly what the metric is for.
+
+Conclusion: the system-vs-baseline contradiction gap (0.159 vs 0.127) is largely
+attributable to contested-pool cross-fire and meta-claim judging rather than to a
+higher rate of false assertions — stated as analysis of records, not as a corrected
+number. **The verifier was not changed.** If it is ever revised to address 2–3, it
+gets a new version, and these validation results will not be re-presented as
+independent confirmation of the revised system, per the standing instruction.
+
+---
+
+## Stage 19 — metrics-v2: the fair external evaluation (development set) — 2026-10-13
+
+**Approved scope: protocol Part 3a, development set only, nine safeguards.** All
+honoured: v1 definitions, rows, historical outputs and frozen artifacts untouched
+(v2 lives under its own `metrics-v2` version string); the frozen test set was not
+run; Part 3b was not implemented.
+
+### What was built
+
+- **External evidence pools** (`external_pool.py`): one per (question, `pool-v1`),
+  built by the evaluator from the question alone (8 web + 8 academic — at least as
+  rich as any arm's own retrieval), cached as exact passages + metadata at
+  `data/benchmarks/pools/pool-v1/` with a canonical sha256. A cached pool is never
+  silently refreshed — present cache means providers are not called (tested), and an
+  edited cache fails its hash check as an integrity violation (tested). The eight
+  pools are committed.
+- **The arm-blind external judge** (`external_judge.py`): the same `verification-v1`
+  prompt, schema, verbatim-quote enforcement and downgrade rule as run-owned
+  verification, reused from the verifier's own statics; inputs are claim text and
+  pool passages only (prompts tested to carry no arm identifiers). Verdicts are
+  stored in the results files, never in run-owned tables. A twice-failing claim is a
+  counted judging failure, not a verdict.
+- **metrics-v2** (`external_support_rate`, `external_contradiction_rate`): exact
+  formulas with terminology guards in code and METRICS.md — supportability from the
+  evaluator's pool is **not** ground-truth factual accuracy, contradiction-vs-pool
+  is **not** all hallucinations, and a true claim absent from the pool is
+  `not_enough_evidence`, never false. Full numerator/denominator/eligibility/
+  failure semantics documented; pool or judge failure yields explicit unavailable,
+  never zero. No claim cap on the development set (all eligible claims judged; the
+  deterministic position-independent sampling rule is documented should a cap ever
+  be needed). Database rows for v2 are deferred pending a MetricKey migration —
+  recorded as a decision.
+- **Judge validation against manually labeled cases**
+  (`data/benchmarks/verifier_validation.json`, 6 cases across supported / partial /
+  contradicted / insufficient / numeric-mismatch / **true-but-absent-from-pool**):
+  run live against the real judge — **6/6 agreement**, including the
+  absence-is-not-falsity case. 15 new offline tests cover pools, judge, formulas,
+  v1-unchanged and the smoke run (identical pool hash across arms; the baseline
+  scoring genuinely). **851 tests passing**, ruff and mypy clean.
+
+### The result that justifies the whole protocol
+
+Development set, 8 × 4 grid (`results/development/20261013T090058Z/`, benchmark run
+`eb70c1e1…`), every arm judged against identical pools:
+
+| | model_only | hybrid | search_grounded | full_verified |
+|---|---|---|---|---|
+| **External support rate (v2)** | **0.442** | 0.540 | 0.654 (n=6) | 0.559 |
+| **External contradiction rate (v2)** | 0.104 | 0.112 | 0.057 (n=6) | 0.097 |
+| Self-grounding support (v1) | 0.0† | 0.636 | 0.628 (n=6) | 0.608 |
+
+**The fair comparison shrinks the headline gap dramatically.** Judged against the
+same evidence, the ungrounded baseline's claims are **44% externally supportable** —
+not the structural 0.0 the v1 metric reports. Baseline-vs-AutoResearch on external
+supportability is **+0.117 absolute (+26% relative)**, and on external contradiction
+**−0.007 — essentially no difference** at this sample size. The v1 numbers were
+never wrong; they measured self-grounding and said so. But any reading of them as a
+factual-quality gap would have overstated AutoResearch's advantage by a factor the
+v2 protocol now quantifies. What AutoResearch demonstrably adds over the baseline is
+**attribution** — citations, per-claim verdicts, conflict surfacing, an audit trail —
+plus a modest external-supportability gain, at ~20× cost. **No factual-accuracy
+claim is made from these scores**: the pool bounds what "supportable" means.
+
+Also honestly on the record: two search_grounded cells failed on retrieval-provider
+blips (a ConnectError and a Tavily 400) — recorded rows, failure_rate 0.25 for that
+arm, and its strong externals ride on n=6 *excluding the conflicting-literature
+item*. Conflict detection was 0/1 for every completed arm this run (stage 16 scored
+1/1) — detection of the vitamin D disagreement is run-variant, a finding for the
+repeats agenda. C's best-in-grid externals vs D's echo the known C/D variance.
+
+### Does the development evidence justify proceeding to validation?
+
+**Yes, with eyes open.** The machinery held (pools cached and reused byte-identical
+across arms, zero judging failures across ~470 judged claims, judge 6/6 on labeled
+cases), and the metric separates arms in an interpretable way. The caveats to carry
+forward: single pass, n=8 items, provider flakiness costing cells, and conflict
+detection's run-to-run variance. Proceeding to the validation set — and any
+threshold tuning — awaits approval, per the protocol.
+
+---
+
 ## Stage 18 — Evaluation audit, and the three reporting corrections — 2026-10-13
 
 Before touching production code after the frozen run, the evaluation pipeline was

@@ -1,0 +1,4 @@
+﻿# Immutable artifact manifest - created 2026-10-13 (stage 20 gate 1). Any change to these files is detectable against this manifest.
+af39534b1171b36b45b8bc6090410d77fea5fde290e2cfe784587839b1193c80  evaluation_summary.md
+4ca6bb07f73057fd0b8cb1d6060eb4f4aa9f566541ab5afdbfff81968fa30569  results.csv
+be694769456313dd06f6787b0ae34dfb4972f0ce83d826d2817232faf2ee12bb  results.json

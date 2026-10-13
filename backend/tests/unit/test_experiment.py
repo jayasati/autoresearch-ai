@@ -26,7 +26,7 @@ from app.services.llm import StructuredLLMResponse, TokenUsage
 from app.services.orchestration import ReportFinalizer, ResearchOrchestrator
 from app.services.research_service import ResearchService
 from app.services.vectorstore import VectorStore
-from app.services.verification import ClaimVerifier
+from app.services.verification import ClaimVerificationModel, ClaimVerifier
 from tests.unit.test_claim_extraction import FakeStructuredLLM, claim, extraction
 from tests.unit.test_final_report import FINAL_BODY
 from tests.unit.test_orchestrator import (
@@ -145,7 +145,9 @@ class TestFormulasMatchTheDocumentation:
 
 
 class FakeJudgeLLM:
-    """Marks the first passage relevant to the first statement, deterministically."""
+    """Serves both evaluator judges deterministically: relevance judgements mark the
+    first passage/statement pair; external claim judgements support the claim when a
+    passage contains the web quote, else insufficient evidence."""
 
     def __init__(self):
         self.calls_made = 0
@@ -154,9 +156,24 @@ class FakeJudgeLLM:
     async def generate_structured_output(self, prompt, schema, *, system=None, model=None,
                                          temperature=None, max_tokens=None):
         self.calls_made += 1
-        judgement = RelevanceJudgement(pairs=[RelevantPair(passage_index=0, statement_index=0)])
-        return StructuredLLMResponse[RelevanceJudgement](
-            data=judgement, text=judgement.model_dump_json(), model="fake-judge",
+        if schema is RelevanceJudgement:
+            data = RelevanceJudgement(
+                pairs=[RelevantPair(passage_index=0, statement_index=0)]
+            )
+            return StructuredLLMResponse[RelevanceJudgement](
+                data=data, text=data.model_dump_json(), model="fake-judge",
+                finish_reason="stop", usage=None, latency_seconds=0.01,
+            )
+        from tests.unit.test_verification import (
+            WEB_QUOTE,
+            judge,
+            parse_prompt,
+        )
+
+        _, passages = parse_prompt(prompt)
+        data = judge(passages, support_containing=WEB_QUOTE)
+        return StructuredLLMResponse[ClaimVerificationModel](
+            data=data, text=data.model_dump_json(), model="fake-judge",
             finish_reason="stop", usage=None, latency_seconds=0.01,
         )
 
@@ -166,7 +183,18 @@ class FakeJudgeLLM:
 
 @pytest.fixture
 def runner(service_session, tmp_path):
-    test_settings = settings()
+    # An isolated benchmark directory: the real dataset files are copied in, so
+    # pool caches and results write to tmp_path, never into data/benchmarks.
+    import shutil
+
+    bench_dir = tmp_path / "benchdata"
+    bench_dir.mkdir()
+    for source in Path("../data/benchmarks").iterdir():
+        if source.is_file():
+            shutil.copy(source, bench_dir / source.name)
+    test_settings = settings().model_copy(
+        update={"BENCHMARK_DATA_DIR": str(bench_dir)}
+    )
     store_factory = lambda name: VectorStore(  # noqa: E731
         embedder=BagOfWordsEmbedder(),
         persist_dir=str(tmp_path / "chroma"),
@@ -202,6 +230,9 @@ def runner(service_session, tmp_path):
         ),
         judge_llm=FakeJudgeLLM(),
         output_root=str(tmp_path / "results"),
+        pool_store_factory=store_factory,
+        pool_web_search=FakeWebSearch(web_result(web_candidate())),
+        pool_academic_search=FakeAcademicSearch(academic_result(academic_candidate())),
     )
 
 
@@ -228,6 +259,14 @@ class TestExperimentRunner:
             > by_arm["search_grounded"]["product_total_tokens"]
         )
         assert by_arm["search_grounded"]["evaluation_tokens"] is not None
+
+        # metrics-v2: every arm faces the identical external pool, and the baseline
+        # can genuinely score — the fairness the protocol exists for.
+        hashes = {row["external_pool_hash"] for row in payload["rows"]}
+        assert len(hashes) == 1 and None not in hashes
+        assert by_arm["model_only"]["external_support_rate"] == 1.0
+        assert by_arm["search_grounded"]["external_support_rate"] == 1.0
+        assert by_arm["model_only"]["external_judging_failures"] == 0
 
         output_dir = Path(payload["output_dir"])
         assert (output_dir / "results.json").exists()
