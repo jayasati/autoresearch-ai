@@ -329,6 +329,84 @@ class TestExperimentRunner:
 
         assert comparison["failure_rate"]["direction"] == "unchanged"
 
+    def test_structural_baseline_values_carry_their_note(self):
+        """Audit CD-2: a definition must not read as a measurement."""
+        aggregates = {
+            "model_only": {
+                "claim_support_rate": {"mean": 0.0, "n": 8},
+                "unsupported_claim_rate": {"mean": 0.0, "n": 8},
+                "citation_coverage": {"mean": 0.0, "n": 8},
+                "citation_precision": {"mean": None, "n": 0},
+                "retrieval_precision_at_k": {"mean": None, "n": 0},
+                "retrieval_recall_at_k": {"mean": None, "n": 0},
+                "retrieval_ndcg_at_k": {"mean": None, "n": 0},
+                "product_latency_seconds": {"mean": 9.0, "n": 8},
+                "product_total_tokens": {"mean": 700, "n": 8},
+                "product_cost_usd": {"mean": 0.0003, "n": 8},
+                "failure_rate": 0.0,
+            },
+            "full_autoresearch_verified": {
+                key: {"mean": 0.5, "n": 8}
+                for key in ExperimentRunner.HIGHER_IS_BETTER
+                if key != "failure_rate"
+            }
+            | {"failure_rate": 0.0},
+        }
+        comparison = {
+            entry["metric"]: entry
+            for entry in ExperimentRunner.build_comparison(aggregates)
+        }
+        assert "structural" in comparison["claim_support_rate"]["baseline_note"]
+        assert "structural" in comparison["unsupported_claim_rate"]["baseline_note"]
+        assert comparison["product_cost_usd"]["baseline_note"] is None
+
+    def test_matched_comparison_covers_only_the_intersection(self):
+        """Audit CD-1: when arms failed different items, the companion comparison
+        is computed over the items both completed, naming the missing ones."""
+        def row(question_id, arm, error=None, support=0.5):
+            return {
+                "question_id": question_id,
+                "arm": arm,
+                "error": error,
+                "claim_support_rate": support,
+                "conflict_expected": False,
+                "conflicts_detected": 0,
+            }
+
+        rows = [
+            row("q1", "model_only"),
+            row("q2", "model_only", error={"code": "internal_error", "message": "x"}),
+            row("q3", "model_only"),
+            row("q1", "full_autoresearch_verified", support=0.9),
+            row("q2", "full_autoresearch_verified", support=0.9),
+            row("q3", "full_autoresearch_verified",
+                error={"code": "internal_error", "message": "x"}),
+        ]
+        matched = ExperimentRunner._matched_comparison(rows, ExperimentRunner._aggregate)
+
+        assert matched is not None
+        assert matched["matched_items"] == ["q1"]
+        assert matched["baseline_missing"] == ["q2"]
+        assert matched["autoresearch_missing"] == ["q3"]
+        support = next(
+            e for e in matched["comparison"] if e["metric"] == "claim_support_rate"
+        )
+        assert support["baseline"] == 0.5 and support["autoresearch"] == 0.9
+
+    def test_matched_comparison_is_omitted_when_subsets_are_identical(self):
+        rows = [
+            {"question_id": "q1", "arm": arm, "error": None, "claim_support_rate": 0.5,
+             "conflict_expected": False, "conflicts_detected": 0}
+            for arm in ("model_only", "full_autoresearch_verified")
+        ]
+        assert ExperimentRunner._matched_comparison(rows, ExperimentRunner._aggregate) is None
+
+    def test_aggregation_method_is_documented(self):
+        """Audit CD-3: macro-averaging must be stated where the formulas live."""
+        documentation = Path("../data/benchmarks/METRICS.md").read_text(encoding="utf-8")
+        assert "macro-average" in documentation
+        assert "Structural values" in documentation
+
     async def test_the_test_set_writes_the_final_file_names(self, runner, service_session):
         """The final evaluation's outputs carry the names the write-up names."""
         payload = await runner.run_experiment("test", arms=("model_only",), limit=1)

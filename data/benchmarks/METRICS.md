@@ -68,6 +68,26 @@ search for C/D; provider rank order for B).
   change and cached-input discounts are ignored; at these rates it is an upper
   bound. A model with no listed price yields None, never $0.00.
 
+## Aggregation (audit CD-3)
+
+Per-arm summaries are **macro-averages**: the per-item metric is computed first and
+items are averaged with equal weight, regardless of how many claims or citations
+each item produced. A micro-average (pooling numerators and denominators across
+items) can differ — in the first frozen run, D's support rate was 0.671 macro vs
+0.667 micro — and is not currently reported. Means are taken over items where the
+metric is defined, with n stated; failed cells are excluded from means and counted
+in the failure rate.
+
+## Structural values (audit CD-2)
+
+Some baseline values are fixed by the arm's construction, not observed:
+`model_only` retrieves no evidence (its claim support rate can only be 0.0), its
+prompt forbids citations (citation coverage can only be 0.0), and claims citing
+nothing cannot be contradicted by their citations (its unsupported-claim rate's 0.0
+is not a quality signal). The generated report marks these cells with † and a
+footnote. They demonstrate the definition of the metric; the empirical content of
+the experiment lives in the differences among the retrieval arms.
+
 ## The final comparison (baseline vs AutoResearch)
 
 - **failure_rate** = items_failed / items_attempted, per arm. A failed cell is a
@@ -80,6 +100,10 @@ search for C/D; provider rank order for B).
 - **direction** classifies each difference as improved / worse / unchanged against
   the metric's better direction (declared per metric in code), mechanically — so
   no prose can soften a regression.
+- **matched-items comparison** (audit CD-1): when the compared arms completed
+  different item subsets (cells can fail), the report additionally shows the same
+  comparison restricted to the items both arms completed, and names each arm's
+  missing items. The headline table remains the all-completed-items view.
 
 ## Provenance
 

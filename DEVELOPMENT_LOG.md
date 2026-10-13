@@ -5,6 +5,43 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 18 — Evaluation audit, and the three reporting corrections — 2026-10-13
+
+Before touching production code after the frozen run, the evaluation pipeline was
+audited end to end: code, prompts, the committed raw outputs, and recomputation from
+database rows (one cell reproduced exactly; aggregates recompute from rows). The
+full audit, with evidence and the confirmed-versus-possible split, is
+**`docs/EVALUATION_AUDIT.md`**.
+
+Headlines: **no arithmetic errors**; the baseline's zeros are structural (it cannot
+score otherwise — extraction worked, producing 14–28 claims per question, all
+unverifiable by construction); the instruction difference between arms is the
+experimental manipulation itself, with the side effect that baseline fabrication
+behaviour is unmeasured (future arm); failure handling is consistent across arms
+except the uncited-report path, which exists only for evidence arms and never fired.
+
+Three confirmed reporting defects were then corrected, with approval, as
+**report-generation and documentation changes only** — no formula changed, no stored
+row changed, and the historical `results/test/20261013T060512Z/` outputs were not
+regenerated:
+
+- **CD-1** — when arms fail different cells, their means cover different item
+  subsets. Future reports add a *matched-items comparison* over the intersection,
+  naming each arm's missing items. (In the frozen run: D was missing the Wakefield
+  citation-integrity item; the baseline was missing current-information.)
+- **CD-2** — structurally determined baseline values (support 0.0, coverage 0.0,
+  unsupported 0.0 for model_only) are now marked † with footnotes stating they are
+  definitions, not measurements; METRICS.md explains them.
+- **CD-3** — METRICS.md now states that aggregates are macro-averages (equal item
+  weights; micro can differ — 0.671 vs 0.667 for D's support in the frozen run).
+
+**836 tests passing** (4 new: structural notes attached and absent where they
+should be; the matched comparison computed over exactly the intersection with
+missing items named; omitted when subsets are identical; the documentation test
+extended). `ruff` and `mypy` clean.
+
+---
+
 ## Stage 17 — The final evaluation, on the frozen test set — 2026-10-13
 
 **The one-shot run the whole project was built toward.** Test set v1.0.0, loaded

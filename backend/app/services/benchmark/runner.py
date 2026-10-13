@@ -364,7 +364,28 @@ class ExperimentRunner:
             "rows": rows,
             "aggregates": (aggregates := self._aggregate(rows, arms)),
             "comparison": self.build_comparison(aggregates),
+            "comparison_matched": self._matched_comparison(rows, self._aggregate),
         }
+
+    #: Values that are fixed by construction for an arm, not observed (audit CD-2).
+    #: The comparison still classifies them mechanically; these notes stop a reader
+    #: mistaking a definition for a measurement.
+    STRUCTURAL_VALUES: dict[str, dict[str, str]] = {
+        "model_only": {
+            "claim_support_rate": (
+                "structural: the arm retrieves no evidence, so no claim can verify "
+                "above not_enough_evidence — 0.0 is the only possible value"
+            ),
+            "citation_coverage": (
+                "structural: the arm's prompt forbids citations, so coverage "
+                "cannot exceed 0.0"
+            ),
+            "unsupported_claim_rate": (
+                "structural: claims citing nothing cannot be contradicted by their "
+                "citations — 0.0 here is not a quality signal"
+            ),
+        }
+    }
 
     #: Which direction is better, per compared metric. Needed to classify a
     #: difference as improvement or regression mechanically, from the numbers alone.
@@ -431,9 +452,43 @@ class ExperimentRunner:
                     "absolute_difference": absolute,
                     "relative_difference": relative,
                     "direction": direction,
+                    "baseline_note": cls.STRUCTURAL_VALUES.get(baseline_arm, {}).get(metric),
                 }
             )
         return comparison
+
+    @classmethod
+    def _matched_comparison(
+        cls,
+        rows: list[dict],
+        aggregate,
+        baseline_arm: str = "model_only",
+        system_arm: str = "full_autoresearch_verified",
+    ) -> dict | None:
+        """The baseline-vs-AutoResearch comparison over only the items BOTH arms
+        completed (audit CD-1). None when the subsets are already identical —
+        the headline table then needs no companion."""
+        completed = {
+            arm: {row["question_id"] for row in rows if row["arm"] == arm and row["error"] is None}
+            for arm in (baseline_arm, system_arm)
+        }
+        matched = completed[baseline_arm] & completed[system_arm]
+        union = completed[baseline_arm] | completed[system_arm]
+        if matched == completed[baseline_arm] == completed[system_arm]:
+            return None
+        subset = [
+            row
+            for row in rows
+            if row["question_id"] in matched and row["arm"] in (baseline_arm, system_arm)
+        ]
+        return {
+            "matched_items": sorted(matched),
+            "baseline_missing": sorted(union - completed[baseline_arm]),
+            "autoresearch_missing": sorted(union - completed[system_arm]),
+            "comparison": cls.build_comparison(
+                aggregate(subset, (baseline_arm, system_arm)), baseline_arm, system_arm
+            ),
+        }
 
     @staticmethod
     def _aggregate(rows: list[dict], arms) -> dict:
@@ -541,6 +596,28 @@ def write_results_csv(payload: dict, path: Path) -> None:
             writer.writerow(flat)
 
 
+def _comparison_table_rows(comparison: list[dict]) -> list[str]:
+    rows = []
+    for entry in comparison:
+        marker = "†" if entry.get("baseline_note") else ""
+        rows.append(
+            "| {metric} | {better} | {baseline}{marker} | {autoresearch} | {absolute} "
+            "| {relative} | {direction} |".format(
+                metric=entry["metric"],
+                better="higher" if entry["higher_is_better"] else "lower",
+                baseline="—" if entry["baseline"] is None else entry["baseline"],
+                marker=marker,
+                autoresearch="—" if entry["autoresearch"] is None else entry["autoresearch"],
+                absolute="—" if entry["absolute_difference"] is None
+                else entry["absolute_difference"],
+                relative="—" if entry["relative_difference"] is None
+                else entry["relative_difference"],
+                direction=entry["direction"] or "—",
+            )
+        )
+    return rows
+
+
 def write_summary_markdown(payload: dict, path: Path) -> None:
     experiment = payload["experiment"]
     aggregates = payload["aggregates"]
@@ -623,21 +700,34 @@ def write_summary_markdown(payload: dict, path: Path) -> None:
             "| Metric | better is | baseline | AutoResearch | abs. diff | rel. diff | direction |",
             "|---|---|---|---|---|---|---|",
         ]
-        for entry in comparison:
-            lines.append(
-                "| {metric} | {better} | {baseline} | {autoresearch} | {absolute} "
-                "| {relative} | {direction} |".format(
-                    metric=entry["metric"],
-                    better="higher" if entry["higher_is_better"] else "lower",
-                    baseline="—" if entry["baseline"] is None else entry["baseline"],
-                    autoresearch="—" if entry["autoresearch"] is None else entry["autoresearch"],
-                    absolute="—" if entry["absolute_difference"] is None
-                    else entry["absolute_difference"],
-                    relative="—" if entry["relative_difference"] is None
-                    else entry["relative_difference"],
-                    direction=entry["direction"] or "—",
-                )
-            )
+        lines += _comparison_table_rows(comparison)
+        footnotes = [entry for entry in comparison if entry.get("baseline_note")]
+        if footnotes:
+            lines += [
+                "",
+                "Structural baseline values — definitions, not measurements "
+                "(audit CD-2):",
+                "",
+            ]
+            for entry in footnotes:
+                lines.append(f"- † `{entry['metric']}`: {entry['baseline_note']}.")
+
+        matched = payload.get("comparison_matched")
+        if matched:
+            lines += [
+                "",
+                "### Matched-items comparison",
+                "",
+                "The arms above completed different item subsets (audit CD-1) — "
+                f"baseline missing: {', '.join(matched['baseline_missing']) or 'none'}; "
+                f"AutoResearch missing: {', '.join(matched['autoresearch_missing']) or 'none'}. "
+                f"Over the {len(matched['matched_items'])} items BOTH completed:",
+                "",
+                "| Metric | better is | baseline | AutoResearch | abs. diff "
+                "| rel. diff | direction |",
+                "|---|---|---|---|---|---|---|",
+            ]
+            lines += _comparison_table_rows(matched["comparison"])
 
     lines += [
         "",
