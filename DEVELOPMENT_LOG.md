@@ -5,6 +5,53 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 22 — The final analysis: metrics-v2 over the frozen test runs — 2026-10-13
+
+Executed under `docs/FINAL_ANALYSIS_PLAN.md` (LOCKED Revision 3, Option B), after
+two read-only inspections and the approved D1/D2 resume-safety fixes (resume paths
+validated fail-closed before any write; progress provenance — benchmark run, set
+fingerprint, per-row research_id — verified before reuse; four regression tests).
+Launch sequence: source directory verified **byte-identical to the committed git
+blobs**, database checked, then the one approved command. The stage-17 product runs
+remain the frozen set's only exposure: no new runs, zero database writes, source
+re-verified unchanged afterwards.
+
+Outputs: `data/benchmarks/results/test/20261013T154641Z-v2eval/` (raw_results.json
+with all 375 per-claim verdicts and pool hashes, raw_results.csv,
+evaluation_report.md, FINAL_ANALYSIS.md, progress.jsonl, MANIFEST.sha256); 8 new
+`tst-*` pools cached and pinned (`MANIFEST.test.sha256`).
+
+### The pre-registered primary result
+
+**External support, A vs D, one shared matched denominator (n = 6):
+baseline 0.4554 vs AutoResearch 0.6675 macro — difference +0.2121, with D ≥ A on
+all six matched questions** (largest on false_premise, 0.286 → 0.909; two
+near-ties). Micro over the same matched set agrees (0.431 vs 0.677). The two
+stage-17 infrastructure-lost cells are the named exclusions. Direction consistent
+with development (+0.117) and validation (+0.096) — shown as context, not pooled.
+
+Secondary: external contradiction (all-available) — baseline 0.048, D 0.064,
+hybrid 0.100, C 0.100. Judging failures: 0/375. The §3.6 inspection of all 29
+contradicted claims classified them into genuine corrections (including the
+baseline's reef-"declared dead" claim contradicted by *"It's not dead yet,
+folks"*, and grounded arms' wrong meta-claims corrected by specific passages),
+pool-internal cross-fire (the Python-version pool contains three mutually
+contradictory "latest" statements; omega-3 likewise), and a handful of visible
+judge errors (agreeing quotes marked contradicted) consistent with the documented
+9/11 validation.
+
+### The project's bottom line, bounded exactly as pre-registered
+
+Judged arm-blind against identical evaluator-owned pools, the full system's claims
+are substantially more externally supportable than the ungrounded baseline's, with
+a comparable contradiction rate — and, from v1, it is the only configuration whose
+claims arrive with validated citations, at ~19× the baseline's cost. Not a
+ground-truth accuracy claim, not a significance claim at n = 6, C-vs-D still
+uninterpretable, judge limitations carried verbatim. The full statement is in
+FINAL_ANALYSIS.md inside the artifact.
+
+---
+
 ## Stage 20 — Validation gates, judge validation at 9/11, and the conflict root-cause — 2026-10-13
 
 Pre-validation gates, all delivered without tuning anything: the stage-19

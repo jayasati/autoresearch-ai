@@ -38,8 +38,11 @@ Honesty rules, enforced here:
 import argparse
 import asyncio
 import csv
+import hashlib
 import json
 import logging
+import uuid
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean
@@ -414,6 +417,313 @@ class ExperimentRunner:
             research_id, entries=entries, metrics_version=formulas.METRICS_VERSION
         )
 
+    # --- re-evaluation (final analysis plan §6, Option B) ----------------------------
+
+    #: v1 fields copied verbatim from the source rows — never recomputed.
+    V1_IMPORT_FIELDS = (
+        "total_claims", "verdicts", "claim_support_rate", "citation_precision",
+        "citation_coverage", "unsupported_claim_rate", "citations_by_status",
+        "conflicts_detected", "downgraded_verdicts", "product_latency_seconds",
+        "product_total_tokens", "product_cost_usd",
+    )
+
+    async def run_reevaluation(
+        self,
+        benchmark_run_id: str,
+        source_dir: str,
+        set_name: str = "test",
+        resume_dir: str | None = None,
+    ) -> dict:
+        """metrics-v2 over an EXISTING benchmark run's stored claims. No new product
+        runs, no run-owned database writes: the source runs stay the only exposure.
+
+        The source directory's files are hashed before and after (§6b); v1 values
+        are imported verbatim from its rows (§6c); per-cell progress is written
+        incrementally so a partial failure is visible and a re-run with
+        `resume_dir` reuses already-judged cells instead of re-spending them (§6d).
+        """
+        source = Path(source_dir)
+        raw_path = next(
+            path for name in ("raw_results.json", "results.json")
+            if (path := source / name).exists()
+        )
+        source_files = sorted(p for p in source.iterdir() if p.is_file())
+        hashes_before = {p.name: _sha256_file(p) for p in source_files}
+
+        source_payload = json.loads(raw_path.read_text(encoding="utf-8"))
+        source_experiment = source_payload["experiment"]
+        if source_experiment["benchmark_run_id"] != str(benchmark_run_id):
+            raise ValueError(
+                f"source directory holds benchmark run "
+                f"{source_experiment['benchmark_run_id']}, not {benchmark_run_id}"
+            )
+        benchmark_set = load_set(set_name, self.settings)
+        if source_experiment["set_fingerprint"] != benchmark_set.fingerprint:
+            raise ValueError("source results were produced from a different set version")
+        items_by_id = {item.question_id: item for item in benchmark_set.items}
+
+        started_at = datetime.now(UTC)
+        if resume_dir is not None:
+            # D1: fail closed BEFORE any write. A resume target must be a prior
+            # re-evaluation directory — never the source artifacts, never an
+            # arbitrary existing directory whose files a resume would overwrite.
+            output_dir = Path(resume_dir).resolve()
+            source_resolved = source.resolve()
+            if (
+                output_dir == source_resolved
+                or source_resolved in output_dir.parents
+                or output_dir in source_resolved.parents
+            ):
+                raise ValueError(
+                    "resume_dir must not be, contain, or live inside the source "
+                    "directory; the source artifacts are read-only inputs"
+                )
+            if not (output_dir / "progress.jsonl").exists():
+                raise ValueError(
+                    f"resume_dir {output_dir} holds no progress.jsonl; refusing to "
+                    "write into an existing directory that is not a prior "
+                    "re-evaluation — omit --resume-dir to start fresh"
+                )
+        else:
+            output_dir = self.output_root / set_name / f"{started_at:%Y%m%dT%H%M%SZ}-v2eval"
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+        progress_path = output_dir / "progress.jsonl"
+        progress = _load_progress(
+            progress_path,
+            benchmark_run_id=str(benchmark_run_id),
+            set_fingerprint=benchmark_set.fingerprint,
+        )
+        if not progress_path.exists():
+            _write_progress_header(
+                progress_path,
+                benchmark_run_id=str(benchmark_run_id),
+                set_fingerprint=benchmark_set.fingerprint,
+            )
+
+        rows: list[dict] = []
+        for src_row in source_payload["rows"]:
+            key = f"{src_row['question_id']}|{src_row['arm']}"
+            if key in progress:
+                cached = progress[key]
+                # D2: reuse only provenance-matched work. The header already ties
+                # the file to this benchmark run; the row must also name the same
+                # research run as the current source record.
+                if cached.get("research_id") != src_row.get("research_id"):
+                    raise ValueError(
+                        f"progress for {key} was judged for research run "
+                        f"{cached.get('research_id')}, but the source names "
+                        f"{src_row.get('research_id')}; refusing to reuse "
+                        "incompatible progress"
+                    )
+                rows.append(cached)  # §6d: already judged, provenance verified
+                continue
+            row = await self._reevaluate_cell(src_row, items_by_id)
+            rows.append(row)
+            _append_progress(progress_path, key, row)
+
+        hashes_after = {p.name: _sha256_file(p) for p in source_files}
+        payload = {
+            "reevaluation": {
+                "benchmark_run_id": str(benchmark_run_id),
+                "source_dir": str(source),
+                "source_file_sha256": hashes_before,
+                "source_files_unchanged": hashes_before == hashes_after,
+                "set": benchmark_set.name,
+                "set_version": benchmark_set.version,
+                "set_fingerprint": benchmark_set.fingerprint,
+                "started_at": started_at.isoformat(),
+                "constants": {
+                    "metrics_v2_version": formulas.METRICS_V2_VERSION,
+                    "external_judge": EXTERNAL_JUDGE_VERSION,
+                    "pool_version": POOL_VERSION,
+                    "v1_source": "imported verbatim from source rows; not recomputed",
+                },
+            },
+            "rows": rows,
+            "aggregates_v2": self._aggregate_external(rows),
+            "primary_matched": self.matched_primary(rows),
+        }
+        write_results_json(payload, output_dir / "raw_results.json")
+        _write_reeval_csv(payload, output_dir / "raw_results.csv")
+        _write_reeval_report(payload, output_dir / "evaluation_report.md")
+        logger.info("Re-evaluation complete; outputs in %s", output_dir)
+        payload["output_dir"] = str(output_dir)
+        return payload
+
+    async def _reevaluate_cell(self, src_row: dict, items_by_id: dict) -> dict:
+        row: dict[str, Any] = {
+            "question_id": src_row["question_id"],
+            "category": src_row.get("category"),
+            "arm": src_row["arm"],
+            "research_id": src_row.get("research_id"),
+            "v1": {field: src_row.get(field) for field in self.V1_IMPORT_FIELDS},
+            "status": "judged",
+            "external_support_rate": None,
+            "external_contradiction_rate": None,
+            "external_judged": None,
+            "external_judging_failures": None,
+            "external_pool_hash": None,
+        }
+        if src_row.get("error"):
+            row["status"] = "missing_product_cell"
+            row["source_error"] = src_row["error"]
+            return row
+        item = items_by_id[src_row["question_id"]]
+        try:
+            try:
+                pool, store = await load_or_build_pool(
+                    item.question_id,
+                    item.question,
+                    settings=self.settings,
+                    store_factory=self._pool_store_factory,
+                    web_search=self._pool_web_search,
+                    academic_search=self._pool_academic_search,
+                )
+            except PoolUnavailable as exc:
+                row["status"] = "pool_unavailable"
+                row["reason"] = exc.reason
+                return row
+
+            summary = self.research.verification_summary(
+                uuid.UUID(src_row["research_id"])
+            )
+            claims = [
+                {"claim_id": claim["claim_id"], "text": claim["text"]}
+                for claim in summary["claims"]
+            ]
+            if not claims:
+                row["status"] = "no_claims"
+                return row
+
+            llm = self._judge_llm or LLMService(settings=self.settings)
+            try:
+                outcome = await judge_claims_against_pool(llm, store, claims)
+            finally:
+                if self._judge_llm is None:
+                    await llm.aclose()
+            row.update(
+                external={"status": "judged", "pool_version": pool.pool_version,
+                          "pool_hash": pool.content_hash, **outcome},
+                external_pool_hash=pool.content_hash,
+                external_support_rate=formulas.external_support_rate(outcome["verdicts"]),
+                external_contradiction_rate=formulas.external_contradiction_rate(
+                    outcome["verdicts"]
+                ),
+                external_judged=outcome["judged"],
+                external_judging_failures=outcome["judging_failures"],
+            )
+        except Exception as exc:  # noqa: BLE001 - §6d: visible, recoverable
+            row["status"] = "judging_error"
+            row["reason"] = f"{type(exc).__name__}: {str(exc)[:300]}"
+            logger.exception(
+                "Re-evaluation cell %s × %s failed; recorded", row["question_id"], row["arm"]
+            )
+        return row
+
+    @staticmethod
+    def _aggregate_external(rows: list[dict]) -> dict:
+        """All-available v2 aggregates per arm: macro AND micro, with n."""
+        aggregates: dict[str, dict] = {}
+        for arm in sorted({row["arm"] for row in rows}):
+            arm_rows = [
+                row for row in rows
+                if row["arm"] == arm and row.get("external_support_rate") is not None
+            ]
+            support = [row["external_support_rate"] for row in arm_rows]
+            contradiction = [row["external_contradiction_rate"] for row in arm_rows]
+            pooled: Counter = Counter()
+            for row in arm_rows:
+                pooled.update(row["external"]["verdicts"])
+            aggregates[arm] = {
+                "eligible_questions": len(arm_rows),
+                "items": sorted(row["question_id"] for row in arm_rows),
+                "external_support_rate_macro": (
+                    round(mean(support), 4) if support else None
+                ),
+                "external_contradiction_rate_macro": (
+                    round(mean(contradiction), 4) if contradiction else None
+                ),
+                "external_support_rate_micro": formulas.external_support_rate(dict(pooled)),
+                "external_contradiction_rate_micro": formulas.external_contradiction_rate(
+                    dict(pooled)
+                ),
+                "statuses": dict(Counter(row["status"] for row in rows if row["arm"] == arm)),
+            }
+        return aggregates
+
+    @staticmethod
+    def matched_primary(
+        rows: list[dict],
+        baseline_arm: str = "model_only",
+        system_arm: str = "full_autoresearch_verified",
+    ) -> dict:
+        """§3.1: one matched denominator for both arms — a question qualifies only
+        when BOTH arms have a judged cell with at least one judged claim. Every
+        exclusion is named with its per-arm reason; macro is primary, micro is the
+        secondary view over the same matched set."""
+        eligible: dict[str, dict[str, dict]] = {baseline_arm: {}, system_arm: {}}
+        exclusions: list[dict] = []
+        for row in rows:
+            arm = row["arm"]
+            if arm not in eligible:
+                continue
+            if row["status"] == "judged" and (row.get("external_judged") or 0) > 0:
+                eligible[arm][row["question_id"]] = row
+            else:
+                reason = {
+                    "missing_product_cell": "missing product cell",
+                    "pool_unavailable": "pool unavailable",
+                    "judging_error": "judging error",
+                    "no_claims": "no extracted claims",
+                }.get(row["status"], "zero judged claims")
+                exclusions.append(
+                    {"question_id": row["question_id"], "arm": arm, "reason": reason}
+                )
+        matched = sorted(set(eligible[baseline_arm]) & set(eligible[system_arm]))
+        for arm in (baseline_arm, system_arm):
+            for question_id in sorted(set(eligible[arm]) - set(matched)):
+                exclusions.append(
+                    {
+                        "question_id": question_id,
+                        "arm": arm,
+                        "reason": "unmatched: the other arm is ineligible here",
+                    }
+                )
+
+        def arm_view(arm: str) -> dict:
+            arm_rows = [eligible[arm][question_id] for question_id in matched]
+            pooled: Counter = Counter()
+            for row in arm_rows:
+                pooled.update(row["external"]["verdicts"])
+            return {
+                "per_question": {
+                    row["question_id"]: row["external_support_rate"] for row in arm_rows
+                },
+                "macro": (
+                    round(mean(row["external_support_rate"] for row in arm_rows), 4)
+                    if arm_rows else None
+                ),
+                "micro": formulas.external_support_rate(dict(pooled)),
+            }
+
+        baseline_view, system_view = arm_view(baseline_arm), arm_view(system_arm)
+        difference = (
+            round(system_view["macro"] - baseline_view["macro"], 4)
+            if baseline_view["macro"] is not None and system_view["macro"] is not None
+            else None
+        )
+        return {
+            "baseline_arm": baseline_arm,
+            "system_arm": system_arm,
+            "matched_questions": matched,
+            "n": len(matched),
+            "exclusions": exclusions,
+            "baseline": baseline_view,
+            "system": system_view,
+            "macro_difference_system_minus_baseline": difference,
+        }
+
     # --- outputs --------------------------------------------------------------------
 
     def _payload(
@@ -653,6 +963,145 @@ def _verdict_counts(audit) -> dict[str, int]:
     }
 
 
+# --- re-evaluation helpers -----------------------------------------------------------
+
+
+def _sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _write_progress_header(path: Path, *, benchmark_run_id: str, set_fingerprint: str) -> None:
+    """First line of every progress file: which re-evaluation this progress
+    belongs to, so a resume can verify provenance before reusing anything (D2)."""
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {"meta": {"benchmark_run_id": benchmark_run_id,
+                          "set_fingerprint": set_fingerprint}}
+            )
+            + "\n"
+        )
+
+
+def _load_progress(path: Path, *, benchmark_run_id: str, set_fingerprint: str) -> dict[str, dict]:
+    """§6d: per-cell results persisted incrementally; a resume reuses them — but
+    only after the header proves the progress belongs to this benchmark run and
+    set version (D2). Incompatible progress is rejected, never silently reused."""
+    progress: dict[str, dict] = {}
+    if not path.exists():
+        return progress
+    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not lines:
+        return progress
+    meta = json.loads(lines[0]).get("meta")
+    if (
+        not meta
+        or meta.get("benchmark_run_id") != benchmark_run_id
+        or meta.get("set_fingerprint") != set_fingerprint
+    ):
+        header_run = meta.get("benchmark_run_id") if meta else "unknown"
+        raise ValueError(
+            "resume_dir progress belongs to a different re-evaluation "
+            f"(its header says benchmark run {header_run}); "
+            "refusing to reuse incompatible progress"
+        )
+    for line in lines[1:]:
+        entry = json.loads(line)
+        # A failed cell is retried on resume; a judged one is reused.
+        if entry["row"].get("status") == "judged":
+            progress[entry["key"]] = entry["row"]
+    return progress
+
+
+def _append_progress(path: Path, key: str, row: dict) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"key": key, "row": row}, default=str) + "\n")
+
+
+REEVAL_CSV_COLUMNS = (
+    "question_id", "category", "arm", "research_id", "status",
+    "external_support_rate", "external_contradiction_rate", "external_judged",
+    "external_judging_failures", "external_pool_hash",
+    "v1_claim_support_rate", "v1_citation_precision", "v1_citation_coverage",
+    "v1_unsupported_claim_rate",
+)
+
+
+def _write_reeval_csv(payload: dict, path: Path) -> None:
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=REEVAL_CSV_COLUMNS, extrasaction="ignore")
+        writer.writeheader()
+        for row in payload["rows"]:
+            flat = dict(row)
+            for field in ("claim_support_rate", "citation_precision",
+                          "citation_coverage", "unsupported_claim_rate"):
+                flat[f"v1_{field}"] = (row.get("v1") or {}).get(field)
+            writer.writerow(flat)
+
+
+def _write_reeval_report(payload: dict, path: Path) -> None:
+    meta = payload["reevaluation"]
+    primary = payload["primary_matched"]
+    lines = [
+        "# Final analysis — metrics-v2 re-evaluation of the frozen test runs",
+        "",
+        f"- Source: `{meta['source_dir']}` (benchmark run `{meta['benchmark_run_id']}`)",
+        f"- Source files unchanged during re-evaluation: **{meta['source_files_unchanged']}**",
+        f"- Set: {meta['set']} v{meta['set_version']} "
+        f"(fingerprint `{meta['set_fingerprint'][:12]}`)",
+        "- Constants: " + ", ".join(f"{k}={v}" for k, v in meta["constants"].items()),
+        "",
+        "## Primary analysis (§3.1): external support, matched questions, one shared denominator",
+        "",
+        f"- Matched questions (n={primary['n']}): "
+        f"{', '.join(primary['matched_questions']) or 'none'}",
+    ]
+    for exclusion in primary["exclusions"]:
+        lines.append(
+            f"- Excluded: {exclusion['question_id']} × {exclusion['arm']} — "
+            f"{exclusion['reason']}"
+        )
+    lines += [
+        "",
+        "| Question | baseline | system |",
+        "|---|---|---|",
+    ]
+    for question_id in primary["matched_questions"]:
+        lines.append(
+            f"| {question_id} | {primary['baseline']['per_question'].get(question_id)} "
+            f"| {primary['system']['per_question'].get(question_id)} |"
+        )
+    lines += [
+        f"| **macro (primary)** | {primary['baseline']['macro']} | {primary['system']['macro']} |",
+        f"| micro (secondary) | {primary['baseline']['micro']} | {primary['system']['micro']} |",
+        "",
+        f"Macro difference (system − baseline): "
+        f"**{primary['macro_difference_system_minus_baseline']}** over n={primary['n']}.",
+        "",
+        "## All-available v2 aggregates (secondary view; per-arm item subsets named)",
+        "",
+        "| Arm | n | support macro | support micro | contradiction macro | contradiction micro |",
+        "|---|---|---|---|---|---|",
+    ]
+    for arm, aggregate in payload["aggregates_v2"].items():
+        lines.append(
+            f"| {arm} | {aggregate['eligible_questions']} "
+            f"| {aggregate['external_support_rate_macro']} "
+            f"| {aggregate['external_support_rate_micro']} "
+            f"| {aggregate['external_contradiction_rate_macro']} "
+            f"| {aggregate['external_contradiction_rate_micro']} |"
+        )
+    lines += [
+        "",
+        "v1 values in the rows are imported verbatim from the source files and were "
+        "not recomputed. Terminology per METRICS.md: external supportability is not "
+        "ground-truth factual accuracy; contradiction-vs-pool is not all "
+        "hallucinations.",
+        "",
+    ]
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 # --- writers (pure functions over the payload; nothing is recomputed) ----------------
 
 CSV_COLUMNS = (
@@ -836,14 +1285,30 @@ async def _main() -> None:
     parser.add_argument("--arms", default=",".join(ARMS))
     parser.add_argument("--depth", default="quick", choices=tuple(DEPTH_PROFILES))
     parser.add_argument("--limit", type=int, default=None)
-    args = parser.parse_args()
-    if args.set == "test":
-        print("NOTE: the frozen test set runs once per final configuration; see "
-              "data/benchmarks/README.md before proceeding.")
-    runner = ExperimentRunner(depth=args.depth)
-    payload = await runner.run_experiment(
-        set_name=args.set, arms=tuple(args.arms.split(",")), limit=args.limit
+    parser.add_argument(
+        "--reevaluate",
+        default=None,
+        metavar="BENCHMARK_RUN_ID",
+        help="metrics-v2 over an existing benchmark run's stored claims; no new "
+        "product runs (final analysis plan, Option B). Requires --source.",
     )
+    parser.add_argument("--source", default=None, help="results directory of the source run")
+    parser.add_argument("--resume-dir", default=None, help="prior re-evaluation output to resume")
+    args = parser.parse_args()
+    runner = ExperimentRunner(depth=args.depth)
+    if args.reevaluate:
+        if not args.source:
+            parser.error("--reevaluate requires --source <results dir>")
+        payload = await runner.run_reevaluation(
+            args.reevaluate, args.source, set_name=args.set, resume_dir=args.resume_dir
+        )
+    else:
+        if args.set == "test":
+            print("NOTE: the frozen test set runs once per final configuration; see "
+                  "data/benchmarks/README.md before proceeding.")
+        payload = await runner.run_experiment(
+            set_name=args.set, arms=tuple(args.arms.split(",")), limit=args.limit
+        )
     print(f"outputs: {payload['output_dir']}")
 
 

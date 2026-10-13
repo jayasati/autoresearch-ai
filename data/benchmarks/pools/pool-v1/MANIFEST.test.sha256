@@ -1,0 +1,9 @@
+﻿# Immutable artifact manifest - test pools, created 2026-10-13 at the final analysis. Prior manifests untouched.
+b1fcdbf5afd4cb247ad0711c4a53b9d5a7231020a0629b6735cfc70c70ffcf89  tst-citation_verification-01.json
+b46ae3fe65d010311f5ca55ffe53fb3275b7af903a96c5d21c73f6f03a0867db  tst-conflicting_literature-01.json
+d08a1aa1dc72cdfbc08c74d6379d437fd484cd134d568ec8bfbc61944ff17855  tst-current_information-01.json
+0f2335073b2e4b6eb093f26f9020c3b6ce079c5e00c75d3d3fb922265b422b14  tst-false_premise-01.json
+5f4aabe469216f9f49343641e397959f44e23074a0f099eca6573861f51931d6  tst-insufficient_evidence-01.json
+915e4d0a49ebc13e2daf600d834c487dc79210b6e76d437d4b071f48c4ec2129  tst-multi_paper_synthesis-01.json
+6c26c70d397074e10d11187b48d3b940e6d12786350504a216e946a453fb7333  tst-normal_research-01.json
+a488ce62888a3a821d5a5dc7b6689b22cc4fe62f3c1cff3d255f6e4c4562b60d  tst-numerical_claims-01.json

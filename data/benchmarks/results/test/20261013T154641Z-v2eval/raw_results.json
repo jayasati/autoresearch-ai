@@ -1,0 +1,4705 @@
+{
+  "reevaluation": {
+    "benchmark_run_id": "14693741-45ab-4dad-9349-73f761b56754",
+    "source_dir": "..\\data\\benchmarks\\results\\test\\20261013T060512Z",
+    "source_file_sha256": {
+      "evaluation_report.md": "2e0a71fa4368124ac48022cd485cb4f0d173f8f4ecf18171de6ed4e8821335f8",
+      "raw_results.csv": "487cf42d452d104173d92dc1f0efde82430222d343cce7eff54385ea931fc170",
+      "raw_results.json": "080e145885bd6287dbf71699f876f788f3bbb1259a315e4c3ff4222ae3244b1d"
+    },
+    "source_files_unchanged": true,
+    "set": "test",
+    "set_version": "1.0.0",
+    "set_fingerprint": "7f6aff0e241367785fd733d1216496f0a34cb39c0bf69bb9e89186d69a48db22",
+    "started_at": "2026-10-13T15:46:41.973109+00:00",
+    "constants": {
+      "metrics_v2_version": "metrics-v2",
+      "external_judge": "external-verification-v1",
+      "pool_version": "pool-v1",
+      "v1_source": "imported verbatim from source rows; not recomputed"
+    }
+  },
+  "rows": [
+    {
+      "question_id": "tst-normal_research-01",
+      "category": "normal_research",
+      "arm": "model_only",
+      "research_id": "e33850db-ca70-462a-9a1b-e1943a1ee257",
+      "v1": {
+        "total_claims": 19,
+        "verdicts": {
+          "supported": 0,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 19
+        },
+        "claim_support_rate": 0.0,
+        "citation_precision": null,
+        "citation_coverage": 0.0,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {},
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 0,
+        "product_latency_seconds": 11.656,
+        "product_total_tokens": 771,
+        "product_cost_usd": 0.000369
+      },
+      "status": "judged",
+      "external_support_rate": 0.5263,
+      "external_contradiction_rate": 0.0,
+      "external_judged": 19,
+      "external_judging_failures": 0,
+      "external_pool_hash": "508ffa67cdd06c2c1f0c4dc1cb0a7a28df5831882a412c700fb59d0e611ee2ea",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "508ffa67cdd06c2c1f0c4dc1cb0a7a28df5831882a412c700fb59d0e611ee2ea",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "87c782cc-dc95-4b92-a91f-035d7a874ee0",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "MBSR is moderately-to-largely effective at reducing anxiety and depression symptom severity among individuals with a broad range of medical and psychiatric conditions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "47cf6e07-53d2-4297-b812-c2aab83a0390",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Mindfulness-Based Stress Reduction, or MBSR, is a unique program developed to help people better understand and work with all the stresses in their lives \u2014 medical, psychological and social.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "52a72a6d-288b-45c5-beaa-b923b04041ef",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "MBSR has gained popularity and recognition for its effectiveness in various settings, including healthcare, education, politics, sports, and workplace environments.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "292b0a46-94df-4f2f-b6f0-af696b68a384",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c39a4053-8cea-4f2a-92c5-ffe0a410342e",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e0279c26-bd83-42e9-b1a1-76053904a691",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "MBSR was efficacious in reducing both anxiety and stress",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "5b4c0e78-2c58-4fb5-8224-3dbb9ba28d6d",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "MBSR was efficacious in reducing both anxiety and stress",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "29c5f468-2ada-4f21-a2b4-81cfafd42b30",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "a marked improvement in their emotional regulation. Moreover, they also reported increased resilience, which played a crucial role in their ability to deal with stressful situations and bounce back from adversities.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "77333232-b621-4a2d-84f2-6d37924b39e3",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "MBSR is moderately-to-largely effective at reducing anxiety and depression symptom severity among individuals with a broad range of medical and psychiatric conditions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "676732db-53b6-40dc-888b-a7fb8d3d8449",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "141417fe-c043-4a2b-8384-d2d760336059",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e1438bcb-834f-4781-a661-63e9f1059c2f",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4bfbbe53-15f3-4561-8a31-788986aa800f",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "These findings provide insights into the efficacy of the individual elements of mindfulness, highlighting decentering as an effective active component for anxiety relief.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c9d9a35b-945a-46b1-842a-2e7ed951502d",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "966bebd9-710d-476b-a64b-b198906352b8",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "d701dcb8-d92e-4c32-a1c3-5f5fdf36cb73",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "MBSR was efficacious in reducing both anxiety and stress and increasing self-compassion",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "32c4f5f6-3a52-4159-863d-69ab050e6d97",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "42c7591d-9c73-4440-9367-31bcd8bacf5c",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "b50b9727-6255-4439-bc89-82ff75ffb919",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "MBSR is moderately-to-largely effective at reducing anxiety and depression symptom severity among individuals with a broad range of medical and psychiatric conditions.",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 10,
+          "not_enough_evidence": 9
+        },
+        "judged": 19,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-normal_research-01",
+      "category": "normal_research",
+      "arm": "hybrid",
+      "research_id": "d09bc313-4a8a-49eb-81e0-3f142f293e6c",
+      "v1": {
+        "total_claims": 14,
+        "verdicts": {
+          "supported": 6,
+          "partially_supported": 1,
+          "unsupported": 0,
+          "contradicted": 1,
+          "not_enough_evidence": 6
+        },
+        "claim_support_rate": 0.5,
+        "citation_precision": 0.4286,
+        "citation_coverage": 0.5,
+        "unsupported_claim_rate": 0.0714,
+        "citations_by_status": {
+          "valid": 3,
+          "misattributed": 4
+        },
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 3,
+        "product_latency_seconds": 26.542,
+        "product_total_tokens": 1483,
+        "product_cost_usd": 0.000421
+      },
+      "status": "judged",
+      "external_support_rate": 0.2857,
+      "external_contradiction_rate": 0.0714,
+      "external_judged": 14,
+      "external_judging_failures": 0,
+      "external_pool_hash": "508ffa67cdd06c2c1f0c4dc1cb0a7a28df5831882a412c700fb59d0e611ee2ea",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "508ffa67cdd06c2c1f0c4dc1cb0a7a28df5831882a412c700fb59d0e611ee2ea",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "b252b79b-9896-4955-9277-bdd6cd100c15",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "MBSR is moderately-to-largely effective at reducing anxiety and depression symptom severity among individuals with a broad range of medical and psychiatric conditions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "d18ece7e-aa6c-4e37-9fad-7303dd0b3f03",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "MBSR was efficacious in reducing both anxiety and stress",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "140f371a-edc0-4fc5-9dc7-db78ae33d26f",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "68ceae65-606c-4cae-94be-00e447691fda",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "bd0ff0c5-61d7-4010-899c-deaf75c328f6",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4777b50f-f159-408c-b85a-c8f723025682",
+            "verdict": "unsupported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "20f6d098-2622-465a-b52f-09430bedbf40",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7d208741-397c-4acd-be53-14eab970fd21",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2e165739-7ca5-458e-b6d5-4ac066a8c6f1",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "The most comprehensive review to date 6 examined the effects of 209 trials of mindfulness-based interventions among 12,145 patients with a variety of disorders.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "64ccf62a-48ea-4309-b0f3-61437e1e546a",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Studies comparing MBSR to active control conditions have demonstrated that MBIs are superior in reducing anxiety symptoms.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2023064a-32ea-452d-ac46-4022e7ca8f2f",
+            "verdict": "unsupported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Research shows that MBSR significantly reduces symptoms of depression and anxiety",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "b6964a6e-a4b7-4a96-9a00-c68409cb7edc",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "MBSR was efficacious in reducing both anxiety and stress",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "bbfc8af0-73db-4574-ab9a-d4aecda8ef20",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ac1842e5-7d36-4a2a-8ff8-5cc6af74ed75",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 4,
+          "not_enough_evidence": 7,
+          "unsupported": 2,
+          "contradicted": 1
+        },
+        "judged": 14,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-normal_research-01",
+      "category": "normal_research",
+      "arm": "search_grounded",
+      "research_id": "1c439617-7054-4963-a1da-7454a5e101e2",
+      "v1": {
+        "total_claims": 13,
+        "verdicts": {
+          "supported": 9,
+          "partially_supported": 1,
+          "unsupported": 1,
+          "contradicted": 0,
+          "not_enough_evidence": 2
+        },
+        "claim_support_rate": 0.7692,
+        "citation_precision": 0.8,
+        "citation_coverage": 0.3846,
+        "unsupported_claim_rate": 0.0769,
+        "citations_by_status": {
+          "valid": 4,
+          "misattributed": 1
+        },
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 0,
+        "product_latency_seconds": 21.811,
+        "product_total_tokens": 1590,
+        "product_cost_usd": 0.000454
+      },
+      "status": "judged",
+      "external_support_rate": 0.5385,
+      "external_contradiction_rate": 0.2308,
+      "external_judged": 13,
+      "external_judging_failures": 0,
+      "external_pool_hash": "508ffa67cdd06c2c1f0c4dc1cb0a7a28df5831882a412c700fb59d0e611ee2ea",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "508ffa67cdd06c2c1f0c4dc1cb0a7a28df5831882a412c700fb59d0e611ee2ea",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "25583806-24d7-44fd-8063-4e55096ddca5",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Mindfulness-Based Stress Reduction, or MBSR, is a unique program developed to help people better understand and work with all the stresses in their lives \u2014 medical, psychological and social.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "80b45ec0-f99d-440f-a348-b60d57c3c020",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "Studies comparing MBSR to active control conditions have demonstrated that MBIs are superior in reducing anxiety symptoms.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "95893613-e682-4670-aa58-025ed15787cb",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Studies comparing MBSR to active control conditions have demonstrated that MBIs are superior in reducing anxiety symptoms.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1c3fbbe4-f573-45eb-afa2-47f8e851a3f0",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Randomized-controlled trials comparing MBSR to active control conditions indicate that MBSR is moderately-to-largely effective at reducing anxiety and depression symptom severity among individuals with a broad range of medical and psychiatric conditions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7163bb02-d441-4848-80de-e35c890effef",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "individuals in the MBSR group demonstrated significantly more reduction in anxiety symptom severity than the control group, as measured by self-report measures of anxiety as well as anxiety in [...]",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "df19f46d-36e1-4edf-a5e1-66093b0bb7b9",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Studies comparing MBSR to active control conditions have demonstrated that MBIs are superior in reducing anxiety symptoms.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "55700e88-1693-49bb-b94b-2250cc93e6d8",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "mindfulness-based stress reduction (MBSR) is just as effective as escitalopram (the generic name for Lexapro) in treating adults with anxiety",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "cbe76d9c-d8ad-4439-b8f1-158ee19579a0",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "a 1.35 point mean reduction for MBSR and 1.43 point mean reduction for the drug, which was a statistically equivalent outcome",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "24d4d179-8cf4-4338-93be-134ca19efe24",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2dbe9c62-9c96-4881-9559-fcb43105f0ea",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "26f395e8-7888-45d7-9900-d96981d6eba9",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "MBSR is moderately-to-largely effective at reducing anxiety and depression symptom severity among individuals with a broad range of medical and psychiatric conditions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1186f773-2d7f-4062-a7aa-8cc42026369a",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "mindfulness-based stress reduction (MBSR) is just as effective as escitalopram (the generic name for Lexapro) in treating adults with anxiety",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "8ad96342-64ee-4466-b85d-18e55f402a7b",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 7,
+          "contradicted": 3,
+          "not_enough_evidence": 3
+        },
+        "judged": 13,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-normal_research-01",
+      "category": "normal_research",
+      "arm": "full_autoresearch_verified",
+      "research_id": "ad6c31f7-1055-4c4b-9c15-1358d451e899",
+      "v1": {
+        "total_claims": 11,
+        "verdicts": {
+          "supported": 7,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 4
+        },
+        "claim_support_rate": 0.6364,
+        "citation_precision": 0.8333,
+        "citation_coverage": 0.5455,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {
+          "valid": 5,
+          "misattributed": 1
+        },
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 3,
+        "product_latency_seconds": 84.089,
+        "product_total_tokens": 28334,
+        "product_cost_usd": 0.005894
+      },
+      "status": "judged",
+      "external_support_rate": 0.5455,
+      "external_contradiction_rate": 0.0909,
+      "external_judged": 11,
+      "external_judging_failures": 0,
+      "external_pool_hash": "508ffa67cdd06c2c1f0c4dc1cb0a7a28df5831882a412c700fb59d0e611ee2ea",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "508ffa67cdd06c2c1f0c4dc1cb0a7a28df5831882a412c700fb59d0e611ee2ea",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "4916c4d2-d279-4e37-900f-224fe949c520",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "mindfulness practices have been associated with decreased anxiety",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2f38a865-ffc8-4092-8021-9ee5f71f51ae",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "MBSR was efficacious in reducing both anxiety and stress and increasing self-compassion",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "15a6e3ad-eb26-49c3-9954-ef5247d69be1",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "MBSR outperformed an active stress-management education program in a group of individuals with generalized anxiety disorder.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4c098057-e1fa-43ad-9b91-f2658af89955",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "aadf5fff-2983-4438-bc91-89e66c5dddda",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "more reduction in anxiety symptom severity than the control group, as measured by self-report measures of anxiety",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "cf2267d3-b9bd-40cd-a3ef-10389b410de7",
+            "verdict": "unsupported",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1ab1ff35-0b6a-4195-b6af-5bd33896b1b1",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "MBSR was efficacious in reducing both anxiety and stress",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2aa0efba-3398-4d76-b876-57517e4ae358",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "mindfulness-based stress reduction (MBSR) is just as effective as escitalopram (the generic name for Lexapro) in treating adults with anxiety",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "d1f20e46-a453-4db7-abbf-bb078914e283",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.75,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "60466a43-f659-4dac-ac0d-33c21f0b0cc9",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "despite available studies being flawed with methodological limitations, MBSR was efficacious in reducing both anxiety and stress",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c4b84fb3-4d87-472c-b006-cef5706fcf91",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 6,
+          "not_enough_evidence": 3,
+          "contradicted": 1,
+          "unsupported": 1
+        },
+        "judged": 11,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-multi_paper_synthesis-01",
+      "category": "multi_paper_synthesis",
+      "arm": "model_only",
+      "research_id": "3c534cac-1d4f-4dde-9b13-0177063f08c7",
+      "v1": {
+        "total_claims": 14,
+        "verdicts": {
+          "supported": 0,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 14
+        },
+        "claim_support_rate": 0.0,
+        "citation_precision": null,
+        "citation_coverage": 0.0,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {},
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 0,
+        "product_latency_seconds": 10.324,
+        "product_total_tokens": 641,
+        "product_cost_usd": 0.000291
+      },
+      "status": "judged",
+      "external_support_rate": 0.4286,
+      "external_contradiction_rate": 0.1429,
+      "external_judged": 14,
+      "external_judging_failures": 0,
+      "external_pool_hash": "0be5a97171e33147ae45ee4c08d687694b619220d0d1671390ad0a4b45e8eea6",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "0be5a97171e33147ae45ee4c08d687694b619220d0d1671390ad0a4b45e8eea6",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "3b17d881-16e7-4dab-b7f0-a3b11e1e5682",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Both short and long duration of sleep are significant predictors of death in prospective population studies.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4bfe3d9d-a2a0-47f2-86ed-c84b36fe082d",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Both short and long sleep durations are associated with an increased risk of cardiovascular events (CVEs) and all-cause mortality, as well as",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "06066c5f-e453-4f0f-a0ed-38f4ec1033b1",
+            "verdict": "contradicted",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": "sleep < 5 h and more than 9 h per day were associated with significant elevated risks of all\u2013cause mortality",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7f5a7e9c-cbe3-4ff6-841f-32c944fec2f8",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Both short and long sleep durations are associated with an increased risk of cardiovascular events (CVEs) and all-cause mortality, as well as",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "5ff4b578-790d-4347-888e-5ddc405d0a11",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Participants who progressed from short or normal sleep duration to long sleep duration had increased risk for all-cause mortality with adjusted hazard ratios of",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7bbe2157-996a-497d-acb1-d72169a18c39",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "6302c8cc-02ab-4c53-b773-1b7769f97fee",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Participants who progressed from short or normal sleep duration to long sleep duration had increased risk for all-cause mortality",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "84c861d2-60ad-4202-9d53-6ab954040208",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "f8f7382c-3fa0-473e-8a62-03f23577aa82",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7ad1d7b6-764a-44bd-a18d-5adeb32ec98f",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "43db6cfd-8d4d-4fd1-b0aa-3676f622d272",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "it is crucial to emphasize the regular basis of sleep (seven or more hours) for adults in modern societies",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ff2025d0-12b6-41eb-ada6-30012d38c9a9",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Both short and long sleep durations are associated with an increased risk of cardiovascular events (CVEs) and all-cause mortality, as well as",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ca4984e7-1ce8-4b04-a0fe-5290028a0cea",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "3ef8dc75-be52-4b9c-9f7a-fb9d9e460b80",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 6,
+          "contradicted": 2,
+          "not_enough_evidence": 6
+        },
+        "judged": 14,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-multi_paper_synthesis-01",
+      "category": "multi_paper_synthesis",
+      "arm": "hybrid",
+      "research_id": "c4eb7340-2ecb-49ce-9f2d-a50100a74e98",
+      "v1": {
+        "total_claims": 12,
+        "verdicts": {
+          "supported": 6,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 2,
+          "not_enough_evidence": 4
+        },
+        "claim_support_rate": 0.5,
+        "citation_precision": 0.3846,
+        "citation_coverage": 0.9167,
+        "unsupported_claim_rate": 0.1667,
+        "citations_by_status": {
+          "misattributed": 8,
+          "valid": 5
+        },
+        "conflicts_detected": 2,
+        "downgraded_verdicts": 3,
+        "product_latency_seconds": 21.226,
+        "product_total_tokens": 1426,
+        "product_cost_usd": 0.000396
+      },
+      "status": "judged",
+      "external_support_rate": 0.5,
+      "external_contradiction_rate": 0.1667,
+      "external_judged": 12,
+      "external_judging_failures": 0,
+      "external_pool_hash": "0be5a97171e33147ae45ee4c08d687694b619220d0d1671390ad0a4b45e8eea6",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "0be5a97171e33147ae45ee4c08d687694b619220d0d1671390ad0a4b45e8eea6",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "04664941-08f7-4a0c-b7b3-09f69a1a0621",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": "sleep < 5 h and more than 9 h per day were associated with significant elevated risks of all\u2013cause mortality",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "6f31f9e4-0210-47d4-a8b4-255f5cea7a8e",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "Both short and long sleep durations are associated with an increased risk of cardiovascular events (CVEs) and all-cause mortality, as well as",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "85fca0fc-aee2-41ff-86ca-93405c0a8079",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Men and women showed an association between sleep duration and all-cause mortality that was J-shaped.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1da35d81-c4fd-40a3-b3cd-48db06e353c6",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "while women only had increased risk when getting >7 hours of sleep.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "57b112f6-581b-4db2-af76-59ceb724cdf0",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Both short and long duration of sleep are significant predictors of death in prospective population studies.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2f2eda9b-edc9-4bb3-8a90-615337cee310",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e1281a81-dc3e-4d2a-9f6f-7cfdfef81c92",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "b90a323f-e1ce-4ae8-a65c-446f7d40cc67",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "men had increased risk at <6-hour or >6-hour duration",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ce91ead3-1859-4f8f-aa52-386de96d0d74",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "after adjustment for age and sex, sleep < 5 h and more than 9 h per day were associated with significant elevated risks of all\u2013cause mortality",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "778eb6d7-f177-478d-aa04-5e53c3d25d7f",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Both short and long duration of sleep are significant predictors of death in prospective population studies.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "bb0e6a88-2bd6-43b5-bffe-ea32ef3c1f45",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "06db6fe4-8e6f-48b0-9eda-6155f0bc5e62",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "age is a modifier of the association between sleep duration in men.",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "not_enough_evidence": 4,
+          "supported": 6,
+          "contradicted": 2
+        },
+        "judged": 12,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-multi_paper_synthesis-01",
+      "category": "multi_paper_synthesis",
+      "arm": "search_grounded",
+      "research_id": "e2f4ff63-f243-4f62-934d-53abf8144e88",
+      "v1": {
+        "total_claims": 7,
+        "verdicts": {
+          "supported": 5,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 2
+        },
+        "claim_support_rate": 0.7143,
+        "citation_precision": 0.6667,
+        "citation_coverage": 0.8571,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {
+          "valid": 4,
+          "misattributed": 2
+        },
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 1,
+        "product_latency_seconds": 22.211,
+        "product_total_tokens": 1467,
+        "product_cost_usd": 0.000406
+      },
+      "status": "judged",
+      "external_support_rate": 0.7143,
+      "external_contradiction_rate": 0.0,
+      "external_judged": 7,
+      "external_judging_failures": 0,
+      "external_pool_hash": "0be5a97171e33147ae45ee4c08d687694b619220d0d1671390ad0a4b45e8eea6",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "0be5a97171e33147ae45ee4c08d687694b619220d0d1671390ad0a4b45e8eea6",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "117b3859-04c2-4670-b076-03baaaa9f88c",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Increasing evidence suggests an association between both short and long duration of habitual sleep with adverse health outcomes.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "8d6b7e20-8da4-4b12-98c3-007193c122d9",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "sleep < 5 h and more than 9 h per day were associated with significant elevated risks of all\u2013cause mortality, and the HRs across categories were 1.79 (95% CI, 1.47\u20132.18)",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "9bcfbb5f-ee55-4043-99f0-8400ef72e2b4",
+            "verdict": "unsupported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a778ab6c-2c09-4aba-bf36-20c6cd1a5cbf",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the greatest association for all-cause mortality was with self-reported sleep durations lasting \u226510 hours in both men (hazard ratio [HR], 1.34; 95% CI, 1.26-1.44) and women (HR, 1.48; 95% CI, 1.36-1.61)",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "f452880d-f463-4d0e-b27c-ea99ecbae0c1",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Men and women showed an association between sleep duration and all-cause mortality that was J-shaped.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "f5259ba5-ad41-491e-bb25-01eee79ec653",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Both short and long duration of sleep are significant predictors of death in prospective population studies.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "cc428ee1-c85e-48b3-a62a-9a6bec42dcdc",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 5,
+          "unsupported": 1,
+          "not_enough_evidence": 1
+        },
+        "judged": 7,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-multi_paper_synthesis-01",
+      "category": "multi_paper_synthesis",
+      "arm": "full_autoresearch_verified",
+      "research_id": "68407b51-4bd9-4488-9d7f-501a4a42ea26",
+      "v1": {
+        "total_claims": 15,
+        "verdicts": {
+          "supported": 10,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 3,
+          "not_enough_evidence": 2
+        },
+        "claim_support_rate": 0.6667,
+        "citation_precision": 0.7778,
+        "citation_coverage": 0.6,
+        "unsupported_claim_rate": 0.2,
+        "citations_by_status": {
+          "valid": 7,
+          "misattributed": 2
+        },
+        "conflicts_detected": 2,
+        "downgraded_verdicts": 2,
+        "product_latency_seconds": 98.021,
+        "product_total_tokens": 36033,
+        "product_cost_usd": 0.007335
+      },
+      "status": "judged",
+      "external_support_rate": 0.7333,
+      "external_contradiction_rate": 0.0,
+      "external_judged": 15,
+      "external_judging_failures": 0,
+      "external_pool_hash": "0be5a97171e33147ae45ee4c08d687694b619220d0d1671390ad0a4b45e8eea6",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "0be5a97171e33147ae45ee4c08d687694b619220d0d1671390ad0a4b45e8eea6",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "ca2c1f67-be8f-4e1b-8a31-cc8adf04506e",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Both short and long sleep durations are associated with an increased risk of cardiovascular events (CVEs) and all-cause mortality, as well as",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "66d3e4ff-db0a-46e8-b371-62ba78f5cfa5",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Participants who progressed from short or normal sleep duration to long sleep duration had increased risk for all-cause mortality with adjusted hazard ratios of",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a220ac46-e8d7-46cf-aa17-278a3fc8fc16",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "8295ce7c-07bc-4336-aacd-aed13709be0b",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "sleep < 5 h and more than 9 h per day were associated with significant elevated risks of all\u2013cause mortality",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ec4619df-6fab-47bb-bf97-8027ce041ce5",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "a significant U\u2013shaped relationship of sleep duration with all\u2013cause mortality was still observed",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "95909828-0160-46c2-9a55-13affb17d782",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Participants who progressed from short or normal sleep duration to long sleep duration had increased risk for all-cause mortality with adjusted hazard ratios of",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "12d233ec-78e5-47f9-9663-be614b13259c",
+            "verdict": "supported",
+            "confidence": 1.0,
+            "downgraded": false,
+            "quote": "the greatest association for all-cause mortality was with self-reported sleep durations lasting \u226510 hours in both men (hazard ratio [HR], 1.34; 95% CI, 1.26-1.44) and women (HR, 1.48; 95% CI, 1.36-1.61).",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1e1a2569-cea4-4a2f-95a3-4bb94db9f5e2",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "d21f1cfb-ea4b-4776-982a-4abad91d3777",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Both short and long sleep durations are associated with an increased risk of cardiovascular events (CVEs) and all-cause mortality, as well as",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "02714b4d-978f-46b2-aeb9-8639863285d0",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "A previous meta\u2013analysis suggested that both short and long sleep durations were associated with an increased risk of all\u2013cause mortality and cardiovascular events (5), however, others did not find consistent results (6, 7).",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "06195bf8-15c4-4ff7-870c-082c4194f621",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the potential harmful effect of long sleep duration still need to be paid attention to.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "24d176f5-ad7b-4e20-a2f0-78c65014ca88",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "b2e7fbaf-4e36-4902-a37b-46eb64650068",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Participants who progressed from short or normal sleep duration to long sleep duration had increased risk for all-cause mortality with adjusted hazard ratios of",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "8db01f5a-eb70-4a1a-9ef9-3035af380757",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "others did not find consistent results",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "327c3a41-21f4-4006-9a72-18a9318107d7",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 11,
+          "not_enough_evidence": 4
+        },
+        "judged": 15,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-conflicting_literature-01",
+      "category": "conflicting_literature",
+      "arm": "model_only",
+      "research_id": "3b066a2b-9d94-4cd2-b8f5-52adc70b0de3",
+      "v1": {
+        "total_claims": 14,
+        "verdicts": {
+          "supported": 0,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 14
+        },
+        "claim_support_rate": 0.0,
+        "citation_precision": null,
+        "citation_coverage": 0.0,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {},
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 0,
+        "product_latency_seconds": 8.538,
+        "product_total_tokens": 727,
+        "product_cost_usd": 0.000343
+      },
+      "status": "judged",
+      "external_support_rate": 0.6429,
+      "external_contradiction_rate": 0.0714,
+      "external_judged": 14,
+      "external_judging_failures": 0,
+      "external_pool_hash": "27a10768d5227ce040310877292885fa64f6b91385cdc2c0a3b3799f18da888b",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "27a10768d5227ce040310877292885fa64f6b91385cdc2c0a3b3799f18da888b",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "71212b6b-44f7-4dba-9bbd-7a44143c6483",
+            "verdict": "partially_supported",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": "food high in omega-3s can help lower your risk of heart and circulatory disease.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c27245dc-84d7-43fc-9ac1-0d0b794b9e77",
+            "verdict": "partially_supported",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": "Research shows that people who eat more fish have lower rates of heart attack and stroke.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "755880d5-1964-4f19-8ba3-b075768a6a58",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "0b0c48ab-75ae-4926-9f0e-829d398849c9",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": "you\u2019ve heard they\u2019re a rich source of omega-3s, which have been linked to a lower risk of coronary heart disease when eaten as part of a healthy diet.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "fb8310a6-f88b-4e71-8405-5cf04d4ba194",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "In recent years, the publication of several large randomized controlled trials has pointed out the direction for us to use fish oil supplements.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "cbbe5668-3a0b-40e3-a7cd-995bdd93268c",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the jury is still out on the benefits of taking supplements, like fish oil, that contain omega-3s.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "cfda5fce-a590-4e99-8336-3030e93b25b1",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Findings of the effects of omega 3 fatty acids or fish oil on the risk of cardiovascular disease are controversial",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "3dd6123e-3e9c-45db-abaf-47e82064a199",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c0b392b3-681c-4641-a603-6f3c79a4f6a9",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Findings of the effects of omega 3 fatty acids or fish oil on the risk of cardiovascular disease are controversial",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a8f055fe-eccb-4fa5-8bbc-5a38dd0fb195",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Your best bet is to eat fatty fish, like salmon. [...] It\u2019s true that regularly eating fish and seafood is consistently associated with a lower risk for cardiovascular disease.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7a6a9f31-8edf-4a8d-b198-62fddbd0ea16",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Because of this, people should talk with their doctor before beginning any high-dose fish oil supplementation regimen and consider the potential [...]",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "b2a8d4c7-c4e9-49b1-9ad2-677511e68338",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the jury is still out on the benefits of taking supplements, like fish oil, that contain omega-3s.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "6c92fad3-a200-44af-a104-979a1060d4d4",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "this study shows the jury is still out on the benefits of taking supplements, like fish oil, that contain omega-3s.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "6df0d4b9-0aec-463d-b904-6f37e3c45ea5",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "partially_supported": 2,
+          "not_enough_evidence": 4,
+          "supported": 7,
+          "contradicted": 1
+        },
+        "judged": 14,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-conflicting_literature-01",
+      "category": "conflicting_literature",
+      "arm": "hybrid",
+      "research_id": "e582636b-4c3f-4a3c-af2b-9e263213e958",
+      "v1": {
+        "total_claims": 6,
+        "verdicts": {
+          "supported": 4,
+          "partially_supported": 1,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 1
+        },
+        "claim_support_rate": 0.8333,
+        "citation_precision": 0.6,
+        "citation_coverage": 0.8333,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {
+          "valid": 3,
+          "misattributed": 2
+        },
+        "conflicts_detected": 1,
+        "downgraded_verdicts": 1,
+        "product_latency_seconds": 20.376,
+        "product_total_tokens": 1406,
+        "product_cost_usd": 0.000421
+      },
+      "status": "judged",
+      "external_support_rate": 0.8333,
+      "external_contradiction_rate": 0.1667,
+      "external_judged": 6,
+      "external_judging_failures": 0,
+      "external_pool_hash": "27a10768d5227ce040310877292885fa64f6b91385cdc2c0a3b3799f18da888b",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "27a10768d5227ce040310877292885fa64f6b91385cdc2c0a3b3799f18da888b",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "f94c193d-2e98-4d22-95fd-8b85088b9bd0",
+            "verdict": "supported",
+            "confidence": 1.0,
+            "downgraded": false,
+            "quote": "taking 1 gram of omega-3 supplements daily did not significantly lower the overall risk of major cardiovascular disease (CVD) events",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "87bacdbe-1cee-4e2b-92c3-de2204a54fc9",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Fish oil supplements can significantly reduce the risk of myocardial infarction in users (RR 0.85, 95%CI 0.72- 0.99; P = 0.04)",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2ccd8742-b2ff-4f28-a805-546d07934a54",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "as shown most recently in the STRENGTH and OMEMI trials.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "aa889c36-0e65-4e12-a6c3-aadb98097555",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Some studies suggest that there are potential risks associated with fish oil supplements. Those risks include heavy metal contamination, such as from mercury; or oxidation of the oil found in fish oil capsules, which can increase the risk of clogged arteries.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1e9ab6ce-0987-46cb-960a-ee90234261c8",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "The American Heart Association recommends eating two servings of fish each week to reduce your risk of heart attack and stroke.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "b5468f68-c072-44b6-a482-18f9f65bb7ba",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "this study shows the jury is still out on the benefits of taking supplements, like fish oil, that contain omega-3s.",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 5,
+          "contradicted": 1
+        },
+        "judged": 6,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-conflicting_literature-01",
+      "category": "conflicting_literature",
+      "arm": "search_grounded",
+      "research_id": "6cfdf0f6-88bd-45a8-85cc-ff664d4d64b8",
+      "v1": {
+        "total_claims": 15,
+        "verdicts": {
+          "supported": 8,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 3,
+          "not_enough_evidence": 4
+        },
+        "claim_support_rate": 0.5333,
+        "citation_precision": 0.5,
+        "citation_coverage": 0.2667,
+        "unsupported_claim_rate": 0.2,
+        "citations_by_status": {
+          "misattributed": 2,
+          "valid": 2
+        },
+        "conflicts_detected": 3,
+        "downgraded_verdicts": 4,
+        "product_latency_seconds": 29.891,
+        "product_total_tokens": 1351,
+        "product_cost_usd": 0.000402
+      },
+      "status": "judged",
+      "external_support_rate": 0.5333,
+      "external_contradiction_rate": 0.2667,
+      "external_judged": 15,
+      "external_judging_failures": 0,
+      "external_pool_hash": "27a10768d5227ce040310877292885fa64f6b91385cdc2c0a3b3799f18da888b",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "27a10768d5227ce040310877292885fa64f6b91385cdc2c0a3b3799f18da888b",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "a1705583-edd0-4fee-af7e-5187f5673d5d",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "omega-3s, which have been linked to a lower risk of coronary heart disease when eaten as part of a healthy diet.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "d0e18938-1df2-4229-8378-dc7eaf25a112",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the jury is still out on the benefits of taking supplements, like fish oil, that contain omega-3s.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "86a583d1-043a-44c5-befb-46d2dee3b32a",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the risk of atrial fibrillation did not go up in healthy adults who took omega-3 supplements compared to those given a dummy supplement.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "346b4e8f-3fa9-4b5f-8d2a-e70af21c6059",
+            "verdict": "unsupported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a3b23673-7dd7-41e1-b6df-6f8d0726f85d",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "they\u2019re a rich source of omega-3s, which have been linked to a lower risk of coronary heart disease when eaten as part of a healthy diet.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "355c6710-73f3-42f6-ad06-a24b674b82d1",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "The primary findings, published in the New England Journal of Medicine in 2018, showed that taking 1 gram of omega-3 supplements daily did not significantly lower the overall risk of major cardiovascular disease (CVD) events - a combined measure of heart attacks, stroke, and CVD death.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "48300808-cc08-4e55-a76c-5b05c6a865b9",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "The Vitamin D and Omega-3 Trial (VITAL Rhythm study), a large trial of omega 3 fatty acids for the primary prevention of cardiovascular disease in adults aged \u226550 years, however, found no effects on incident atrial fibrillation, major adverse cardiovascular events, or cardiovascular disease mortality among those treated with 840 mg/day of marine omega 3 fatty acids compared with placebo.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "8b73cd2e-a13a-4e95-8d00-d58bfc2391d5",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "taking 1 gram of omega-3 supplements daily did not significantly lower the overall risk of major cardiovascular disease (CVD) events - a combined measure of heart attacks, stroke, and CVD death.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1a5f2c9d-d9a5-4b76-86d1-d154110be85e",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Findings of the effects of omega 3 fatty acids or fish oil on the risk of cardiovascular disease are controversial",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e4dcdd6a-7bd6-41d0-8711-a1cbee6ff15a",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": "omega-3 supplements reduced the risk of dying from heart disease in people who have a heart condition.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "557929c0-4ab1-472b-aa20-78451b8457a8",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1a3285ef-7cc6-473c-8e77-c7752c88949b",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the risk of atrial fibrillation did not go up in healthy adults who took omega-3 supplements compared to those given a dummy supplement.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e641e930-31d5-4afb-bb82-6c32099cad31",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "taking 1 gram of omega-3 supplements daily did not significantly lower the overall risk of major cardiovascular disease (CVD) events",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "68f0b08e-2414-4b66-96b9-3ff1bfcd63d0",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Some studies suggest that there are potential risks associated with fish oil supplements.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "fdf02b3d-d1d3-4e81-82b6-c39cbaec27bb",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the jury is still out on the benefits of taking supplements, like fish oil, that contain omega-3s.",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "contradicted": 4,
+          "supported": 8,
+          "unsupported": 1,
+          "not_enough_evidence": 2
+        },
+        "judged": 15,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-conflicting_literature-01",
+      "category": "conflicting_literature",
+      "arm": "full_autoresearch_verified",
+      "research_id": "83940af6-7992-4ba4-8d2c-c2a56cac1cd3",
+      "v1": {
+        "total_claims": 10,
+        "verdicts": {
+          "supported": 7,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 2,
+          "not_enough_evidence": 1
+        },
+        "claim_support_rate": 0.7,
+        "citation_precision": 0.8,
+        "citation_coverage": 1.0,
+        "unsupported_claim_rate": 0.2,
+        "citations_by_status": {
+          "valid": 8,
+          "misattributed": 2
+        },
+        "conflicts_detected": 2,
+        "downgraded_verdicts": 1,
+        "product_latency_seconds": 78.297,
+        "product_total_tokens": 25952,
+        "product_cost_usd": 0.005534
+      },
+      "status": "judged",
+      "external_support_rate": 0.7,
+      "external_contradiction_rate": 0.1,
+      "external_judged": 10,
+      "external_judging_failures": 0,
+      "external_pool_hash": "27a10768d5227ce040310877292885fa64f6b91385cdc2c0a3b3799f18da888b",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "27a10768d5227ce040310877292885fa64f6b91385cdc2c0a3b3799f18da888b",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "20a068cc-fadc-4126-a7e7-00d60de80a22",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "which have been linked to a lower risk of coronary heart disease when eaten as part of a healthy diet.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4fc0a5d5-be30-4f73-84a8-58ceb1e8b050",
+            "verdict": "contradicted",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": "Findings of the effects of omega 3 fatty acids or fish oil on the risk of cardiovascular disease are controversial",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e1ee7c4c-e22a-4849-a830-51729fa07353",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "a 2020 analysis of 16 trials in Pharmacological Research suggested that omega-3 supplements reduced the risk of dying from heart disease in people who have a heart condition.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "804be922-58d7-4f25-9d28-f63f3007cf68",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "taking 1 gram of omega-3 supplements daily did not significantly lower the overall risk of major cardiovascular disease (CVD) events - a combined measure of heart attacks, stroke, and CVD death.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "33a53456-adfd-472f-a95d-8b3db8a9f018",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "taking 1 gram of omega-3 supplements daily did not significantly lower the overall risk of major cardiovascular disease (CVD) events - a combined measure of heart attacks, stroke, and CVD death.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "d83c2f9a-5789-4100-8f54-abfb95d5a332",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "Some studies suggest that there are potential risks associated with fish oil supplements. Those risks include heavy metal contamination, such as from mercury; or oxidation of the oil found in fish oil capsules, which can increase the risk of clogged arteries.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1d9f0473-5e43-4986-968f-d926e4404f02",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": "the risk of atrial fibrillation did not go up in healthy adults who took omega-3 supplements compared to those given a dummy supplement.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "eca11437-6c2a-483e-899f-ab46de69d186",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Findings of the effects of omega 3 fatty acids or fish oil on the risk of cardiovascular disease are controversial",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "14a4ab4a-a164-4611-910e-50cb79f5ffd9",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Most previous studies focused on one health outcome and did not characterise specific cardiovascular disease outcomes (eg, atrial fibrillation, myocardial infarction, stroke, heart failure, and major adverse cardiovascular events)",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "37bea5be-d152-423c-b6ab-b519f9ec3c02",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": "the jury is still out on the benefits of taking supplements, like fish oil, that contain omega-3s.",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 7,
+          "contradicted": 1,
+          "not_enough_evidence": 2
+        },
+        "judged": 10,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-numerical_claims-01",
+      "category": "numerical_claims",
+      "arm": "model_only",
+      "research_id": "37a467df-0c3f-4cac-a361-f4a105cae9b2",
+      "v1": {
+        "total_claims": 15,
+        "verdicts": {
+          "supported": 0,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 15
+        },
+        "claim_support_rate": 0.0,
+        "citation_precision": null,
+        "citation_coverage": 0.0,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {},
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 0,
+        "product_latency_seconds": 6.698,
+        "product_total_tokens": 701,
+        "product_cost_usd": 0.000325
+      },
+      "status": "judged",
+      "external_support_rate": 0.5333,
+      "external_contradiction_rate": 0.0,
+      "external_judged": 15,
+      "external_judging_failures": 0,
+      "external_pool_hash": "74d7a712e3aa4d63e9f6727a190ce45defaeaa55adf8fbaf3d2af3da66ea46e8",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "74d7a712e3aa4d63e9f6727a190ce45defaeaa55adf8fbaf3d2af3da66ea46e8",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "8ce3766a-33fe-4c4e-8d97-9a1b3cb08861",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Statins decrease your risk of having a stroke or heart attack because they cut down the amount of LDL (low-density lipoprotein or \u201cbad\u201d) cholesterol in your blood.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4d303b77-e273-467b-b007-231d5dc11d4d",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "abc64ab5-77e1-4ae6-9661-9322c47513d3",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "statins reduced the risk of major vascular events by 21% per 1\u00b70 mmol/L LDL cholesterol reduction (RR 0\u00b779, 95% CI 0\u00b777-0\u00b781, p<0\u00b70001)",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "101f50ff-6692-4698-a06b-63939efb439e",
+            "verdict": "unsupported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4a58ba02-b25d-40a1-8432-3841e1a6d1e5",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1d155fdb-9c95-4c1b-8114-c0f1dddc0089",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "statins reduced the risk of major vascular events by 21% per 1\u00b70 mmol/L LDL cholesterol reduction",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "89c30a32-dbeb-433c-a043-3fb7a7af311b",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "0cc4e91e-c764-4a1f-99b3-56482793fbd4",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c5262fed-f9bb-472a-94bd-eb4199644c49",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Each 1 mmol/L LDL cholesterol reduction reduces the risk of occlusive vascular events by about a fifth, irrespective of baseline cholesterol",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "b09758e8-cefa-4ff4-a894-2e8649136198",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2b092b44-d54e-468f-a092-6af3a8d0c6cc",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "statins reduced the risk of major vascular events by 21% per 1\u00b70 mmol/L LDL cholesterol reduction",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "32d91a7a-1ea9-46fd-ac33-35783536a142",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "f22d1c1b-035b-4c2d-935b-8f812f8b688a",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "lowering of LDL cholesterol with standard statin regimens safely reduced the 5-year incidence of major coronary events, coronary revascularisations, and ischaemic strokes by about one fifth per 1\u00b70 mmol/L reduction in LDL cholesterol",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "98a25ef2-6761-4d55-8283-427222a98fc8",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "statins reduced the risk of major vascular events by 21% per 1\u00b70 mmol/L LDL cholesterol reduction (RR 0\u00b779, 95% CI 0\u00b777\u20130\u00b781, p<0\u00b70001)",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "cac68523-003b-4afe-95c3-17360dc3e6d2",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "lowering of LDL cholesterol with standard statin regimens safely reduced the 5-year incidence of major coronary events, coronary revascularisations, and ischaemic strokes by about one fifth per 1\u00b70 mmol/L reduction in LDL cholesterol",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 8,
+          "not_enough_evidence": 6,
+          "unsupported": 1
+        },
+        "judged": 15,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-numerical_claims-01",
+      "category": "numerical_claims",
+      "arm": "hybrid",
+      "research_id": "9d88b0a3-694a-41b0-806f-868b56df6b23",
+      "v1": {
+        "total_claims": 10,
+        "verdicts": {
+          "supported": 9,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 1
+        },
+        "claim_support_rate": 0.9,
+        "citation_precision": 0.8333,
+        "citation_coverage": 0.7,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {
+          "valid": 10,
+          "misattributed": 2
+        },
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 1,
+        "product_latency_seconds": 21.06,
+        "product_total_tokens": 1601,
+        "product_cost_usd": 0.000423
+      },
+      "status": "judged",
+      "external_support_rate": 0.5,
+      "external_contradiction_rate": 0.1,
+      "external_judged": 10,
+      "external_judging_failures": 0,
+      "external_pool_hash": "74d7a712e3aa4d63e9f6727a190ce45defaeaa55adf8fbaf3d2af3da66ea46e8",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "74d7a712e3aa4d63e9f6727a190ce45defaeaa55adf8fbaf3d2af3da66ea46e8",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "7d603cd1-b70a-4b4d-81a0-cb1442fefcbc",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "statins reduced the risk of major vascular events by 21% per 1\u00b70 mmol/L LDL cholesterol reduction",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "011a4668-48b6-4b36-8e2a-ed7fe7f429ef",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "6a47a4d8-80e7-46f0-b62c-bbff5f2b2a16",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "largely irrespective of age, sex, baseline LDL cholesterol or previous vascular disease, and of vascular and all-cause mortality. The proportional reduction in major vascular events was at least as big in the two lowest risk categories as in the higher risk categories",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "50d9a2e7-0ab0-4844-8c8c-9561cb752176",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "9af17885-a6ed-4681-af1d-e5ed57cb2315",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.95,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e9b0419f-d2dc-4716-9423-e06bf369ee5b",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "lowering of LDL cholesterol with standard statin regimens safely reduced the 5-year incidence of major coronary events, coronary revascularisations, and ischaemic strokes by about one fifth per 1\u00b70 mmol/L reduction in LDL cholesterol",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "11e4553c-27ed-4b48-930c-1269ebc140b7",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the achieved reduction in LDL cholesterol at 1 year with statin therapy or more intensive statin therapy was greater in people with higher predicted 5-year risk of major vascular events",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7945acea-b548-4e5b-9949-387618e54f3d",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Among all 27 trials, statins reduced the risk of major vascular events by 21% per 1\u00b70 mmol/L LDL cholesterol reduction",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "5f14d6c4-6f71-4fcc-bed2-06a6c83d5922",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.95,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ed438093-4c9b-4c0b-a728-17f942de5c84",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "there were significant reductions in major vascular event risk in each of the two lowest risk categories",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 5,
+          "not_enough_evidence": 4,
+          "contradicted": 1
+        },
+        "judged": 10,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-numerical_claims-01",
+      "category": "numerical_claims",
+      "arm": "search_grounded",
+      "research_id": "03c0f580-a987-4a2c-8605-d583a7a565ef",
+      "v1": {
+        "total_claims": 12,
+        "verdicts": {
+          "supported": 6,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 6
+        },
+        "claim_support_rate": 0.5,
+        "citation_precision": 0.5,
+        "citation_coverage": 0.5833,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {
+          "valid": 5,
+          "misattributed": 5
+        },
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 6,
+        "product_latency_seconds": 17.586,
+        "product_total_tokens": 1658,
+        "product_cost_usd": 0.000457
+      },
+      "status": "judged",
+      "external_support_rate": 0.5833,
+      "external_contradiction_rate": 0.0,
+      "external_judged": 12,
+      "external_judging_failures": 0,
+      "external_pool_hash": "74d7a712e3aa4d63e9f6727a190ce45defaeaa55adf8fbaf3d2af3da66ea46e8",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "74d7a712e3aa4d63e9f6727a190ce45defaeaa55adf8fbaf3d2af3da66ea46e8",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "eba56283-34a1-4f7b-98ee-c5c07fd3bcdb",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "Statins decrease your risk of having a stroke or heart attack because they cut down the amount of LDL (low-density lipoprotein or \u201cbad\u201d) cholesterol in your blood.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "3b50e3ea-0cc0-4703-86eb-1cfdd25cd50f",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "statins reduced the risk of major vascular events by 21% per 1\u00b70 mmol/L LDL cholesterol reduction",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "0736768a-3a86-402e-8730-de510bb0abd8",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "statins reduced the risk of major vascular events by 21% per 1\u00b70 mmol/L LDL cholesterol reduction (RR 0\u00b779, 95% CI 0\u00b777\u20130\u00b781, p<0\u00b70001)",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "5dd3eab8-d9a4-405b-8e57-f877d0f7215d",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "d2e94a73-78ac-45e7-8c50-b7eb22a12636",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "5737e1ff-7206-4cfc-9f20-469c35ebbae3",
+            "verdict": "unsupported",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "8a60bd54-6c03-458a-98ea-78f95c06ed39",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "b8d9a40a-50ba-47b2-970a-7bc6135fb916",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "lowering of LDL cholesterol with standard statin regimens safely reduced the 5-year incidence of major coronary events, coronary revascularisations, and ischaemic strokes by about one fifth per 1\u00b70 mmol/L reduction in LDL cholesterol",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1caaa0bb-b6d8-4315-a6d8-faf9b84cdebc",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "additional reductions in LDL cholesterol obtained with more intensive statin regimens further reduced the incidence of these major vascular events.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a5ceda7a-ee71-4dc4-b89e-49184ecdfcb4",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "statins reduced the risk of major vascular events by 21% per 1\u00b70 mmol/L LDL cholesterol reduction",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "bda1872c-c4b1-42c9-93cd-8cff3ce2d759",
+            "verdict": "unsupported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e6daf2af-5c07-4ff3-a27c-faa54e136a42",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "statins reduced the risk of major vascular events by 21% per 1\u00b70 mmol/L LDL cholesterol reduction (RR 0\u00b779, 95% CI 0\u00b777\u20130\u00b781, p<0\u00b70001)",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 7,
+          "not_enough_evidence": 3,
+          "unsupported": 2
+        },
+        "judged": 12,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-numerical_claims-01",
+      "category": "numerical_claims",
+      "arm": "full_autoresearch_verified",
+      "research_id": "497cbd55-49cc-4e96-b19b-bedad3ef0c9e",
+      "v1": {
+        "total_claims": 11,
+        "verdicts": {
+          "supported": 7,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 1,
+          "not_enough_evidence": 3
+        },
+        "claim_support_rate": 0.6364,
+        "citation_precision": 0.7143,
+        "citation_coverage": 0.5455,
+        "unsupported_claim_rate": 0.0909,
+        "citations_by_status": {
+          "valid": 5,
+          "misattributed": 2
+        },
+        "conflicts_detected": 1,
+        "downgraded_verdicts": 2,
+        "product_latency_seconds": 73.268,
+        "product_total_tokens": 29526,
+        "product_cost_usd": 0.006015
+      },
+      "status": "judged",
+      "external_support_rate": 0.5455,
+      "external_contradiction_rate": 0.0909,
+      "external_judged": 11,
+      "external_judging_failures": 0,
+      "external_pool_hash": "74d7a712e3aa4d63e9f6727a190ce45defaeaa55adf8fbaf3d2af3da66ea46e8",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "74d7a712e3aa4d63e9f6727a190ce45defaeaa55adf8fbaf3d2af3da66ea46e8",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "e2fcd961-9d2e-4e7b-9689-2010e39b2dd9",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Statins decrease your risk of having a stroke or heart attack because they cut down the amount of LDL (low-density lipoprotein or \u201cbad\u201d) cholesterol in your blood.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2abf2bec-6110-48f4-8cd2-daff183994a8",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "statins reduced the risk of major vascular events by 21% per 1\u00b70 mmol/L LDL cholesterol reduction",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c44c4cde-724d-4b31-b22a-aff157bd3e9e",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "9c648f75-3657-4c58-af2f-77b6595308b3",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Among all 27 trials, statins reduced the risk of major vascular events by 21% per 1\u00b70 mmol/L LDL cholesterol reduction (RR 0\u00b779, 95% CI 0\u00b777-0\u00b781, p<0\u00b70001), with separately significant proportional reductions in each risk [...]",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a824fb48-2768-4d0d-97af-92b2fcf875e2",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "with separately significant proportional reductions in each risk [...]",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "5f49db12-971f-48fe-990e-807ff68dec35",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "263a1d62-6861-4020-96e8-0fcf84385ed1",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "9a76bace-efa2-4f7f-9a66-8970ed7f489d",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the 5-year incidence of major coronary events, coronary revascularisations, and ischaemic strokes by about one fifth per 1\u00b70 mmol/L reduction in LDL cholesterol",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a99654de-de70-4264-a249-2eb18abb0676",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "additional reductions in LDL cholesterol obtained with more intensive statin regimens further reduced the incidence of these major vascular events.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "380f1f92-f831-453f-b7be-408974c99d83",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "281f0049-8254-4ef4-abae-2b08a419048e",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "largely irrespective of age, sex, baseline LDL cholesterol or previous vascular disease, and of vascular and all-cause mortality.",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 6,
+          "not_enough_evidence": 4,
+          "contradicted": 1
+        },
+        "judged": 11,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-citation_verification-01",
+      "category": "citation_verification",
+      "arm": "model_only",
+      "research_id": "55d77c48-55ff-4b20-9f6f-53ab59a85dfe",
+      "v1": {
+        "total_claims": 15,
+        "verdicts": {
+          "supported": 0,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 15
+        },
+        "claim_support_rate": 0.0,
+        "citation_precision": null,
+        "citation_coverage": 0.0,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {},
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 0,
+        "product_latency_seconds": 8.033,
+        "product_total_tokens": 687,
+        "product_cost_usd": 0.000314
+      },
+      "status": "judged",
+      "external_support_rate": 0.6,
+      "external_contradiction_rate": 0.0,
+      "external_judged": 15,
+      "external_judging_failures": 0,
+      "external_pool_hash": "198a1e3d2a3651bf2d5f581bbd19cb4bfc80e220a774fc275a9b4e114144b574",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "198a1e3d2a3651bf2d5f581bbd19cb4bfc80e220a774fc275a9b4e114144b574",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "f93179e8-42de-4e35-888b-a9e2ef4ba3f1",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "In late February 1998, a research team led by Andrew Wakefield published an article in The Lancet suggesting a link between the Measles, Mumps, and Rubella vaccine (MMR) and the development of autism in children.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "40c6135a-e903-40f2-98b5-a3d3fb73490f",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "95f6bd7e-ab26-49ac-a975-1cccd8504aa6",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "52052394-34dd-4e8d-92eb-9995ff7b6cc8",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "the study only included twelve children, and much of the \u201cdata\u201d used came from what the children\u2019s parents themselves observed and what they believed had caused the developmental and gastrointestinal issues. This kind of data is always questionable, particularly in a medical journal, as it is not what one would normally consider scientifically",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "761140c2-7a1a-48b3-b5aa-84827bf61d47",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the study only included twelve children, and much of the \u201cdata\u201d used came from what the children\u2019s parents themselves observed and what they believed had caused the developmental and gastrointestinal issues.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e8055dff-b9b3-4960-bf88-45eb611aaa78",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7370f71e-d10f-4e15-9bfb-3b2630b09428",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7f428d4e-9708-4e2d-a42a-b84d335313aa",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the medical community quickly rose up to refute the study for some obvious issues.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "6f66f731-9d57-42b1-839e-e26768957aa7",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "A cohort study following more than 500 000 children for a mean of 4 years found no association between MMR vaccination and autism or autistic",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "fb7babca-5825-4be4-a4f9-ff4826974c16",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "On February 2, 2010 \u2013 just four days after the release of the GMC\u2019s findings \u2013 the editors of The Lancet finally retracted the original 1998 study.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "57dfeffd-b92b-47d7-9eaf-cecbe57ed179",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the GMC panel found Wakefield guilty of serious professional misconduct, concluding that \u201cDr. Wakefield\u2019s name should be erased from the medical register\u201d",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "3b78a9b2-d3b1-4a8e-8108-f0bb1f37e55f",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Immediately after The Lancet published the paper in 1998, the medical community quickly rose up to refute the study for some obvious issues.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "9d05aa67-7cab-494d-a872-504f62e24fee",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the study only included twelve children, and much of the \u201cdata\u201d used came from what the children\u2019s parents themselves observed and what they believed had caused the developmental and gastrointestinal issues. This kind of data is always questionable, particularly in a medical journal, as it is not what one would normally consider scientifically",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "f9b9579d-a927-48fd-ac44-8bc3dd4bc887",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "55020a26-3f6e-4cec-ac5c-00643f0ad058",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 9,
+          "not_enough_evidence": 6
+        },
+        "judged": 15,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-citation_verification-01",
+      "category": "citation_verification",
+      "arm": "hybrid",
+      "research_id": "157ecd9a-1189-440d-8ab7-6093fb092781",
+      "v1": {
+        "total_claims": 8,
+        "verdicts": {
+          "supported": 6,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 2
+        },
+        "claim_support_rate": 0.75,
+        "citation_precision": 0.25,
+        "citation_coverage": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {
+          "misattributed": 9,
+          "valid": 3
+        },
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 2,
+        "product_latency_seconds": 18.383,
+        "product_total_tokens": 1500,
+        "product_cost_usd": 0.000354
+      },
+      "status": "judged",
+      "external_support_rate": 0.375,
+      "external_contradiction_rate": 0.0,
+      "external_judged": 8,
+      "external_judging_failures": 0,
+      "external_pool_hash": "198a1e3d2a3651bf2d5f581bbd19cb4bfc80e220a774fc275a9b4e114144b574",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "198a1e3d2a3651bf2d5f581bbd19cb4bfc80e220a774fc275a9b4e114144b574",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "91666cc0-dd14-45d9-9c7f-09d423098b1d",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "In late February 1998, a research team led by Andrew Wakefield published an article in The Lancet suggesting a link between the Measles, Mumps, and Rubella vaccine (MMR) and the development of autism in children.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "d4bc7592-fea5-400e-bc34-1b5418dac09a",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.95,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "6280769a-6956-48c0-9cf5-dae7000739e2",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "fa6cbc3e-ed74-4b03-af08-67741f5ec53d",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "In this case, the studies were deemed fraudulent and data misrepresented.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e12906b5-3785-4970-9ead-939bb93c40e6",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "On February 2, 2010 \u2013 just four days after the release of the GMC\u2019s findings \u2013 the editors of The Lancet finally retracted the original 1998 study.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1a561aee-59db-4f73-9ae8-ed33241dc20f",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1462249b-bab3-42b5-a7e1-7b8fe1bcd4dc",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": "On February 2, 2010 \u2013 just four days after the release of the GMC\u2019s findings \u2013 the editors of The Lancet finally retracted the original 1998 study.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a4a7c0a8-19f4-4cd9-a618-e4139f98d667",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 3,
+          "not_enough_evidence": 5
+        },
+        "judged": 8,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-citation_verification-01",
+      "category": "citation_verification",
+      "arm": "search_grounded",
+      "research_id": "00272da9-b129-4d87-b40e-8c328208f0e5",
+      "v1": {
+        "total_claims": 12,
+        "verdicts": {
+          "supported": 7,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 5
+        },
+        "claim_support_rate": 0.5833,
+        "citation_precision": 0.1538,
+        "citation_coverage": 0.8333,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {
+          "misattributed": 11,
+          "valid": 2
+        },
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 5,
+        "product_latency_seconds": 15.525,
+        "product_total_tokens": 1464,
+        "product_cost_usd": 0.000359
+      },
+      "status": "judged",
+      "external_support_rate": 0.4167,
+      "external_contradiction_rate": 0.0,
+      "external_judged": 12,
+      "external_judging_failures": 0,
+      "external_pool_hash": "198a1e3d2a3651bf2d5f581bbd19cb4bfc80e220a774fc275a9b4e114144b574",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "198a1e3d2a3651bf2d5f581bbd19cb4bfc80e220a774fc275a9b4e114144b574",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "822b6341-2df5-4757-a5ff-af0317768010",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "In late February 1998, a research team led by Andrew Wakefield published an article in The Lancet suggesting a link between the Measles, Mumps, and Rubella vaccine (MMR) and the development of autism in children.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "62749564-08b0-4f13-81f0-20eeb9ebcd71",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.95,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "3827f7e0-f365-489f-be60-e99274bd02e7",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "0e868fa4-3356-46be-a654-ddb01a8660a3",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the medical community quickly rose up to refute the study for some obvious issues.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "91fc6405-cb0c-4758-a221-6656944198a5",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "The Lancet medical journal fully retracted a 1998 paper Tuesday that first suggested a link between the measles-mumps-rubella (MMR) vaccine and autism, formally discrediting a key piece of research in the public debate over the vaccine's safety for children.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "8cb78fe9-959d-4bdb-bcb9-1518d96f6c18",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4875864f-a369-4e4d-8ac0-72f344cb17a9",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "362878fb-79b1-42ec-8068-f235a6ffdd8b",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the medical community quickly rose up to refute the study for some obvious issues.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2682dbb6-3cb6-4352-8d19-3531cc58dda4",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a6f4d06f-1bd5-4f15-86f6-5640400f329c",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the GMC panel found Wakefield guilty of serious professional misconduct, concluding that \u201cDr. Wakefield\u2019s name should be erased from the medical register\u201d",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "f2113098-db83-4331-809a-62d7ef76115d",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "9dceb7f4-a40c-4ffe-aa7a-df67a6b1ef23",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 5,
+          "not_enough_evidence": 7
+        },
+        "judged": 12,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-citation_verification-01",
+      "category": "citation_verification",
+      "arm": "full_autoresearch_verified",
+      "research_id": "4d6ae83c-71cc-4f05-ad24-9b9a5e0be841",
+      "v1": {
+        "total_claims": null,
+        "verdicts": null,
+        "claim_support_rate": null,
+        "citation_precision": null,
+        "citation_coverage": null,
+        "unsupported_claim_rate": null,
+        "citations_by_status": null,
+        "conflicts_detected": null,
+        "downgraded_verdicts": null,
+        "product_latency_seconds": null,
+        "product_total_tokens": null,
+        "product_cost_usd": null
+      },
+      "status": "missing_product_cell",
+      "external_support_rate": null,
+      "external_contradiction_rate": null,
+      "external_judged": null,
+      "external_judging_failures": null,
+      "external_pool_hash": null,
+      "source_error": {
+        "code": "internal_error",
+        "message": "OperationalError: (psycopg.OperationalError) consuming input failed: server closed the connection unexpectedly\n\tThis probably means the server terminated abnormally\n\tbefore or while processing the request.\nserver closed the connection unexpectedly\n\tThis probably means the server terminated abnormally\n\tbefore or while"
+      }
+    },
+    {
+      "question_id": "tst-insufficient_evidence-01",
+      "category": "insufficient_evidence",
+      "arm": "model_only",
+      "research_id": "6f88afc7-3f00-4ec9-aa49-fe13d3b73c5f",
+      "v1": {
+        "total_claims": 19,
+        "verdicts": {
+          "supported": 0,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 19
+        },
+        "claim_support_rate": 0.0,
+        "citation_precision": null,
+        "citation_coverage": 0.0,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {},
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 0,
+        "product_latency_seconds": 9.184,
+        "product_total_tokens": 801,
+        "product_cost_usd": 0.000389
+      },
+      "status": "judged",
+      "external_support_rate": 0.3158,
+      "external_contradiction_rate": 0.0526,
+      "external_judged": 19,
+      "external_judging_failures": 0,
+      "external_pool_hash": "61da6181104064ad01789feeb8f691afbb5cafe835ecf7b269186393b63c85e8",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "61da6181104064ad01789feeb8f691afbb5cafe835ecf7b269186393b63c85e8",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "467ca1d6-768a-49f0-93d4-91660ce0f861",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "With its long history of use as an ayurvedic medicinal and a growing body of research, it\u2019s becoming a popular choice among athletes and weekend warriors.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "255290df-ee5b-4242-ad70-699dabe29ba3",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Ashwagandha is an ayurvedic medicinal that offers a natural way to enhance athletic performance, support recovery and improve overall well-being.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "878eb5df-dc7b-4e7d-9772-14a045229940",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "0b41aa0d-9212-41bc-a166-2153ed6ddf0f",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ae812100-0c6c-4dc9-bec0-f32ac0a73950",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "ashwagandha may support the aerobic [...] The potential benefits extend beyond aerobic performance.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "fdc9094b-46bc-4002-9ea3-60c0b60a4af5",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "d332879e-3f4c-4394-9292-6941871d231d",
+            "verdict": "unsupported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7b1e91bd-3439-484f-abcc-e20fd37f89e5",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a764c041-51f4-406f-9bb1-c34b432d7571",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "418e8ff8-ef17-48da-8f37-c0571627a322",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "none of the studies were conducted in a 'real-life' competitive setting, making it challenging to ascertain how these results translate into actual sports performance during competitions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c5c017a0-4d92-4a59-8cde-611993430328",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "df434fc2-ccef-42f1-98fd-9b93dfbf54cd",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ff74c7ca-6df5-41d2-bea1-2ad94b81366d",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "b11fd5fa-4b33-47cb-a97f-e8c1d535a994",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.85,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2eb8ca71-bb07-49c2-80ee-5ffd816813ef",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "96647e4b-3050-4fef-abc8-98f17a20bcad",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "90c6fb46-e592-4549-8cdd-44301c1b34df",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the inconclusive effect of ashwagandha on training-induced changes in muscle oxygenation needs to be verified in further studies.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "742b4593-00c9-4f15-9561-9e1dcdb40263",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "none of the studies were conducted in a 'real-life' competitive setting, making it challenging to ascertain how these results translate into actual sports performance during competitions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "eea4c3fb-9ab5-4603-b361-fd2d636d29ae",
+            "verdict": "partially_supported",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": "seeking guidance from medical professionals before commencing Ashwagandha supplementation in competitive sports is recommended.",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 5,
+          "not_enough_evidence": 11,
+          "unsupported": 1,
+          "contradicted": 1,
+          "partially_supported": 1
+        },
+        "judged": 19,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-insufficient_evidence-01",
+      "category": "insufficient_evidence",
+      "arm": "hybrid",
+      "research_id": "6151805f-a10c-462f-adfc-d806930eabbb",
+      "v1": {
+        "total_claims": 12,
+        "verdicts": {
+          "supported": 4,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 2,
+          "not_enough_evidence": 6
+        },
+        "claim_support_rate": 0.3333,
+        "citation_precision": 0.2857,
+        "citation_coverage": 0.5,
+        "unsupported_claim_rate": 0.1667,
+        "citations_by_status": {
+          "valid": 2,
+          "misattributed": 5
+        },
+        "conflicts_detected": 1,
+        "downgraded_verdicts": 2,
+        "product_latency_seconds": 18.065,
+        "product_total_tokens": 1340,
+        "product_cost_usd": 0.000365
+      },
+      "status": "judged",
+      "external_support_rate": 0.75,
+      "external_contradiction_rate": 0.0,
+      "external_judged": 12,
+      "external_judging_failures": 0,
+      "external_pool_hash": "61da6181104064ad01789feeb8f691afbb5cafe835ecf7b269186393b63c85e8",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "61da6181104064ad01789feeb8f691afbb5cafe835ecf7b269186393b63c85e8",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "c9220295-df63-434b-b59f-5ec4f4cf6b2b",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "enhance physical performance and improve the recovery process in healthy populations",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "9281f72a-864a-4f15-8235-77f784e78bdd",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Ashwagandha supplementation was more efficacious than placebo for improving variables related to strength/power, cardiorespiratory fitness and fatigue/recovery in healthy men and female.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ed292a6f-93d3-43a5-8f4e-24730777e47a",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "Ashwagandha significantly improved VO2max in athletes by 4.09 ml/min/kg (95% CI, 2.55-5.63, p<0.001; I2=92%, p<0.001).",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1fa6d4c0-e603-4a39-a671-e0efeb7acf67",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "abe25a63-2266-4a7a-a249-8fa1a2a7588a",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "none of the studies included elite-level athletes, and the adaptability of Ashwagandha supplementation may differ between semi-elite and international-level athletes. Additionally, although the results are positive, none of the studies were conducted in a 'real-life' competitive setting, making it challenging to ascertain how these results translate into actual sports performance during competitions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "082ab2cd-5056-45fb-9de8-8645165420c1",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "none of the studies were conducted in a 'real-life' competitive setting, making it challenging to ascertain how these results translate into actual sports performance during competitions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "87741e67-846e-451c-ac2a-b656232cc4f1",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "none of the studies were conducted in a 'real-life' competitive setting, making it challenging to ascertain how these results translate into actual sports performance during competitions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7f0aaf2f-53ae-4d09-99da-cf4cb31b9666",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "688e9f4d-7397-454f-974d-5e187a035757",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "making it challenging to ascertain how these results translate into actual sports performance during competitions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "414f55de-7fa6-449a-a656-95baef8414fd",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "results of this systematic review and meta-analysis confirm that Ashwagandha supplementation is efficacious in improving sports performance, including enhancements in cardiorespiratory fitness, muscle strength, recovery, and various physical fitness parameters.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ec8d953a-c871-4f56-963b-89738af90f9e",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "none of the studies were conducted in a 'real-life' competitive setting, making it challenging to ascertain how these results translate into actual sports performance during competitions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "668fee70-1ad6-4ea8-a3e5-bc098396fad4",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 9,
+          "not_enough_evidence": 3
+        },
+        "judged": 12,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-insufficient_evidence-01",
+      "category": "insufficient_evidence",
+      "arm": "search_grounded",
+      "research_id": "e9289cd9-dc19-4304-a451-2f197f89b81d",
+      "v1": {
+        "total_claims": 9,
+        "verdicts": {
+          "supported": 4,
+          "partially_supported": 1,
+          "unsupported": 0,
+          "contradicted": 1,
+          "not_enough_evidence": 3
+        },
+        "claim_support_rate": 0.5556,
+        "citation_precision": 0.2857,
+        "citation_coverage": 0.4444,
+        "unsupported_claim_rate": 0.1111,
+        "citations_by_status": {
+          "misattributed": 5,
+          "valid": 2
+        },
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 1,
+        "product_latency_seconds": 23.172,
+        "product_total_tokens": 1307,
+        "product_cost_usd": 0.000338
+      },
+      "status": "judged",
+      "external_support_rate": 0.5556,
+      "external_contradiction_rate": 0.1111,
+      "external_judged": 9,
+      "external_judging_failures": 0,
+      "external_pool_hash": "61da6181104064ad01789feeb8f691afbb5cafe835ecf7b269186393b63c85e8",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "61da6181104064ad01789feeb8f691afbb5cafe835ecf7b269186393b63c85e8",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "dde54d35-ea44-4cc4-b34f-7d72d00c9936",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "results of this systematic review and meta-analysis confirm that Ashwagandha supplementation is efficacious in improving sports performance, including enhancements in cardiorespiratory fitness, muscle strength, recovery, and various physical fitness parameters.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7628f241-7429-4b71-b31f-b0e76785925b",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "ashwagandha improved endurance, leg press, and bench press performance more than a placebo.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "51d94378-9425-478d-9a63-ccfde64d77c5",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "Ashwagandha significantly improved VO2max in athletes by 4.09 ml/min/kg (95% CI, 2.55-5.63, p<0.001; I2=92%, p<0.001).",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "0be7825d-3f3f-449a-afa9-73ea565dad48",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "none of the studies were conducted in a 'real-life' competitive setting, making it challenging to ascertain how these results translate into actual sports performance during competitions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a9cf3f5b-44ea-40fa-89bd-489d8ecb040b",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "none of the studies included elite-level athletes",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ff2bcecb-60e7-47a8-84c3-0b201d5fbc78",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "none of the studies included elite-level athletes",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "bc9e0374-d45a-4ed3-804d-b0ea2204a5db",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ad446d44-5217-46bd-91c9-fe52cbff4c22",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a374ba0b-daa3-4ef4-850f-49dc86835552",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 5,
+          "contradicted": 1,
+          "not_enough_evidence": 3
+        },
+        "judged": 9,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-insufficient_evidence-01",
+      "category": "insufficient_evidence",
+      "arm": "full_autoresearch_verified",
+      "research_id": "537e424a-2c45-4f08-a3e5-789a7b2f1664",
+      "v1": {
+        "total_claims": 7,
+        "verdicts": {
+          "supported": 5,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 2
+        },
+        "claim_support_rate": 0.7143,
+        "citation_precision": 1.0,
+        "citation_coverage": 0.7143,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {
+          "valid": 6
+        },
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 0,
+        "product_latency_seconds": 59.172,
+        "product_total_tokens": 19188,
+        "product_cost_usd": 0.003897
+      },
+      "status": "judged",
+      "external_support_rate": 0.5714,
+      "external_contradiction_rate": 0.0,
+      "external_judged": 7,
+      "external_judging_failures": 0,
+      "external_pool_hash": "61da6181104064ad01789feeb8f691afbb5cafe835ecf7b269186393b63c85e8",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "61da6181104064ad01789feeb8f691afbb5cafe835ecf7b269186393b63c85e8",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "dca557ea-19f9-44da-9a2b-4fd67f8555a8",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "results of this systematic review and meta-analysis confirm that Ashwagandha supplementation is efficacious in improving sports performance, including enhancements in cardiorespiratory fitness, muscle strength, recovery, and various physical fitness parameters.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "fb978542-bf76-495c-8495-ef48dd110754",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "Ashwagandha significantly improved VO2max in athletes by 4.09 ml/min/kg (95% CI, 2.55-5.63, p<0.001; I2=92%, p<0.001).",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ad6a6835-a602-4f78-a776-4bf7079f396a",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "none of the studies were conducted in a 'real-life' competitive setting, making it challenging to ascertain how these results translate into actual sports performance during competitions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "27934615-a425-4273-9ebc-7a27d2ee7aad",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": "none of the studies included elite-level athletes",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "77a14f41-db70-451a-bc6e-cf9459a6fa26",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "none of the studies were conducted in a 'real-life' competitive setting, making it challenging to ascertain how these results translate into actual sports performance during competitions.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "0e756b86-c6da-4c38-84e7-4c051bb351ed",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "02f036dc-8b22-47ab-880d-8c559b10664f",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 4,
+          "not_enough_evidence": 3
+        },
+        "judged": 7,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-false_premise-01",
+      "category": "false_premise",
+      "arm": "model_only",
+      "research_id": "8238ff7a-cbd6-4a0f-9875-0755069c1a5e",
+      "v1": {
+        "total_claims": 28,
+        "verdicts": {
+          "supported": 0,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 28
+        },
+        "claim_support_rate": 0.0,
+        "citation_precision": null,
+        "citation_coverage": 0.0,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {},
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 0,
+        "product_latency_seconds": 8.304,
+        "product_total_tokens": 835,
+        "product_cost_usd": 0.000407
+      },
+      "status": "judged",
+      "external_support_rate": 0.2857,
+      "external_contradiction_rate": 0.0714,
+      "external_judged": 28,
+      "external_judging_failures": 0,
+      "external_pool_hash": "ceaf155a2bf53c90ad34a14b3e3644bcda92490566de042c61051a5572f765ee",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "ceaf155a2bf53c90ad34a14b3e3644bcda92490566de042c61051a5572f765ee",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "6b29785a-659d-4609-91f9-d1247f9a1152",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a4ac4a83-0462-4e03-956a-41057ec285a9",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": true,
+            "quote": "In 2016, the Far Northern management area between Cape York and Port Douglas experienced widespread and severe bleaching due to record ocean temperatures. This led to record widespread coral bleaching on the Reef, with overall coral mortality at 22%.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "f9715632-9b60-46d5-831a-5a80cff066d8",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "As climate change causes ocean temperatures to rise, marine heatwaves and associated coral bleaching events are becoming more frequent and severe, and the Reef\u2019s natural recovery processes are unable to keep up.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4a50eec2-46e8-4e66-a6e5-15d4354e6fd4",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "In recent years, the Great Barrier Reef has suffered climate change-induced mass bleaching, which occurs when sea temperatures soar for an extended period of time and destroy a reef\u2019s colourful algae that gives coral up to 90 percent of their energy and their vibrant colours.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "b729676e-0457-4686-829a-a6dc9ad9bead",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "92ba1cf7-4647-46d9-9dba-ae8391c97285",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "821bc5ea-0e35-45da-8b9e-32d50bae886d",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "79383404-cfe3-4d61-9b6d-cd7b52b5f072",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "5642f8e9-82e6-406e-89a2-eb16425c90ff",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "fd9b32c2-1301-4c17-a9bf-fe96383f9f09",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "In 2016, the Far Northern management area between Cape York and Port Douglas experienced widespread and severe bleaching due to record ocean temperatures.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "cf81564e-da02-4e9e-8a8f-694cb4171a95",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a16f9fbf-6380-48b1-b4a6-f96ac848c208",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the amount of larval recruitment declined in 2018 by 89% compared to historical levels.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7d95ed95-a8cd-4bfd-ad7d-49bac000662c",
+            "verdict": "supported",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": "\u201cIt\u2019s just warming,\u201d he said. \u201cOnce it warms, it\u2019s toast.\u201d",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "33e1da6e-5e11-48ee-82c0-bde465d5efce",
+            "verdict": "supported",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": "Reefs can recover from bleaching events but need at least 10 years between successive bleaching events or other major disturbances to do so.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "88be3583-fdf7-4f62-bc6e-c93457b32929",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the mortality of at least 30% of shallow water corals on the GBR",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2fbed504-6f94-43c0-af51-adcb9f723f32",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "08fd4dc6-777f-4245-9563-bb2bdc7d9b53",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c1423336-9771-4410-8d7e-b313442f1d21",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "bec932d6-5291-452d-a512-631d35457ea8",
+            "verdict": "unsupported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "344c2223-97e8-4126-a268-c9e8729afb82",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "deaf5fc4-e2f8-413e-87f0-0bccc7b51481",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "6e77e39e-0c00-46c7-bf3c-3d88fefdd0dd",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "This finding, while a central finding of coral-reef science, may take a long time to sink in in Australia.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "01c8be83-d8cc-4158-9a5d-98f8b02b6ca1",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "It's not dead yet, folks.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1dcbec3e-e015-46fb-8de2-5d25adcbc052",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": "governments, scientists, and charities are working so future generations can continue to appreciate its beauty.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "bfef1180-cd44-47ee-9ca2-18c4f33de863",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the Reef\u2019s natural recovery processes are unable to keep up.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "af7f1144-fedd-4347-b564-11328356c048",
+            "verdict": "unsupported",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a35f7a5f-5601-44b6-b087-b307438fa80e",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "8ac2d244-1aac-4e2c-b57e-a407c7ae02ce",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "not_enough_evidence": 16,
+          "supported": 8,
+          "contradicted": 2,
+          "unsupported": 2
+        },
+        "judged": 28,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-false_premise-01",
+      "category": "false_premise",
+      "arm": "hybrid",
+      "research_id": "db719222-7eb1-4fba-ba06-06b104f9dbb0",
+      "v1": {
+        "total_claims": 11,
+        "verdicts": {
+          "supported": 8,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 1,
+          "not_enough_evidence": 2
+        },
+        "claim_support_rate": 0.7273,
+        "citation_precision": 0.6667,
+        "citation_coverage": 0.9091,
+        "unsupported_claim_rate": 0.0909,
+        "citations_by_status": {
+          "misattributed": 4,
+          "valid": 8
+        },
+        "conflicts_detected": 1,
+        "downgraded_verdicts": 2,
+        "product_latency_seconds": 20.019,
+        "product_total_tokens": 1428,
+        "product_cost_usd": 0.000386
+      },
+      "status": "judged",
+      "external_support_rate": 0.8182,
+      "external_contradiction_rate": 0.0909,
+      "external_judged": 11,
+      "external_judging_failures": 0,
+      "external_pool_hash": "ceaf155a2bf53c90ad34a14b3e3644bcda92490566de042c61051a5572f765ee",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "ceaf155a2bf53c90ad34a14b3e3644bcda92490566de042c61051a5572f765ee",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "79952584-351b-4f61-b38a-d3d30ed9015a",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "In 2016, the Far Northern management area between Cape York and Port Douglas experienced widespread and severe bleaching due to record ocean temperatures.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "8fbb2c11-ff98-4ece-9efe-c0001958ba60",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "an 800-kilometre (500 mi) stretch in the northern part of the reef had died in the course of 2016 of high water temperatures, an event that the authors put down to the effects of global climate change.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "f3f88134-9b3a-43f8-b5f1-41a8e2be978a",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "climate change-induced mass bleaching, which occurs when sea temperatures soar for an extended period of time and destroy a reef\u2019s colourful algae that gives coral up to 90 percent of their energy and their vibrant colours.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "5aba55bc-b54f-4ee9-a460-158b3864f787",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "As a consequence of mass mortality of adult brood stock in 2016 and 2017 owing to heat stress, the amount of larval recruitment declined in 2018 by 89% compared to historical levels.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "f9e90e22-96b6-424b-895b-0fcffd8858b5",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the amount of larval recruitment declined in 2018 by 89% compared to historical levels.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "32759551-ce91-4850-ad30-569981c83b4a",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "As much as 30 percent of a sample of reefs surveyed in 2016 had lost more than half of their coral cover due to severe bleaching, GBRMPA reported in this 2017 report.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4a0c1400-de07-4e16-b949-90bdd05533e2",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "29% of corals died from the 2016 event alone \u2013 with most perishing in the northern section, where waters are warmest.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "bcd4add5-01f4-4865-9700-110bfdf479a2",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "0fd22c1c-b923-4b06-9bed-950598e36945",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "mass mortality of adult brood stock in 2016 and 2017 owing to heat stress",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "8d183613-04e8-477a-8585-f53b3d298f73",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the Reef\u2019s natural recovery processes are unable to keep up.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c9bd416d-4a15-4218-be9a-5fcd621011b3",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the Reef\u2019s natural recovery processes are unable to keep up.",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 9,
+          "contradicted": 1,
+          "not_enough_evidence": 1
+        },
+        "judged": 11,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-false_premise-01",
+      "category": "false_premise",
+      "arm": "search_grounded",
+      "research_id": "547e6402-3527-48c7-a08e-e2e5ee57686d",
+      "v1": {
+        "total_claims": 9,
+        "verdicts": {
+          "supported": 5,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 2,
+          "not_enough_evidence": 2
+        },
+        "claim_support_rate": 0.5556,
+        "citation_precision": 1.0,
+        "citation_coverage": 0.4444,
+        "unsupported_claim_rate": 0.2222,
+        "citations_by_status": {
+          "valid": 4
+        },
+        "conflicts_detected": 1,
+        "downgraded_verdicts": 0,
+        "product_latency_seconds": 19.286,
+        "product_total_tokens": 1356,
+        "product_cost_usd": 0.000377
+      },
+      "status": "judged",
+      "external_support_rate": 0.4444,
+      "external_contradiction_rate": 0.1111,
+      "external_judged": 9,
+      "external_judging_failures": 0,
+      "external_pool_hash": "ceaf155a2bf53c90ad34a14b3e3644bcda92490566de042c61051a5572f765ee",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "ceaf155a2bf53c90ad34a14b3e3644bcda92490566de042c61051a5572f765ee",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "39c57269-2796-4d2a-8a80-29c58fcb1476",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "In 2016, the Far Northern management area between Cape York and Port Douglas experienced widespread and severe bleaching due to record ocean temperatures.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2507c6df-42cf-41d0-86c6-e3bbf8015531",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "As a consequence of mass mortality of adult brood stock in 2016 and 2017 owing to heat stress, the amount of larval recruitment declined in 2018 by 89% compared to historical levels.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "26c514dd-aa75-4311-a66d-5cd8d87ba094",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "overall coral mortality at 22%.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "644fdeb0-4953-4e79-b203-110be880fd89",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": "an 800-kilometre (500 mi) stretch in the northern part of the reef had died in the course of 2016 of high water temperatures",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ee5871c5-47ec-4623-9bb0-fe5986cdcefd",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "overall coral mortality at 22%.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "63de0b26-e16c-49f7-99bc-4392dff30ed8",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "The percentage of baby corals being born on the Great Barrier Reef dropped drastically in 2018 and scientists are describing it as the early stage of a \"huge natural selection event unfolding\".",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "5fe9f139-c1aa-4322-9d4f-67479fcbec79",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": true,
+            "quote": "As climate change causes ocean temperatures to rise, marine heatwaves and associated coral bleaching events are becoming more frequent and severe, and the Reef\u2019s natural recovery processes are unable to keep up.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "38417868-ce50-4d56-b4c1-d0518a89f0e9",
+            "verdict": "unsupported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "0119b4bb-7b3f-4cd7-bc97-9deb458b7428",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 4,
+          "contradicted": 1,
+          "not_enough_evidence": 3,
+          "unsupported": 1
+        },
+        "judged": 9,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-false_premise-01",
+      "category": "false_premise",
+      "arm": "full_autoresearch_verified",
+      "research_id": "ba8dd5a0-a77d-4be2-95db-b2c653cea72b",
+      "v1": {
+        "total_claims": 11,
+        "verdicts": {
+          "supported": 8,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 0,
+          "not_enough_evidence": 3
+        },
+        "claim_support_rate": 0.7273,
+        "citation_precision": 0.375,
+        "citation_coverage": 0.6364,
+        "unsupported_claim_rate": 0.0,
+        "citations_by_status": {
+          "valid": 3,
+          "misattributed": 5
+        },
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 3,
+        "product_latency_seconds": 73.77,
+        "product_total_tokens": 27538,
+        "product_cost_usd": 0.005808
+      },
+      "status": "judged",
+      "external_support_rate": 0.9091,
+      "external_contradiction_rate": 0.0909,
+      "external_judged": 11,
+      "external_judging_failures": 0,
+      "external_pool_hash": "ceaf155a2bf53c90ad34a14b3e3644bcda92490566de042c61051a5572f765ee",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "ceaf155a2bf53c90ad34a14b3e3644bcda92490566de042c61051a5572f765ee",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "2af57dc0-adb9-44b1-bb8b-0c078ba953a2",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "overall coral mortality at 22%.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "8e35c59d-3cbe-48b9-91fa-4979d4f37496",
+            "verdict": "partially_supported",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": "overall coral mortality at 22%.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "49eb2601-1ed6-4d94-84d5-905e2e26f20c",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "As climate change causes ocean temperatures to rise, marine heatwaves and associated coral bleaching events are becoming more frequent and severe, and the Reef\u2019s natural recovery processes are unable to keep up.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "fe6e7e3d-aa35-4a61-b3c4-bbd40c24968d",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "of an 800-kilometre (500 mi) stretch in the northern part of the reef had died in the course of 2016 of high water temperatures, an event that the authors put down to the effects of global climate change.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "2b73b224-b383-4956-870b-d45f901f476e",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the Great Barrier Reef suffered back-to-back bleaching, leaving half of the shallow water corals dead.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "5642863c-26f4-4417-9993-8e4900dece20",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "The percentage of baby corals being born on the Great Barrier Reef dropped drastically in 2018",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "484e73e3-47d4-494b-9657-9943dc9f2488",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the article was criticised for being premature and hindering efforts to bolster the resilience of the reef.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4076e783-f975-4781-860d-fec101ed8b7a",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the article was criticised for being premature and hindering efforts to bolster the resilience of the reef.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c31c612b-ab43-4b60-9a53-ce3c5bb1bc80",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "This led to record widespread coral bleaching on the Reef, with overall coral mortality at 22%.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "b8d2a5f5-bff5-422a-8dec-5d15b6cc9f4e",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Many of the mature breeding adults died in the bleaching events of 2016\u201317, leading to low coral [...] A March 2016 report stated that coral bleaching was more widespread than previously thought, seriously affecting the northern parts of the reef as a result of warming ocean temperatures.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c3127086-17b5-4e01-9836-753a91a5bf85",
+            "verdict": "partially_supported",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": "As climate change causes ocean temperatures to rise, marine heatwaves and associated coral bleaching events are becoming more frequent and severe, and the Reef\u2019s natural recovery processes are unable to keep up.",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "supported": 8,
+          "partially_supported": 2,
+          "contradicted": 1
+        },
+        "judged": 11,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-current_information-01",
+      "category": "current_information",
+      "arm": "model_only",
+      "research_id": "61431386-d647-4759-9e9d-610f3fdd68fd",
+      "v1": {
+        "total_claims": null,
+        "verdicts": null,
+        "claim_support_rate": null,
+        "citation_precision": null,
+        "citation_coverage": null,
+        "unsupported_claim_rate": null,
+        "citations_by_status": null,
+        "conflicts_detected": null,
+        "downgraded_verdicts": null,
+        "product_latency_seconds": null,
+        "product_total_tokens": null,
+        "product_cost_usd": null
+      },
+      "status": "missing_product_cell",
+      "external_support_rate": null,
+      "external_contradiction_rate": null,
+      "external_judged": null,
+      "external_judging_failures": null,
+      "external_pool_hash": null,
+      "source_error": {
+        "code": "internal_error",
+        "message": "OperationalError: (psycopg.OperationalError) consuming input failed: server closed the connection unexpectedly\n\tThis probably means the server terminated abnormally\n\tbefore or while processing the request.\nserver closed the connection unexpectedly\n\tThis probably means the server terminated abnormally\n\tbefore or while"
+      }
+    },
+    {
+      "question_id": "tst-current_information-01",
+      "category": "current_information",
+      "arm": "hybrid",
+      "research_id": "cc12f2a1-4040-4684-9f79-bf7ab36937f9",
+      "v1": {
+        "total_claims": 10,
+        "verdicts": {
+          "supported": 5,
+          "partially_supported": 0,
+          "unsupported": 1,
+          "contradicted": 2,
+          "not_enough_evidence": 2
+        },
+        "claim_support_rate": 0.5,
+        "citation_precision": 0.4444,
+        "citation_coverage": 0.8,
+        "unsupported_claim_rate": 0.3,
+        "citations_by_status": {
+          "valid": 4,
+          "misattributed": 5
+        },
+        "conflicts_detected": 1,
+        "downgraded_verdicts": 2,
+        "product_latency_seconds": 18.37,
+        "product_total_tokens": 1327,
+        "product_cost_usd": 0.000318
+      },
+      "status": "judged",
+      "external_support_rate": 0.3,
+      "external_contradiction_rate": 0.2,
+      "external_judged": 10,
+      "external_judging_failures": 0,
+      "external_pool_hash": "5ff3bcc5ba556b862ff9d0f9af178eaca3946fc004558ab8ddc68f61776e8b55",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "5ff3bcc5ba556b862ff9d0f9af178eaca3946fc004558ab8ddc68f61776e8b55",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "ccb20de0-1d43-4c4e-af7a-329cd1ec3fd5",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Python 3.15 is the latest stable release.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "31706097-62af-4d07-942f-57523377ca97",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "81fa7631-5e36-4445-9e77-ee4243613555",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "9ef8a8f5-8b86-4298-abc6-d0ba76a3c9b2",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "the newest stable version of Python is Python 3.13.7.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "740af1ef-d522-4f53-8751-a8c1b3311969",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "fb18e8e5-958d-4b53-b384-fbb5d207dccc",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e05c33d8-8c13-421f-a10e-2d79bc6af574",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "It also offers clearer error messages with color highlighted tracebacks, making bugs easier to find and fix.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e522431b-3bc3-417f-a51c-9d163cf445d3",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "New language features like default values for type parameters and experimental support for running in isolated modes help write cleaner, more secure code.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "75de5537-5c9b-4b7f-ae0a-d8b2991728fc",
+            "verdict": "partially_supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Let\u2019s explore the key features of Python\u2019s current version, how to download and install it, and what this release means for developers.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "e1a2cf7a-edde-4d08-aec2-890d6cc2853c",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": "Python 3.14 was released on 7th October 2025. Here we summarise some of the more interesting changes and some trends in Python development and data-science over the past year.",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "contradicted": 2,
+          "not_enough_evidence": 5,
+          "supported": 2,
+          "partially_supported": 1
+        },
+        "judged": 10,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-current_information-01",
+      "category": "current_information",
+      "arm": "search_grounded",
+      "research_id": "e3f51311-d2cb-47d7-806b-00aada69ae4d",
+      "v1": {
+        "total_claims": 13,
+        "verdicts": {
+          "supported": 6,
+          "partially_supported": 0,
+          "unsupported": 0,
+          "contradicted": 1,
+          "not_enough_evidence": 6
+        },
+        "claim_support_rate": 0.4615,
+        "citation_precision": 0.5833,
+        "citation_coverage": 0.7692,
+        "unsupported_claim_rate": 0.0769,
+        "citations_by_status": {
+          "valid": 7,
+          "misattributed": 5
+        },
+        "conflicts_detected": 1,
+        "downgraded_verdicts": 6,
+        "product_latency_seconds": 20.72,
+        "product_total_tokens": 1354,
+        "product_cost_usd": 0.000383
+      },
+      "status": "judged",
+      "external_support_rate": 0.3077,
+      "external_contradiction_rate": 0.0769,
+      "external_judged": 13,
+      "external_judging_failures": 0,
+      "external_pool_hash": "5ff3bcc5ba556b862ff9d0f9af178eaca3946fc004558ab8ddc68f61776e8b55",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "5ff3bcc5ba556b862ff9d0f9af178eaca3946fc004558ab8ddc68f61776e8b55",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "c6142dc4-13f2-4680-aa55-03b7159dda00",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Yes, Python 3.14 is the latest stable release.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "1d84378c-ff25-4d16-b223-7e03484a1e23",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.95,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c4d76d33-410c-48f1-aa71-c99b41cf8432",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Python 3.14\u2014released in October 2025\u2014will continue to receive bug-fixes until October 2027, and after that will only receive security fixes until its end-of-life in 2030.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "0ee40ca9-3837-4d7a-803a-7ac61175e02b",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Python 3.14\u2014released in October 2025\u2014will continue to receive bug-fixes until October 2027, and after that will only receive security fixes until its end-of-life in 2030.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "3714ce07-d6ea-4faf-ae19-675a2b20e904",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "It also offers clearer error messages with color highlighted tracebacks, making bugs easier to find and fix.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "d71cabff-9c27-4f95-8e20-51fcc6724e02",
+            "verdict": "unsupported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "30456e0b-c034-4f12-87b9-ab12c9dc262c",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "fdeb245d-30ed-480c-8f55-0f4f1a07ef7e",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": "August 14, 2025, the newest stable version of Python is Python 3.13.7.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ffaefe0f-a30e-4ea6-af40-9d99f4ff013a",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "c11252fd-730c-4c92-a9a1-2a514cad7d9c",
+            "verdict": "supported",
+            "confidence": 0.95,
+            "downgraded": false,
+            "quote": "It also offers clearer error messages with color highlighted tracebacks, making bugs easier to find and fix.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "f7a356cf-37b7-44a4-8a5d-a6a7b5cb1277",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "New language features like default values for type parameters and experimental support for running in isolated modes help write cleaner, more secure code.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "15657fa2-c3ca-4883-a450-47d15e99382d",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "653eacd5-cb6a-407c-b042-f8a06228d81f",
+            "verdict": "unsupported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Python 3.14\u2014released in October 2025\u2014will continue to receive bug-fixes until October 2027",
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "contradicted": 1,
+          "not_enough_evidence": 6,
+          "supported": 4,
+          "unsupported": 2
+        },
+        "judged": 13,
+        "judging_failures": 0
+      }
+    },
+    {
+      "question_id": "tst-current_information-01",
+      "category": "current_information",
+      "arm": "full_autoresearch_verified",
+      "research_id": "4b8b51ed-214a-4c2c-83fc-abe7edde2c91",
+      "v1": {
+        "total_claims": 13,
+        "verdicts": {
+          "supported": 8,
+          "partially_supported": 0,
+          "unsupported": 1,
+          "contradicted": 1,
+          "not_enough_evidence": 3
+        },
+        "claim_support_rate": 0.6154,
+        "citation_precision": 0.4667,
+        "citation_coverage": 0.7692,
+        "unsupported_claim_rate": 0.1538,
+        "citations_by_status": {
+          "misattributed": 8,
+          "valid": 7
+        },
+        "conflicts_detected": 0,
+        "downgraded_verdicts": 2,
+        "product_latency_seconds": 86.392,
+        "product_total_tokens": 31515,
+        "product_cost_usd": 0.006327
+      },
+      "status": "judged",
+      "external_support_rate": 0.3077,
+      "external_contradiction_rate": 0.0769,
+      "external_judged": 13,
+      "external_judging_failures": 0,
+      "external_pool_hash": "5ff3bcc5ba556b862ff9d0f9af178eaca3946fc004558ab8ddc68f61776e8b55",
+      "external": {
+        "status": "judged",
+        "pool_version": "pool-v1",
+        "pool_hash": "5ff3bcc5ba556b862ff9d0f9af178eaca3946fc004558ab8ddc68f61776e8b55",
+        "judge_version": "external-verification-v1",
+        "claims": [
+          {
+            "claim_id": "3b7a93b3-4193-4e1b-bea1-1c02e19439f6",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.95,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "ebbfae1f-f338-4526-8ea7-dd279cc737c0",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.9,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "a37fd8a2-240a-4f9c-a9e3-76aecdf11201",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "Python 3.14\u2014released in October 2025\u2014will continue to receive bug-fixes until October 2027, and after that will only receive security fixes until its end-of-life in 2030.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "0792c1ac-81f8-4ad5-9d37-833ff7c18404",
+            "verdict": "contradicted",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "August 14, 2025, the newest stable version of Python is Python 3.13.7.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "670fc76e-b783-49e3-8db6-6f8bfa222763",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "d9e1969e-e59e-4eb6-8e1c-e83995169e95",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.7,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4a312c80-42cf-446b-82b4-36da8434fdf9",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": true,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "d5c668bc-ccfc-49fc-9211-ca237ae02b23",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "696250df-bc16-44b9-82fd-73ec276f1be0",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "It also offers clearer error messages with color highlighted tracebacks, making bugs easier to find and fix.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "09236cbd-dc08-4155-b52e-50456ddc6aa6",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "New language features like default values for type parameters and experimental support for running in isolated modes help write cleaner, more secure code.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "4ded3ea7-e809-438b-90cf-551798973fc4",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.85,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "7cd67c7b-0092-4fa6-a63f-c95939f3effa",
+            "verdict": "supported",
+            "confidence": 0.9,
+            "downgraded": false,
+            "quote": "New language features like default values for type parameters and experimental support for running in isolated modes help write cleaner, more secure code.",
+            "evidence_count": 4
+          },
+          {
+            "claim_id": "caa53b1e-813c-4603-8ecd-0ff970e1fa43",
+            "verdict": "not_enough_evidence",
+            "confidence": 0.8,
+            "downgraded": false,
+            "quote": null,
+            "evidence_count": 4
+          }
+        ],
+        "verdicts": {
+          "not_enough_evidence": 8,
+          "supported": 4,
+          "contradicted": 1
+        },
+        "judged": 13,
+        "judging_failures": 0
+      }
+    }
+  ],
+  "aggregates_v2": {
+    "full_autoresearch_verified": {
+      "eligible_questions": 7,
+      "items": [
+        "tst-conflicting_literature-01",
+        "tst-current_information-01",
+        "tst-false_premise-01",
+        "tst-insufficient_evidence-01",
+        "tst-multi_paper_synthesis-01",
+        "tst-normal_research-01",
+        "tst-numerical_claims-01"
+      ],
+      "external_support_rate_macro": 0.6161,
+      "external_contradiction_rate_macro": 0.0642,
+      "external_support_rate_micro": 0.6154,
+      "external_contradiction_rate_micro": 0.0641,
+      "statuses": {
+        "judged": 7,
+        "missing_product_cell": 1
+      }
+    },
+    "hybrid": {
+      "eligible_questions": 8,
+      "items": [
+        "tst-citation_verification-01",
+        "tst-conflicting_literature-01",
+        "tst-current_information-01",
+        "tst-false_premise-01",
+        "tst-insufficient_evidence-01",
+        "tst-multi_paper_synthesis-01",
+        "tst-normal_research-01",
+        "tst-numerical_claims-01"
+      ],
+      "external_support_rate_macro": 0.5453,
+      "external_contradiction_rate_macro": 0.0995,
+      "external_support_rate_micro": 0.5301,
+      "external_contradiction_rate_micro": 0.0964,
+      "statuses": {
+        "judged": 8
+      }
+    },
+    "model_only": {
+      "eligible_questions": 7,
+      "items": [
+        "tst-citation_verification-01",
+        "tst-conflicting_literature-01",
+        "tst-false_premise-01",
+        "tst-insufficient_evidence-01",
+        "tst-multi_paper_synthesis-01",
+        "tst-normal_research-01",
+        "tst-numerical_claims-01"
+      ],
+      "external_support_rate_macro": 0.4761,
+      "external_contradiction_rate_macro": 0.0483,
+      "external_support_rate_micro": 0.4516,
+      "external_contradiction_rate_micro": 0.0484,
+      "statuses": {
+        "judged": 7,
+        "missing_product_cell": 1
+      }
+    },
+    "search_grounded": {
+      "eligible_questions": 8,
+      "items": [
+        "tst-citation_verification-01",
+        "tst-conflicting_literature-01",
+        "tst-current_information-01",
+        "tst-false_premise-01",
+        "tst-insufficient_evidence-01",
+        "tst-multi_paper_synthesis-01",
+        "tst-normal_research-01",
+        "tst-numerical_claims-01"
+      ],
+      "external_support_rate_macro": 0.5117,
+      "external_contradiction_rate_macro": 0.0996,
+      "external_support_rate_micro": 0.5,
+      "external_contradiction_rate_micro": 0.1111,
+      "statuses": {
+        "judged": 8
+      }
+    }
+  },
+  "primary_matched": {
+    "baseline_arm": "model_only",
+    "system_arm": "full_autoresearch_verified",
+    "matched_questions": [
+      "tst-conflicting_literature-01",
+      "tst-false_premise-01",
+      "tst-insufficient_evidence-01",
+      "tst-multi_paper_synthesis-01",
+      "tst-normal_research-01",
+      "tst-numerical_claims-01"
+    ],
+    "n": 6,
+    "exclusions": [
+      {
+        "question_id": "tst-citation_verification-01",
+        "arm": "full_autoresearch_verified",
+        "reason": "missing product cell"
+      },
+      {
+        "question_id": "tst-current_information-01",
+        "arm": "model_only",
+        "reason": "missing product cell"
+      },
+      {
+        "question_id": "tst-citation_verification-01",
+        "arm": "model_only",
+        "reason": "unmatched: the other arm is ineligible here"
+      },
+      {
+        "question_id": "tst-current_information-01",
+        "arm": "full_autoresearch_verified",
+        "reason": "unmatched: the other arm is ineligible here"
+      }
+    ],
+    "baseline": {
+      "per_question": {
+        "tst-conflicting_literature-01": 0.6429,
+        "tst-false_premise-01": 0.2857,
+        "tst-insufficient_evidence-01": 0.3158,
+        "tst-multi_paper_synthesis-01": 0.4286,
+        "tst-normal_research-01": 0.5263,
+        "tst-numerical_claims-01": 0.5333
+      },
+      "macro": 0.4554,
+      "micro": 0.4312
+    },
+    "system": {
+      "per_question": {
+        "tst-conflicting_literature-01": 0.7,
+        "tst-false_premise-01": 0.9091,
+        "tst-insufficient_evidence-01": 0.5714,
+        "tst-multi_paper_synthesis-01": 0.7333,
+        "tst-normal_research-01": 0.5455,
+        "tst-numerical_claims-01": 0.5455
+      },
+      "macro": 0.6675,
+      "micro": 0.6769
+    },
+    "macro_difference_system_minus_baseline": 0.2121
+  }
+}
