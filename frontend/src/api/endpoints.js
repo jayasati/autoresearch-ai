@@ -23,24 +23,33 @@ export const system = {
   capabilities: (options) => http.get('/api/v1/system/capabilities', options),
 }
 
-// --- Not available yet -------------------------------------------------------
-//
-// export const research = {
-//   create: (payload) => http.post('/api/v1/research', payload),   // stage 3
-//   get: (id) => http.get(`/api/v1/research/${id}`),               // stage 3
-//   list: () => http.get('/api/v1/research'),                      // stage 3
-// }
-//
-// export const sources = {
-//   listForRun: (runId) => http.get(`/api/v1/research/${runId}/sources`),   // stage 4
-// }
-//
-// export const evidence = {
-//   claims: (runId) => http.get(`/api/v1/research/${runId}/claims`),        // stage 5
-//   conflicts: (runId) => http.get(`/api/v1/research/${runId}/conflicts`),  // stage 5
-// }
-//
-// export const evaluation = {
-//   metrics: (runId) => http.get(`/api/v1/research/${runId}/metrics`),      // stage 6
-//   benchmark: () => http.get('/api/v1/evaluation/benchmark'),              // stage 6
-// }
+export const research = {
+  /**
+   * Run the whole pipeline for one topic and wait for the finished report.
+   *
+   * Synchronous on the backend: the response arrives after the run completes
+   * (roughly 15-90+ seconds depending on depth), so callers should pass an
+   * AbortSignal and show a real loading state.
+   */
+  start: (payload, options) => http.post('/api/v1/research/start', payload, options),
+
+  /** Recent runs, newest first. */
+  list: (options) => http.get('/api/v1/research', options),
+
+  /** One run with its configuration, plan and counts. */
+  get: (id, options) => http.get(`/api/v1/research/${id}`, options),
+
+  /** The run's report texts: the immutable draft, and the final report if made. */
+  report: (id, options) => http.get(`/api/v1/research/${id}/report`, options),
+
+  /** Every source the run retrieved, labelled or not. */
+  sources: (id, options) => http.get(`/api/v1/research/${id}/sources`, options),
+
+  /** Stored claims, verdicts, citation outcomes, conflicts and labelled sources. */
+  evidence: (id, options) => http.get(`/api/v1/research/${id}/evidence`, options),
+}
+
+export const evaluation = {
+  /** The committed benchmark artifacts for one set, served verbatim. */
+  benchmark: (options) => http.get('/api/v1/evaluation/benchmark', options),
+}

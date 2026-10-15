@@ -37,6 +37,13 @@ export const RESEARCH_MODES = [
   },
 ]
 
+/** Mirrors ResearchDepth. How much retrieval and synthesis a run pays for. */
+export const RESEARCH_DEPTHS = [
+  { value: 'quick', label: 'Quick', summary: 'Cheapest and fastest — good for trying it out.' },
+  { value: 'medium', label: 'Medium', summary: 'The default balance of cost and coverage.' },
+  { value: 'deep', label: 'Deep', summary: 'Most retrieval and synthesis; slowest and costliest.' },
+]
+
 /** Mirrors VerificationVerdict. */
 export const VERIFICATION_VERDICTS = [
   { value: 'supported', label: 'Supported', tone: 'positive' },
@@ -54,19 +61,5 @@ export const CITATION_STATUSES = [
   { value: 'fabricated', label: 'Fabricated', tone: 'negative' },
 ]
 
-/**
- * Which build stage each part of the system arrives in.
- *
- * Every placeholder in the UI cites one of these, so "not implemented" always
- * comes with a specific answer to "when".
- */
-export const STAGES = {
-  DATA_MODEL: 'stage 4 — data model and run lifecycle',
-  MODEL_ONLY: 'stage 5 — model-only pipeline',
-  RETRIEVAL: 'stage 6 — retrieval (web, academic, RAG)',
-  EVIDENCE: 'stage 7 — evidence layer',
-  EVALUATION: 'stage 8 — evaluation and benchmark',
-}
-
-/** Where the project currently is. Shown in the sidebar and on the dashboard. */
-export const CURRENT_STAGE = { number: 3, total: 9, name: 'frontend foundation' }
+/** Where the project currently is. Shown in the sidebar. */
+export const CURRENT_STAGE = { number: 23, total: 23, name: 'complete — pipeline, evidence, benchmark' }

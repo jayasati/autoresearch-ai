@@ -1,18 +1,37 @@
 /**
  * Sources.
  *
- * Every web page and paper a run retrieved. The table headers are real -- they are
- * the columns the backend will need to provide -- but there are no rows, because
- * no retrieval has ever happened.
+ * Every web page and paper a run retrieved — all of them, not only the cited
+ * ones, because a source that was retrieved and then unused is part of what the
+ * run did. Evidence depth stays a first-class column: a claim grounded in a full
+ * text and one grounded in an abstract are not equally well supported.
  */
 
-import { Card, PageHeader, PlannedContents } from '../components/ui/primitives.jsx'
-import { EmptyState, NotImplemented } from '../components/ui/states.jsx'
-import { STAGES } from '../lib/constants.js'
+import { useState } from 'react'
 
-const COLUMNS = ['Title', 'Type', 'Venue / domain', 'Year', 'Evidence depth', 'Used by claims']
+import { research } from '../api/endpoints.js'
+import RunPicker from '../components/RunPicker.jsx'
+import { Badge, Card, PageHeader } from '../components/ui/primitives.jsx'
+import { AsyncBoundary, EmptyState } from '../components/ui/states.jsx'
+import { useApi } from '../hooks/useApi.js'
+
+const DEPTH_TONES = { full_text: 'positive', abstract: 'warning', snippet: 'neutral', metadata: 'neutral' }
+
+function hostOf(url) {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return url
+  }
+}
 
 export default function SourcesPage() {
+  const [runId, setRunId] = useState(null)
+  const sources = useApi(({ signal }) => research.sources(runId, { signal }), {
+    enabled: Boolean(runId),
+    deps: [runId],
+  })
+
   return (
     <>
       <PageHeader
@@ -20,47 +39,73 @@ export default function SourcesPage() {
         description="Every web page and paper retrieved, and how deeply each one was read."
       />
 
-      <Card title="Retrieved sources">
-        <table className="table">
-          <thead>
-            <tr>
-              {COLUMNS.map((column) => (
-                <th key={column} scope="col">
-                  {column}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td colSpan={COLUMNS.length} className="table__empty">
-                <EmptyState
-                  title="No sources"
-                  message="No run has retrieved anything. Web search, academic search and page fetching are not implemented yet."
-                />
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <Card title="Pick a run">
+        <RunPicker value={runId} onChange={setRunId} />
       </Card>
 
-      <Card title="Retrieval">
-        <NotImplemented feature="Source retrieval" stage={STAGES.RETRIEVAL}>
-          <PlannedContents
-            items={[
-              { label: 'Tavily', detail: 'web search returning clean, LLM-ready results' },
-              { label: 'Semantic Scholar', detail: 'papers, abstracts, venues, citation counts' },
-              { label: 'Fetcher', detail: 'URL to clean text, with timeouts and politeness' },
-              {
-                label: 'Chunker',
-                detail: 'overlapping chunks that keep their character offsets',
-              },
-              { label: 'Embeddings', detail: 'Sentence Transformers, run locally' },
-              { label: 'Vector store', detail: 'ChromaDB, persisted under data/vectorstore' },
-            ]}
-          />
-        </NotImplemented>
-      </Card>
+      {runId && (
+        <Card title="Retrieved sources" description="Read live from the run's stored source links.">
+          <AsyncBoundary
+            loading={sources.loading}
+            error={sources.error}
+            onRetry={sources.reload}
+            loadingMessage="Loading sources…"
+            isEmpty={sources.data?.length === 0}
+            empty={
+              <EmptyState
+                title="No sources"
+                message="This run retrieved nothing — a model_only run performs no retrieval by design."
+              />
+            }
+          >
+            <table className="table">
+              <thead>
+                <tr>
+                  <th scope="col">Label</th>
+                  <th scope="col">Title</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Venue / domain</th>
+                  <th scope="col">Year</th>
+                  <th scope="col">Retriever</th>
+                  <th scope="col">Evidence depth</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(sources.data ?? []).map((source) => (
+                  <tr key={source.source_id}>
+                    <td>{source.label ? <code>[{source.label}]</code> : '—'}</td>
+                    <td>
+                      {source.url ? (
+                        <a className="link" href={source.url} target="_blank" rel="noreferrer">
+                          {source.title ?? source.url}
+                        </a>
+                      ) : (
+                        (source.title ?? '(untitled)')
+                      )}
+                    </td>
+                    <td>
+                      <code>{source.source_type}</code>
+                    </td>
+                    <td>{source.venue ?? (source.url ? hostOf(source.url) : '—')}</td>
+                    <td>{source.year ?? '—'}</td>
+                    <td>{source.retriever ?? '—'}</td>
+                    <td>
+                      <Badge tone={DEPTH_TONES[source.evidence_depth] ?? 'neutral'}>
+                        {source.evidence_depth}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="note">
+              A row without a label was retrieved but not selected as evidence; the report never
+              cites it. Labels like <code>[S1]</code> are what the report&apos;s citations resolve
+              to.
+            </p>
+          </AsyncBoundary>
+        </Card>
+      )}
 
       <Card title="Why evidence depth is a column">
         <p className="note">

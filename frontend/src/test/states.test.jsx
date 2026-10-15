@@ -51,7 +51,7 @@ describe('error state', () => {
   it('tells the user how to start the backend', async () => {
     stubOfflineBackend()
     renderApp('/')
-    expect(await screen.findByText(/uvicorn app\.main:app/)).toBeInTheDocument()
+    expect((await screen.findAllByText(/uvicorn app\.main:app/)).length).toBeGreaterThan(0)
   })
 
   it('shows the stable error code and the correlation id', async () => {
@@ -90,21 +90,21 @@ describe('empty state', () => {
   it('appears for research runs, and is not confused with an error', async () => {
     stubHealthyBackend()
     renderApp('/')
-    expect(await screen.findByText('No research runs')).toBeInTheDocument()
+    expect(await screen.findByText('No research runs yet')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('explains why it is empty rather than just saying "none"', async () => {
+  it('explains what to do rather than just saying "none"', async () => {
     stubHealthyBackend()
     renderApp('/')
-    expect(await screen.findByText(/the research API does not exist yet/i)).toBeInTheDocument()
+    expect(await screen.findByText(/start one from the new research page/i)).toBeInTheDocument()
   })
 
   it.each([
-    ['/research/results', 'No reports'],
-    ['/sources', 'No sources'],
-    ['/evidence', 'No claims'],
-    ['/evaluation', 'No benchmark runs'],
+    ['/research/results', 'No research runs yet'],
+    ['/sources', 'No research runs yet'],
+    ['/evidence', 'No research runs yet'],
+    ['/evaluation', 'No benchmark artifacts'],
   ])('%s shows "%s"', async (path, title) => {
     stubHealthyBackend()
     renderApp(path)

@@ -38,9 +38,9 @@ describe('shell', () => {
     ])
   })
 
-  it('states in the sidebar that research functionality is not implemented', () => {
+  it('states in the sidebar that nothing shown is invented', () => {
     renderApp('/')
-    expect(screen.getByText(/research functionality is not/i)).toBeInTheDocument()
+    expect(screen.getByText(/nothing shown is invented/i)).toBeInTheDocument()
   })
 
   it('marks the active route', () => {
@@ -69,38 +69,22 @@ describe('each route renders its page', () => {
   )
 })
 
-describe('placeholders are explicit', () => {
-  // Every page except the dashboard is a placeholder, and each must say so
-  // without showing anything that could pass for generated output.
-  it.each([
-    ['/research/new', 'Starting a research run'],
-    ['/research/results', 'Report generation and display'],
-    ['/sources', 'Source retrieval'],
-    ['/evidence', 'Claim extraction and verification'],
-    ['/evaluation', 'Metrics and benchmarking'],
-  ])('%s says %s is not implemented yet', async (path, feature) => {
-    renderApp(path)
-    expect(
-      await screen.findByText(new RegExp(`${feature} is not implemented yet`, 'i')),
-    ).toBeInTheDocument()
-  })
+describe('empty states are honest', () => {
+  // With no stored runs and no benchmark artifacts, every data page must say so
+  // rather than showing anything that could pass for a result. The populated
+  // behaviour is covered in storedRuns.test.jsx.
+  it.each([['/research/results'], ['/sources'], ['/evidence']])(
+    '%s explains there are no runs yet',
+    async (path) => {
+      renderApp(path)
+      expect(await screen.findByText(/no research runs yet/i)).toBeInTheDocument()
+    },
+  )
 
-  it.each([
-    ['/research/new'],
-    ['/research/results'],
-    ['/sources'],
-    ['/evidence'],
-    ['/evaluation'],
-  ])('%s names the stage the feature arrives in', async (path) => {
-    renderApp(path)
-    const notes = await screen.findAllByRole('note')
-    expect(notes.length).toBeGreaterThan(0)
-    expect(notes.some((note) => /stage \d/i.test(note.textContent))).toBe(true)
-  })
-
-  it('states that no sample results are shown', async () => {
-    renderApp('/research/results')
-    expect(await screen.findByText(/no sample results are shown/i)).toBeInTheDocument()
+  it('/evaluation explains there are no benchmark artifacts', async () => {
+    renderApp('/evaluation')
+    expect(await screen.findByText(/no benchmark artifacts/i)).toBeInTheDocument()
+    expect(screen.getByText(/fabricated result/i)).toBeInTheDocument()
   })
 })
 

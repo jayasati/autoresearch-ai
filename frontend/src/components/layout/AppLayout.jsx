@@ -68,7 +68,7 @@ export default function AppLayout() {
           <span className="sidebar__stage">
             Stage {CURRENT_STAGE.number} of {CURRENT_STAGE.total} · {CURRENT_STAGE.name}
           </span>
-          <span>Research functionality is not implemented yet.</span>
+          <span>Every page reads real stored data; nothing shown is invented.</span>
         </p>
       </aside>
 

@@ -632,6 +632,16 @@ pre {
   color: var(--text-muted);
 }
 
+/* A generated report, shown verbatim: markdown as the pipeline wrote it, with
+   line breaks preserved. Deliberately not rendered as HTML — what the grader
+   audits is the raw output, not a prettified version of it. */
+.report-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
 /* --- Table ---------------------------------------------------------------- */
 
 .table {

@@ -46,15 +46,17 @@ export const CAPABILITIES = {
   implemented: [],
 }
 
-/** Backend up: answers health and capabilities, 404s everything else. */
+/** Backend up: answers health, capabilities and an empty run list, 404s the rest. */
 export function stubHealthyBackend(overrides = {}) {
   const routes = {
     '/api/health': HEALTH,
     '/api/v1/system/capabilities': CAPABILITIES,
+    '/api/v1/research': [],
     ...overrides,
   }
   const fetchMock = vi.fn(async (url) => {
-    const path = String(url)
+    // Match on the path alone: callers may append query strings.
+    const path = String(url).split('?')[0]
     const match = Object.keys(routes).find((key) => path.endsWith(key))
     if (match) return jsonResponse(routes[match])
     return jsonResponse(

@@ -1,19 +1,21 @@
 /**
  * Dashboard.
  *
- * The one page backed by real data: it reads `GET /api/v1/system/capabilities`
- * and reports exactly what the backend says. Nothing here is invented, which is
- * also what makes it the page that genuinely exercises the loading, error and
- * empty states.
+ * Everything on this page is read live from the backend: integration status from
+ * `/api/v1/system/capabilities`, the run list from `/api/v1/research`, and the
+ * benchmark headline from `/api/v1/evaluation/benchmark`. Nothing is invented; a
+ * number that cannot be read shows as absent, never as zero.
  */
 
 import { CheckCircle2, CircleDashed, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-import { AsyncBoundary, EmptyState, NotImplemented } from '../components/ui/states.jsx'
-import { Badge, Card, PageHeader, PlannedContents, StatTile } from '../components/ui/primitives.jsx'
+import { evaluation, research } from '../api/endpoints.js'
+import { Badge, Card, PageHeader, StatTile } from '../components/ui/primitives.jsx'
+import { AsyncBoundary, EmptyState } from '../components/ui/states.jsx'
+import { useApi } from '../hooks/useApi.js'
 import { useCapabilities } from '../hooks/useBackendStatus.js'
-import { CURRENT_STAGE, RESEARCH_MODES, STAGES } from '../lib/constants.js'
+import { RESEARCH_MODES } from '../lib/constants.js'
 
 /** One integration and whether the backend has usable credentials for it. */
 function IntegrationRow({ name, configured, note }) {
@@ -41,8 +43,12 @@ const INTEGRATION_LABELS = {
   chromadb: { name: 'ChromaDB', note: 'vector store · local' },
 }
 
+const STATUS_TONES = { completed: 'positive', failed: 'negative', running: 'warning' }
+
 export default function DashboardPage() {
   const { data, error, loading, reload } = useCapabilities()
+  const runs = useApi(({ signal }) => research.list({ signal }))
+  const benchmark = useApi(({ signal }) => evaluation.benchmark({ signal }))
 
   const backendModes = data?.modes ?? []
   // The mode list is duplicated in lib/constants.js so routing and labels work
@@ -53,26 +59,48 @@ export default function DashboardPage() {
   const modesAgree =
     backendModes.length === localModes.length && backendModes.every((m) => localModes.includes(m))
 
+  const primary = benchmark.data?.external?.primary_matched
+  const supportGain =
+    primary && typeof primary.macro_difference_system_minus_baseline === 'number'
+      ? `+${primary.macro_difference_system_minus_baseline.toFixed(3)}`
+      : null
+
   return (
     <>
       <PageHeader
         title="Dashboard"
-        description="What is built, what is configured, and what is still to come."
+        description="What is configured, what has run, and what the benchmark measured."
       />
 
       <div className="grid grid--stats">
         <StatTile
-          label="Build stage"
-          value={`${CURRENT_STAGE.number} / ${CURRENT_STAGE.total}`}
-          hint={CURRENT_STAGE.name}
+          label="Research runs"
+          value={runs.data ? String(runs.data.length) : '—'}
+          hint={runs.data ? 'stored in the database (most recent 20)' : 'reading…'}
         />
-        <StatTile label="Research runs" value="0" hint="no runs have been created" />
         <StatTile
           label="Research modes"
           value={backendModes.length || '—'}
           hint="declared by the backend"
         />
-        <StatTile label="Verified claims" value="0" hint="evidence layer not built" />
+        <StatTile
+          label="External support gain"
+          value={supportGain ?? '—'}
+          hint={
+            supportGain
+              ? `frozen test set, macro over ${primary.n} matched questions`
+              : 'no benchmark artifact readable'
+          }
+        />
+        <StatTile
+          label="Pipeline"
+          value={data?.implemented?.length ? 'live' : '—'}
+          hint={
+            data?.implemented?.length
+              ? `modes implemented: ${data.implemented.join(', ')}`
+              : 'reading…'
+          }
+        />
       </div>
 
       <Card
@@ -100,8 +128,8 @@ export default function DashboardPage() {
 
               {data.missing_credentials?.length > 0 && (
                 <p className="note">
-                  Still to set in <code>.env</code>: {data.missing_credentials.join(', ')}. Not
-                  needed until the retrieval stage.
+                  Still to set in <code>.env</code>: {data.missing_credentials.join(', ')}. Needed
+                  for live research runs.
                 </p>
               )}
 
@@ -116,9 +144,59 @@ export default function DashboardPage() {
         </AsyncBoundary>
       </Card>
 
+      <Card title="Recent research runs" description="Read live from /api/v1/research.">
+        <AsyncBoundary
+          loading={runs.loading}
+          error={runs.error}
+          onRetry={runs.reload}
+          loadingMessage="Loading runs…"
+          isEmpty={runs.data?.length === 0}
+          empty={
+            <EmptyState
+              title="No research runs yet"
+              message="Start one from the New Research page; it will appear here and under Research Results."
+              action={
+                <Link className="btn btn--ghost" to="/research/new">
+                  Start a research run
+                </Link>
+              }
+            />
+          }
+        >
+          <table className="table">
+            <thead>
+              <tr>
+                <th scope="col">Topic</th>
+                <th scope="col">Mode</th>
+                <th scope="col">Status</th>
+                <th scope="col">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(runs.data ?? []).slice(0, 8).map((run) => (
+                <tr key={run.id}>
+                  <td>
+                    <Link className="link" to="/research/results">
+                      {run.topic.length > 60 ? `${run.topic.slice(0, 60)}…` : run.topic}
+                    </Link>
+                  </td>
+                  <td>
+                    <code>{run.mode}</code>
+                  </td>
+                  <td>
+                    <Badge tone={STATUS_TONES[run.status] ?? 'neutral'}>{run.status}</Badge>
+                  </td>
+                  <td>{run.created_at ? new Date(run.created_at).toLocaleString() : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </AsyncBoundary>
+      </Card>
+
       <Card
         title="Research configurations"
-        description="The three settings the benchmark will compare."
+        description="The configurations the benchmark compares."
       >
         <ul className="mode-list">
           {RESEARCH_MODES.map((mode) => (
@@ -132,42 +210,6 @@ export default function DashboardPage() {
             </li>
           ))}
         </ul>
-      </Card>
-
-      <Card title="Recent research runs">
-        <EmptyState
-          title="No research runs"
-          message="Nothing has been run because the research API does not exist yet. Creating and storing runs arrives in stage 4."
-          action={
-            <Link className="btn btn--ghost" to="/research/new">
-              See the research form
-            </Link>
-          }
-        />
-      </Card>
-
-      <Card title="Implemented capabilities">
-        {/* Deliberately not inside an AsyncBoundary: this notice is static, and
-            rendering the same failed request as a second error block would be
-            noise rather than information. Only the line that reads backend data
-            is conditional. */}
-        <NotImplemented feature="Research orchestration" stage={STAGES.MODEL_ONLY}>
-          {data && (
-            <p className="state__message">
-              The backend reports <code>implemented: {JSON.stringify(data.implemented ?? [])}</code>
-              . That list fills in as each stage lands.
-            </p>
-          )}
-          <PlannedContents
-            items={[
-              { label: 'Planning', detail: 'topic to sub-questions to search queries' },
-              { label: 'Retrieval', detail: 'web, academic papers, RAG over full text' },
-              { label: 'Synthesis', detail: 'report with inline citation markers' },
-              { label: 'Evidence', detail: 'claim extraction, verification, citation validation' },
-              { label: 'Evaluation', detail: 'metrics and the three-way benchmark' },
-            ]}
-          />
-        </NotImplemented>
       </Card>
 
       <Card title="API reference">

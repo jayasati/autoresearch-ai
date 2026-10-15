@@ -583,6 +583,62 @@ class ResearchService:
             ]
             return report.id, rows
 
+    def report_view(self, run_id: uuid.UUID) -> dict:
+        """The run's report texts, for display.
+
+        Both texts, labelled: `markdown` is the immutable draft that claim offsets
+        point into, `final_markdown` the verification-aware final report when one
+        was produced. The caller decides which to show; this method never picks one
+        silently, because the two are different artifacts.
+        """
+        with unit_of_work(self._session) as session:
+            run = ResearchRunRepository(session).get_or_raise(run_id)
+            report = ReportRepository(session).get_for_run(run_id)
+            if report is None:
+                raise NotFoundError(
+                    f"Run {run_id} has no report.", details={"run_id": str(run_id)}
+                )
+            return {
+                "research_id": run_id,
+                "report_id": report.id,
+                "topic": run.topic,
+                "title": report.title,
+                "markdown": report.markdown,
+                "final_markdown": report.final_markdown,
+                "finalized": report.final_markdown is not None,
+                "generated_at": report.generated_at,
+                "finalized_at": report.finalized_at,
+            }
+
+    def run_sources(self, run_id: uuid.UUID) -> list[dict]:
+        """Every source a run retrieved, with the per-run retrieval facts.
+
+        All of them, not only the cited ones: a source that was retrieved and then
+        not used is part of what the run did, and hiding it would overstate how
+        selective the evidence was.
+        """
+        with unit_of_work(self._session) as session:
+            ResearchRunRepository(session).get_or_raise(run_id)
+            rows = []
+            for link in SourceRepository(session).links_for_run(run_id):
+                source = link.source
+                rows.append(
+                    {
+                        "source_id": source.id,
+                        "label": link.citation_label,
+                        "title": source.title,
+                        "url": source.url,
+                        "doi": source.doi,
+                        "venue": source.venue,
+                        "year": source.publication_year,
+                        "source_type": source.source_type.value,
+                        "retriever": link.retriever,
+                        "rank": link.rank,
+                        "evidence_depth": link.evidence_depth.value,
+                    }
+                )
+            return rows
+
     def verification_summary(self, run_id: uuid.UUID) -> dict:
         """Everything the final report and its evidence audit need, in plain data.
 

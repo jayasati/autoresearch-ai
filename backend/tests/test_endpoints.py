@@ -18,11 +18,12 @@ class TestRoot:
         assert body["health_url"] == "/api/health"
         assert body["api_version_prefix"] == "/api/v1"
 
-    def test_states_what_is_and_is_not_implemented(self, client):
-        """The stage marker is part of the contract while the project is unfinished."""
+    def test_states_what_is_implemented(self, client):
+        """The stage marker names the pipeline and the read endpoints it serves."""
         stage = client.get("/").json()["stage"]
         assert "research/start" in stage
-        assert "no claim verification" in stage
+        assert "verification" in stage
+        assert "GET" in stage
 
 
 class TestHealth:

@@ -5,6 +5,60 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 23 — Every frontend page functional: read endpoints + wired UI — 2026-10-15
+
+The frontend had been frozen at its stage-7 placeholder state while the backend
+grew through stage 22. This stage makes every page functional, in both layers.
+
+**Backend — five read-only GET endpoints** over what the pipeline already
+persists, each a thin route over existing service reads (no new judgement, no
+recomputation, zero writes):
+
+- `GET /api/v1/research` — recent runs with mode and status
+- `GET /api/v1/research/{id}` — run detail (configuration, plan, counts)
+- `GET /api/v1/research/{id}/report` — both report texts, labelled: the immutable
+  draft and the verification-aware final report; the API never silently picks one
+- `GET /api/v1/research/{id}/sources` — every retrieved source with its per-run
+  retrieval facts (label, retriever, rank, evidence depth), unlabelled ones
+  included so unused retrievals stay visible
+- `GET /api/v1/research/{id}/evidence` — stored claims with verdicts, citation
+  outcomes, conflicts and labelled sources, verbatim from `verification_summary`
+- `GET /api/v1/evaluation/benchmark` — the committed benchmark artifacts served
+  verbatim from `data/benchmarks/results/<set>/` (latest v1 experiment +
+  latest `-v2eval` re-evaluation); 404 when none exist rather than an empty
+  table that could read as "measured: zero"
+
+New service reads `report_view` and `run_sources`; nothing touched in the
+verification, benchmark or re-evaluation paths. The stale root `stage` string
+(still claiming "no claim verification") was corrected.
+
+**Frontend — all six pages live** (wired during this stage and the previous one):
+Dashboard (live run list, live benchmark headline, integrations), New Research
+(submits to the pipeline), Research Results (run picker, header stats, plan, the
+stored report labelled draft/final), Sources (full retrieval table with evidence
+depth), Evidence Audit (claims with verdict and citation badges, rationales,
+conflicts, labelled sources; the vocabulary cards stay), Evaluation (the primary
+matched result, the v1 comparison and the v2 per-arm table, with the caveats
+rendered as part of the result). Shared `RunPicker` component; every page keeps
+honest loading/error/empty states, and a missing artifact or report shows as
+exactly that.
+
+Tests: 12 new backend endpoint tests (seeded via the integration builders,
+placeholder values only) — backend suite 872 passed, ruff and mypy clean.
+Frontend: stale placeholder tests replaced with populated-page tests driven by a
+stubbed backend — 69 passed, lint clean.
+
+**Verified live:** `GET /api/v1/evaluation/benchmark` serves the stage-22 numbers
+(matched diff +0.2121, n=6) from the committed artifacts; capabilities and the
+frontend serve correctly. **Not verified live at the time of writing:** the
+database-backed endpoints — Neon's Postgres endpoint began refusing connections
+(handshake timeout from this machine; TCP reachable, general internet fine)
+during final verification, after working earlier the same day. The pages built
+for them show their designed error state with the request id. To be re-verified
+when the database answers again.
+
+---
+
 ## Stage 22 — The final analysis: metrics-v2 over the frozen test runs — 2026-10-13
 
 Executed under `docs/FINAL_ANALYSIS_PLAN.md` (LOCKED Revision 3, Option B), after

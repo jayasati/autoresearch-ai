@@ -133,3 +133,31 @@ class BenchmarkComparison(ReadModel):
                 f"configurations completed different numbers of runs ({detail})",
             )
         return self
+
+
+# --- the benchmark-results read endpoint (stage 23) ----------------------------------
+
+
+class BenchmarkArtifactResponse(ReadModel):
+    """Committed benchmark artifacts, served verbatim for the Evaluation page.
+
+    Everything here is read from the result files the experiment runner wrote and
+    the repository committed -- nothing is computed at request time, so the page
+    can never show a number the artifacts do not contain.
+    """
+
+    set_name: str
+    source_dir: str = Field(description="The experiment artifact directory, for provenance.")
+    experiment: dict = Field(description="The runner's experiment header, verbatim.")
+    comparison: list[dict] = Field(
+        default_factory=list,
+        description="Per-metric baseline-vs-AutoResearch rows (metrics v1), verbatim.",
+    )
+    aggregates: dict = Field(default_factory=dict, description="Per-arm v1 aggregates, verbatim.")
+    external: dict | None = Field(
+        default=None,
+        description=(
+            "The metrics-v2 external re-evaluation (primary_matched, aggregates_v2, "
+            "provenance), verbatim; null when no re-evaluation artifact exists."
+        ),
+    )

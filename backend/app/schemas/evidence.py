@@ -447,3 +447,55 @@ class ClaimExtractionResponse(IdentifiedModel):
     retried: bool = Field(description="True when the first output failed validation.")
     token_usage: dict[str, int] | None = None
     duration_seconds: float = Field(ge=0)
+
+
+# --- the evidence-audit read endpoint (stage 23) -------------------------------------
+
+
+class AuditClaimRead(ReadModel):
+    """One stored claim with its verdict and citation outcomes, as the audit shows it."""
+
+    claim_id: uuid.UUID
+    text: str
+    claim_type: str
+    importance: str
+    requires_citation: bool
+    section: str | None
+    verdict: str | None = Field(description="Null when the claim was never verified.")
+    confidence: float | None
+    downgraded: bool
+    rationale: str | None
+    citations: dict[str, str] = Field(
+        default_factory=dict, description="Marker to citation status, e.g. {'S1': 'valid'}."
+    )
+
+
+class AuditConflictRead(ReadModel):
+    conflict_id: uuid.UUID
+    claim_id: uuid.UUID | None
+    conflict_type: str
+    description: str
+
+
+class AuditSourceRead(ReadModel):
+    """A labelled source, as the report's citations resolve to it."""
+
+    label: str
+    title: str | None
+    url: str | None
+    doi: str | None
+    venue: str | None
+    year: int | None
+    source_type: str
+
+
+class EvidenceAuditResponse(ReadModel):
+    """A run's stored verification rows, read back verbatim for the audit view."""
+
+    research_id: uuid.UUID
+    report_id: uuid.UUID
+    topic: str
+    finalized: bool
+    claims: list[AuditClaimRead] = Field(default_factory=list)
+    conflicts: list[AuditConflictRead] = Field(default_factory=list)
+    sources: list[AuditSourceRead] = Field(default_factory=list)

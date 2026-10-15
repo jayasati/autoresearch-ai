@@ -28,8 +28,10 @@ from app.schemas.common import ErrorResponse, ServiceInfoResponse
 logger = logging.getLogger(__name__)
 
 STAGE = (
-    "stage-11: three research modes "
-    "(POST /api/v1/research/start; no claim verification yet)"
+    "stage-23: full pipeline with read endpoints "
+    "(POST /api/v1/research/start runs plan, retrieval, synthesis, claim "
+    "verification and the final report; GET endpoints read stored runs, "
+    "evidence and benchmark results)"
 )
 
 

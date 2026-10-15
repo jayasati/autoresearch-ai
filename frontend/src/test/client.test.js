@@ -29,11 +29,12 @@ describe('endpoint paths', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/system/capabilities')
   })
 
-  it('does not export research operations, because the routes do not exist', async () => {
+  it('exports the research and evaluation operations the backend serves', async () => {
     const endpoints = await import('../api/endpoints.js')
-    expect(endpoints.research).toBeUndefined()
-    expect(endpoints.evidence).toBeUndefined()
-    expect(endpoints.evaluation).toBeUndefined()
+    for (const operation of ['start', 'list', 'get', 'report', 'sources', 'evidence']) {
+      expect(typeof endpoints.research[operation]).toBe('function')
+    }
+    expect(typeof endpoints.evaluation.benchmark).toBe('function')
   })
 })
 

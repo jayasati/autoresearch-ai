@@ -363,3 +363,66 @@ class ResearchStartResponse(ReadModel):
     report: str = Field(description="Markdown, with [S#] citations and a Sources section.")
     sources: list[CitedSourceRead]
     execution_metadata: ExecutionMetadata
+
+
+# --- the read endpoints (stage 23) --------------------------------------------------
+
+
+class ResearchRunListItem(ReadModel):
+    """One row in the run list: enough to recognise and pick a run, nothing more."""
+
+    id: uuid.UUID
+    topic: str
+    mode: ResearchMode
+    status: RunStatus
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+    error_code: str | None
+
+    @classmethod
+    def from_run(cls, run) -> "ResearchRunListItem":  # noqa: ANN001 - ORM ResearchRun
+        return cls(
+            id=run.id,
+            topic=run.topic,
+            mode=run.configuration.mode,
+            status=run.status,
+            created_at=run.created_at,
+            started_at=run.started_at,
+            completed_at=run.completed_at,
+            error_code=run.error_code,
+        )
+
+
+class ReportViewResponse(ReadModel):
+    """Both report texts, labelled — the caller chooses which to show.
+
+    `markdown` is the immutable draft that claim offsets point into;
+    `final_markdown` is the verification-aware final report, when one exists.
+    """
+
+    research_id: uuid.UUID
+    report_id: uuid.UUID
+    topic: str
+    title: str | None
+    markdown: str
+    final_markdown: str | None
+    finalized: bool
+    generated_at: datetime | None
+    finalized_at: datetime | None
+
+
+class RunSourceRead(ReadModel):
+    """One retrieved source, with the per-run retrieval facts from the link row."""
+
+    source_id: uuid.UUID
+    label: str | None = Field(description="The [S#] label, when the source was labelled.")
+    title: str | None
+    url: str | None
+    doi: str | None
+    venue: str | None
+    year: int | None
+    source_type: str
+    retriever: str | None
+    rank: int | None
+    evidence_depth: str
