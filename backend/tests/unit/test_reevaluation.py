@@ -157,6 +157,15 @@ class TestReevaluationObligations:
         # The normal timestamped output path (no resume) still works and is new.
         assert result["output_dir"].endswith("-v2eval")
         assert Path(result["output_dir"]) != Path(source_dir)
+        # The report names the set it actually re-evaluated — a development
+        # artifact must never wear the frozen test set's label.
+        report = (Path(result["output_dir"]) / "evaluation_report.md").read_text(
+            encoding="utf-8"
+        )
+        assert report.startswith(
+            "# Metrics-v2 re-evaluation of the stored development-set runs"
+        )
+        assert "frozen test" not in report.splitlines()[0]
 
     async def test_b_and_c_source_files_untouched_and_v1_values_exact(
         self, harness
@@ -354,6 +363,21 @@ class TestReevaluationObligations:
             for p in Path(reeval_a["output_dir"]).iterdir() if p.is_file()
         }
         assert outputs_after == outputs_before  # nothing in the resume dir changed
+
+    def test_same_second_output_dirs_never_collide(self, tmp_path):
+        """Output directories are named to the second; two runs started within
+        one second must get distinct directories, or the later run overwrites
+        the earlier artifacts and a fresh re-evaluation reads a stranger's
+        progress file (the intermittent d/d2 failures observed in this file)."""
+        from app.services.benchmark.runner import _fresh_output_dir
+
+        base = tmp_path / "development" / "20261016T120000Z-v2eval"
+        first = _fresh_output_dir(base)
+        second = _fresh_output_dir(base)
+        third = _fresh_output_dir(base)
+        assert first == base and first.is_dir()
+        assert second == base.with_name(base.name + "-2") and second.is_dir()
+        assert third == base.with_name(base.name + "-3") and third.is_dir()
 
     async def test_mismatched_benchmark_id_is_refused(self, harness):
         test_settings, build_runner, _ = harness

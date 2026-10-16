@@ -485,8 +485,9 @@ class ExperimentRunner:
                     "re-evaluation — omit --resume-dir to start fresh"
                 )
         else:
-            output_dir = self.output_root / set_name / f"{started_at:%Y%m%dT%H%M%SZ}-v2eval"
-            output_dir.mkdir(parents=True, exist_ok=True)
+            output_dir = _fresh_output_dir(
+                self.output_root / set_name / f"{started_at:%Y%m%dT%H%M%SZ}-v2eval"
+            )
 
         progress_path = output_dir / "progress.jsonl"
         progress = _load_progress(
@@ -928,8 +929,9 @@ class ExperimentRunner:
         return aggregates
 
     def _write_outputs(self, payload: dict, set_name: str, started_at: datetime) -> Path:
-        output_dir = self.output_root / set_name / f"{started_at:%Y%m%dT%H%M%SZ}"
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir = _fresh_output_dir(
+            self.output_root / set_name / f"{started_at:%Y%m%dT%H%M%SZ}"
+        )
         # The final test-set evaluation uses the names the write-up names.
         final = set_name == "test"
         write_results_json(
@@ -961,6 +963,25 @@ def _verdict_counts(audit) -> dict[str, int]:
         "contradicted": audit.contradicted,
         "not_enough_evidence": audit.insufficient_evidence,
     }
+
+
+def _fresh_output_dir(base: Path) -> Path:
+    """`base`, or the first `base-N` sibling that does not exist yet — created.
+
+    Output directories are named to the second, so two runs started within the
+    same second would otherwise share one: the later run's files silently
+    overwrite the earlier run's artifacts, and a fresh re-evaluation would read
+    a stranger's progress file and trip the provenance check. Creation doubles
+    as the existence test so the check-then-create cannot race.
+    """
+    candidate, counter = base, 2
+    while True:
+        try:
+            candidate.mkdir(parents=True)
+            return candidate
+        except FileExistsError:
+            candidate = base.with_name(f"{base.name}-{counter}")
+            counter += 1
 
 
 # --- re-evaluation helpers -----------------------------------------------------------
@@ -1043,7 +1064,9 @@ def _write_reeval_report(payload: dict, path: Path) -> None:
     meta = payload["reevaluation"]
     primary = payload["primary_matched"]
     lines = [
-        "# Final analysis — metrics-v2 re-evaluation of the frozen test runs",
+        # The title names the actual set: a development re-evaluation must never
+        # wear the frozen test set's label (the stage-22 original hardcoded it).
+        f"# Metrics-v2 re-evaluation of the stored {meta['set']}-set runs",
         "",
         f"- Source: `{meta['source_dir']}` (benchmark run `{meta['benchmark_run_id']}`)",
         f"- Source files unchanged during re-evaluation: **{meta['source_files_unchanged']}**",

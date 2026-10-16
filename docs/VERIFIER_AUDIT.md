@@ -157,3 +157,13 @@ contradiction rates is measured on the development set first. The frozen test se
 stays untouched until that is approved. A larger labeled set (≥50 cases, second
 annotator, inter-annotator agreement) is the next investment if verifier
 reliability itself becomes a claim the project needs to make.
+
+**Addendum (2026-10-16):** the development-set re-evaluation was executed —
+stage 25 in the development log; artifacts in
+`data/benchmarks/results/development/20261016T044109Z-v2eval/`. Headline: on the
+identical 418 claims and byte-identical pools, the v2 judge raises external
+support for every arm, cuts external contradiction sharply everywhere (21 of
+v1's 40 contradicted verdicts move to partially_supported), preserves the arm
+ordering, and widens the matched A-vs-D gap from +0.117 to +0.2165. Only
+228/418 verdicts are unchanged between judge versions: absolute values are
+judge-version-bound and must never be compared across versions.

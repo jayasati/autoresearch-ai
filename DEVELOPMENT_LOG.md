@@ -5,6 +5,80 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 25 — The development set re-judged under external-verification-v2 — 2026-10-16
+
+The stage-24 recommendation, executed with the stage-22 Option B machinery and
+the same gate discipline: pre-run, the 8 development pool caches verified 8/8
+against `MANIFEST.sha256`, the stage-19 source directory verified identical to
+the committed git blobs, the database answered `SELECT 1` (Neon recovered from
+the stage-23 outage), and the runtime constants confirmed
+(`external-verification-v2`, `pool-v1`, gpt-4o-mini). Then the one command:
+`--reevaluate eb70c1e1… --source results/development/20261013T090058Z --set
+development`. **No new product runs, zero run-owned database writes, source
+files hashed unchanged, frozen test set untouched.** Outputs:
+`results/development/20261016T044109Z-v2eval/` — 30/30 judgeable cells (the two
+stage-19 provider-failure cells remain the named exclusions), **the identical
+418 claims cell-for-cell, zero judging failures, pool hashes byte-identical to
+stage 19**. The comparison therefore isolates exactly one variable: the judge.
+
+### What the v2 judge changes, on fixed claims and fixed pools
+
+| arm | support v1→v2 (macro) | contradiction v1→v2 (macro) |
+|---|---|---|
+| model_only | 0.442 → 0.480 (+0.038) | 0.104 → 0.030 (−0.074) |
+| hybrid | 0.540 → 0.642 (+0.102) | 0.112 → 0.017 (−0.095) |
+| search_grounded (n=6) | 0.654 → 0.695 (+0.041) | 0.057 → 0.000 (−0.057) |
+| full_verified | 0.559 → 0.697 (+0.138) | 0.097 → 0.051 (−0.047) |
+
+**Matched primary (A vs D, n=8): +0.2165 under v2 (was +0.117 under v1), D ≥ A
+on all eight questions.** The stage-19 direction is robust to the judge
+revision and widens; arm ordering on support is preserved.
+
+The per-claim transition matrix (both runs carry per-claim verdicts for the
+same claim ids) explains the movement. Of v1's 40 `contradicted` verdicts only
+9 remain; **21 become `partially_supported`** — direct confirmation of the
+stage-21 hypothesis that v1's contradiction rate partly measured compound-claim
+inflation, and it confirms differentially: the baseline keeps 4 of its 14
+contradictions while hybrid keeps 2 of 11, consistent with the stage-21 reading
+that grounded arms absorbed more compound/meta cross-fire. The two
+`contradicted → supported` flips were inspected: identical quotes in both runs,
+each plainly agreeing with its claim — the stage-21 "agreeing quote marked
+contradicted" error corrected, not detections lost. The large
+`supported ↔ not_enough_evidence` churn is almost entirely the verbatim-quote
+lottery, stable across judges (77 downgrades under v1, 76 under v2; 33 of the
+34 supported→NEE moves are v2 quote-enforcement downgrades, not judgments).
+
+### Read no larger than it is
+
+Only 228/418 verdicts are unchanged between judge versions. **Absolute v2-judge
+numbers are judge-version-bound**: they must never be compared against
+v1-judged artifacts (stages 16–22), and nothing about the research systems
+improved — the claims are the stage-19 claims. The near-zero contradiction
+rates also mean the metric's remaining sensitivity to genuine corrections is
+thin (9 surviving contradictions grid-wide); a §3.6-style inspection of those 9
+is cheap and worth doing before leaning on contradiction-rate conclusions
+under v2.
+
+### Incidental fixes, found by this run
+
+- `evaluation_report.md` titled every re-evaluation "of the frozen test runs" —
+  a development artifact wearing the frozen set's label. The writer now names
+  the actual set; this run's report regenerated; the committed stage-22 test
+  artifact untouched (its title was correct). Pinned by a test.
+- Output directories are timestamped to the second, so two runs started within
+  one second shared a directory — the later silently overwriting the earlier,
+  and a fresh re-evaluation reading a stranger's progress file (the root of the
+  intermittent d/d2 failures in `test_reevaluation.py`, reproduced on
+  pre-change code). `_fresh_output_dir` now suffixes `-2`, `-3`, … with
+  creation as the existence test; unit-tested.
+
+Suite 878 passed, ruff and mypy clean. **Not done:** no validation or test-set
+exposure under v2 (each needs its own approval, per protocol); no re-run of the
+judge-validation labeled set beyond stage 24's; v2 numbers nowhere presented as
+system improvements.
+
+---
+
 ## Stage 24 — Verifier audit and verification-v2 — 2026-10-16
 
 The claim-level evidence verifier was audited end to end (full findings in
