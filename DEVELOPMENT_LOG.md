@@ -5,6 +5,69 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 24 — Verifier audit and verification-v2 — 2026-10-16
+
+The claim-level evidence verifier was audited end to end (full findings in
+`docs/VERIFIER_AUDIT.md`) and revised to **verification-v2** — the first prompt
+revision since the stage-13 original, triggered by the failure modes stages 20–21
+put on the record and left standing by design.
+
+**The audit's verdict on the existing design:** sound. Verdicts are meaning-based
+(similarity only ranks retrieval, never judges); a relevant source is not
+supporting evidence (verbatim-quote enforcement + recorded downgrade); citation
+validity is structural; absence of evidence never becomes falsity; malformed
+output is a counted skip, never a defaulted verdict. None of that changed.
+
+**What changed:**
+
+- **`verification-v2`** names what v1 left unstated: dates, units and named
+  entities alongside numbers; an in-range value is agreement; hedged agreement is
+  support, not contradiction; causal claims cap at partially_supported on
+  correlational evidence; compound claims with a negated conjunct are
+  partially_supported (the stage-20 0/2); conflicting evidence is never filed as
+  insufficient; a five-verdict glossary drawing the unsupported /
+  not_enough_evidence boundary. Envelope unchanged. Per the stage-21 standing
+  instruction, stages 16–22 stay attributed to v1 and the 9/11 judge validation
+  is not carried over; `EXTERNAL_JUDGE_VERSION` follows as
+  `external-verification-v2`.
+- **Enforcement fix, found live:** a single passage that supports one conjunct and
+  negates another carries one relation; when the model quoted the negated part,
+  `_verdict_anchor` rejected it for partially_supported and the downgrade turned
+  quoted evidence into `not_enough_evidence`. partially_supported now accepts a
+  contradicting anchor as fallback — still nothing stands without a verbatim quote.
+- **Validation set v1.2.0:** the 11 v1.1.0 cases verbatim + 10 development cases
+  (the three measured failure modes, the previously unlabeled unsupported verdict,
+  unit/date/entity mismatches, causal wording, conflicting-is-not-insufficient;
+  `acceptable_verdicts` where several verdicts are defensible). A development set
+  for tuning — **the frozen test set was neither touched nor used.**
+- **`scripts/validate_verifier.py`:** the stage-20 live judge validation, made a
+  persistent runner; measurements land in
+  `data/benchmarks/results/verifier-validation/` keyed by prompt version.
+- **Vocabulary note recorded on `VerificationVerdict`:** stored
+  `not_enough_evidence` is the project's spelling of INSUFFICIENT_EVIDENCE;
+  renaming would orphan the DB enum and frozen artifacts.
+
+**Measured, live (gpt-4o-mini, 21 labeled cases, two passes per prompt, same
+enforcement both):** v2 19/21 and 19/21 with identical, metric-neutral misses
+(two stable unsupported↔not_enough_evidence swaps; never-contradicted held
+everywhere); v1 19/21 and 18/21 with 4 of 6 compound-partial judgments wrong,
+three of them the severe partial→contradicted inflation. The headline is not the
+counts — it is that **v2 eliminated the severe miss class (0 across both passes)
+and went 6/6 on compound partial support**, while 21 cases remain no reliability
+certificate. The stage-21 meta-claim and contested-pool patterns are untouched
+and open.
+
+Tests: 13 added (claim-level scenario tests incl. the anchor-fallback regression,
+prompt pins for every measured failure mode, validation-set shape) — backend
+suite 877 passed, ruff and mypy clean.
+
+**Not done, deliberately:** no re-run of the development/validation benchmarks
+under v2 (that is the recommended next step, gated as before); no chasing of the
+2/21 boundary swaps (tuning labels to the model); no change to v1 artifacts or
+the frozen test set.
+
+---
+
 ## Stage 23 — Every frontend page functional: read endpoints + wired UI — 2026-10-15
 
 The frontend had been frozen at its stage-7 placeholder state while the backend

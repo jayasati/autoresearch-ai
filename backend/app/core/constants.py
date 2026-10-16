@@ -34,6 +34,14 @@ class RunStatus(StrEnum):
 
 
 class VerificationVerdict(StrEnum):
+    """The five claim verdicts.
+
+    `NOT_ENOUGH_EVIDENCE` is this project's stored spelling of the spec
+    vocabulary's INSUFFICIENT_EVIDENCE. Renaming the stored value would orphan
+    the database enum and every frozen benchmark artifact, so the mapping is
+    documented here instead of applied.
+    """
+
     SUPPORTED = "supported"
     PARTIALLY_SUPPORTED = "partially_supported"
     UNSUPPORTED = "unsupported"

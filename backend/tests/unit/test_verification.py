@@ -343,6 +343,205 @@ class TestConflictDetection:
         assert service_session.execute(select(Conflict)).scalars().all() == []
 
 
+class TestSpecScenarios:
+    """The spec's required claim-level outcomes, each stored end to end.
+
+    Together with the citation-misattribution, conflict and no-evidence tests
+    above, these pin every scenario the verifier must distinguish: numerical
+    mismatch, partial support, contradiction, insufficient evidence, and that
+    unsupported/insufficient verdicts are never silently converted to anything
+    stronger — nor contradiction manufactured from mere absence.
+    """
+
+    async def test_a_numerical_mismatch_is_stored_as_contradicted_with_the_quote(
+        self, pipeline, service_session
+    ):
+        """The claim asserts a figure the passage opposes: contradicted, anchored to
+        the contradicting passage with its verbatim quote and offsets — and the cited
+        source, having supported nothing, is misattributed."""
+        run_response, web_label, _, extract, verifier = pipeline
+        await extract(
+            claim("Recall accuracy improved by 6.5% in older adults.", labels=[web_label])
+        )
+        llm = FakeVerifierLLM().on(
+            "6.5%",
+            lambda p: judge(
+                p,
+                contradict_containing=ABSTRACT_QUOTE,
+                verdict=VerificationVerdict.CONTRADICTED,
+            ),
+        )
+
+        result = await verifier(llm).verify(run_response.research_id)
+
+        [outcome] = result.results
+        assert outcome.verdict is VerificationVerdict.CONTRADICTED
+        assert outcome.downgraded is False
+        assert outcome.citation_assessment == "invalid"
+        [stored] = service_session.execute(select(VerificationResult)).scalars().all()
+        assert stored.supporting_evidence_id is not None  # anchored to the contradiction
+        contradicting = [
+            e for e in service_session.execute(select(Evidence)).scalars().all()
+            if e.relation is EvidenceRelation.CONTRADICTS
+        ]
+        assert contradicting and contradicting[0].quoted_text == ABSTRACT_QUOTE
+        assert contradicting[0].quote_start_char is not None
+
+    async def test_partial_support_keeps_the_verdict_and_grades_the_citation(
+        self, pipeline
+    ):
+        """A compound claim only partly established: the verdict stays
+        partially_supported (not inflated to supported, not collapsed to
+        contradicted) and the citation is partially_valid, not valid."""
+        run_response, web_label, _, extract, verifier = pipeline
+        await extract(
+            claim(
+                "Caffeine improved working memory and eliminated age-related decline.",
+                labels=[web_label],
+            )
+        )
+        llm = FakeVerifierLLM().on(
+            "eliminated age-related decline",
+            lambda p: judge(
+                p,
+                support_containing=WEB_QUOTE,
+                verdict=VerificationVerdict.PARTIALLY_SUPPORTED,
+            ),
+        )
+
+        result = await verifier(llm).verify(run_response.research_id)
+
+        [outcome] = result.results
+        assert outcome.verdict is VerificationVerdict.PARTIALLY_SUPPORTED
+        assert outcome.downgraded is False
+        assert outcome.citations == {web_label: "valid"}
+        assert outcome.citation_assessment == "partially_valid"
+
+    async def test_partial_support_grounded_only_by_the_negating_quote_survives(
+        self, pipeline, service_session
+    ):
+        """One passage establishes part of a compound claim and negates the rest;
+        the schema allows it one relation, and the model quotes the negated part.
+        The verbatim quote grounds the verdict: partially_supported must survive,
+        anchored to the contradicting evidence — not be downgraded into
+        not_enough_evidence (the val-partial-02 failure, observed live)."""
+        run_response, web_label, _, extract, verifier = pipeline
+        await extract(
+            claim(
+                "Caffeine was studied in older adults and improved their recall.",
+                labels=[web_label],
+            )
+        )
+        llm = FakeVerifierLLM().on(
+            "improved their recall",
+            lambda p: judge(
+                p,
+                contradict_containing=ABSTRACT_QUOTE,
+                verdict=VerificationVerdict.PARTIALLY_SUPPORTED,
+            ),
+        )
+
+        result = await verifier(llm).verify(run_response.research_id)
+
+        [outcome] = result.results
+        assert outcome.verdict is VerificationVerdict.PARTIALLY_SUPPORTED
+        assert outcome.downgraded is False
+        [stored] = service_session.execute(select(VerificationResult)).scalars().all()
+        anchor = next(
+            e for e in service_session.execute(select(Evidence)).scalars().all()
+            if e.id == stored.supporting_evidence_id
+        )
+        assert anchor.relation is EvidenceRelation.CONTRADICTS
+        assert anchor.quoted_text == ABSTRACT_QUOTE
+
+    async def test_insufficient_evidence_is_stored_without_any_downgrade(
+        self, pipeline, service_session
+    ):
+        """All passages judged neutral: not_enough_evidence is the verifier's own
+        verdict, stored verbatim with downgraded=False — visible uncertainty, not a
+        converted one — and every evidence row stays quoteless and neutral."""
+        run_response, web_label, _, extract, verifier = pipeline
+        await extract(claim(SUPPORTED_CLAIM, labels=[web_label]))
+        llm = FakeVerifierLLM().on(
+            "caffeine intake",
+            lambda p: judge(p, verdict=VerificationVerdict.NOT_ENOUGH_EVIDENCE),
+        )
+
+        result = await verifier(llm).verify(run_response.research_id)
+
+        [outcome] = result.results
+        assert outcome.verdict is VerificationVerdict.NOT_ENOUGH_EVIDENCE
+        assert outcome.downgraded is False
+        assert outcome.citation_assessment == "invalid"  # cited source supported nothing
+        evidence = service_session.execute(select(Evidence)).scalars().all()
+        assert evidence and all(e.relation is EvidenceRelation.NEUTRAL for e in evidence)
+        assert all(e.quoted_text is None for e in evidence)
+
+    async def test_an_unsupported_verdict_needs_no_quote_and_is_not_downgraded(
+        self, pipeline
+    ):
+        """unsupported asserts the absence of support, not evidence of falsity: it
+        is not evidence-bearing, so it stands without a quoted passage."""
+        run_response, web_label, _, extract, verifier = pipeline
+        await extract(claim(SUPPORTED_CLAIM, labels=[web_label]))
+        llm = FakeVerifierLLM().on(
+            "caffeine intake",
+            lambda p: judge(p, verdict=VerificationVerdict.UNSUPPORTED),
+        )
+
+        result = await verifier(llm).verify(run_response.research_id)
+
+        [outcome] = result.results
+        assert outcome.verdict is VerificationVerdict.UNSUPPORTED
+        assert outcome.downgraded is False
+
+
+class TestPromptV2:
+    """Pins of the verification-v2 prompt, in the style of the metrics terminology
+    guards: each measured v1 failure mode must stay named in the rules."""
+
+    def test_the_version_is_v2_and_the_external_judge_follows(self):
+        from app.services.benchmark.external_judge import EXTERNAL_JUDGE_VERSION
+        from app.services.verification.prompts import VERIFICATION_PROMPT_VERSION
+
+        assert VERIFICATION_PROMPT_VERSION == "verification-v2"
+        assert EXTERNAL_JUDGE_VERSION == "external-verification-v2"
+
+    def test_the_rules_name_each_measured_failure_mode(self):
+        from app.services.verification.prompts import VERIFICATION_SYSTEM
+
+        # stage-20: compound claims with one negated conjunct fell to contradicted
+        assert "Compound claims" in VERIFICATION_SYSTEM
+        assert "partially_supported" in VERIFICATION_SYSTEM
+        # stage-21: hedged agreement judged as contradiction
+        assert "hedging" in VERIFICATION_SYSTEM
+        # stage-21: an in-range value judged as contradiction
+        assert "in-range value" in VERIFICATION_SYSTEM
+
+    def test_the_rules_cover_the_spec_checklist(self):
+        from app.services.verification.prompts import VERIFICATION_SYSTEM
+
+        assert "numbers, dates, units, and named entities" in VERIFICATION_SYSTEM
+        assert "CAUSES" in VERIFICATION_SYSTEM  # causal vs correlational wording
+        assert "Absence is not falsity" in VERIFICATION_SYSTEM
+        assert "verbatim" in VERIFICATION_SYSTEM
+        # conflicting evidence is distinguished from insufficient evidence
+        assert "Conflicting evidence is not" in VERIFICATION_SYSTEM
+        assert "never call it not_enough_evidence" in VERIFICATION_SYSTEM
+        for verdict in VerificationVerdict:
+            assert verdict.value in VERIFICATION_SYSTEM
+
+    def test_the_prompt_format_is_unchanged_from_v1(self):
+        """The enforcement and the scripted tests parse this exact shape; v2 changed
+        the rules, not the envelope."""
+        from app.services.verification.prompts import build_verification_prompt
+
+        prompt = build_verification_prompt("A claim.", [("P1", "A title", "Some text.")])
+        assert prompt.startswith("Claim to verify:\nA claim.\n\nEvidence passages:")
+        assert "[P1] (from: A title)\nSome text." in prompt
+        assert prompt.endswith("Verify now.")
+
+
 class TestResumabilityAndGuards:
     async def test_a_twice_failing_claim_is_skipped_then_resumable(self, pipeline):
         run_response, web_label, _, extract, verifier = pipeline

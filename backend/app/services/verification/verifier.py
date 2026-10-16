@@ -310,17 +310,29 @@ class ClaimVerifier:
     ) -> uuid.UUID | None:
         """The chunk the verdict rests on: the first enforced supporting passage for
         a support verdict, the first contradicting one for `contradicted`. None when
-        nothing survived enforcement — the repository downgrade then applies."""
+        nothing survived enforcement — the repository downgrade then applies.
+
+        `partially_supported` accepts a contradicting anchor when no supporting one
+        survived: a compound claim judged from ONE passage that establishes one part
+        and negates another carries a single relation, and the verbatim quote for the
+        negated part grounds the verdict just as firmly. Without the fallback, that
+        measured partial support was downgraded to `not_enough_evidence` — silently
+        converting quoted evidence into "insufficient", the exact failure the
+        downgrade rule exists to prevent (observed live on val-partial-02)."""
         wanted = {
-            VerificationVerdict.SUPPORTED: EvidenceRelation.SUPPORTS,
-            VerificationVerdict.PARTIALLY_SUPPORTED: EvidenceRelation.SUPPORTS,
-            VerificationVerdict.CONTRADICTED: EvidenceRelation.CONTRADICTS,
+            VerificationVerdict.SUPPORTED: [EvidenceRelation.SUPPORTS],
+            VerificationVerdict.PARTIALLY_SUPPORTED: [
+                EvidenceRelation.SUPPORTS,
+                EvidenceRelation.CONTRADICTS,
+            ],
+            VerificationVerdict.CONTRADICTED: [EvidenceRelation.CONTRADICTS],
         }.get(verdict)
         if wanted is None:
             return None
-        for label, (relation, _) in relations.items():
-            if relation is wanted:
-                return labels[label].chunk_id
+        for accepted in wanted:
+            for label, (relation, _) in relations.items():
+                if relation is accepted:
+                    return labels[label].chunk_id
         return None
 
     @staticmethod

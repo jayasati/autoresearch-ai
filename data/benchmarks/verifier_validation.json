@@ -1,7 +1,8 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "created": "2026-10-13",
-  "description": "Manually labeled validation cases for the external claim judge. Each case fixes a claim, a small passage pool, and the verdict a correct judge must reach. Labels were authored by hand from the passage text alone; case 5 exists to pin the rule that ABSENCE FROM THE POOL IS NOT FALSITY: a true claim the pool does not cover must land in not_enough_evidence, never contradicted.",
+  "updated": "2026-10-16",
+  "description": "Manually labeled validation cases for the claim verifier / external judge. Each case fixes a claim, a small passage pool, and the verdict a correct judge must reach. Labels were authored by hand from the passage text alone; case 5 exists to pin the rule that ABSENCE FROM THE POOL IS NOT FALSITY: a true claim the pool does not cover must land in not_enough_evidence, never contradicted. v1.2.0 keeps the 11 v1.1.0 cases verbatim and adds 10 development cases: the three failure modes measured under verification-v1 (compound partial support, hedged agreement read as contradiction, in-range value read as contradiction), the previously uncovered unsupported verdict, unit/date/entity mismatches, causal-vs-correlational wording, and conflicting-is-not-insufficient. This is a DEVELOPMENT set used to tune the verification prompt; the frozen final test set is never used for tuning. A case may carry acceptable_verdicts (always containing expected_verdict): any verdict in it counts as agreement, used where several verdicts are defensible but one (named in label_basis) is pinned as wrong.",
   "cases": [
     {
       "case_id": "val-supported-01",
@@ -111,6 +112,108 @@
       ],
       "expected_verdict": "not_enough_evidence",
       "label_basis": "A textbook-true anatomical fact that no passage in the pool states. Absence from the pool must yield not_enough_evidence, never contradicted - second anchor for the absence-is-not-falsity rule."
+    },
+    {
+      "case_id": "val-unsupported-01",
+      "claim": "The trial reported improved sleep quality in the treatment group.",
+      "passages": [
+        {"title": "Trial outcomes", "text": "The trial's primary and secondary outcomes were systolic blood pressure and body weight; the treatment group improved significantly on both."},
+        {"title": "Trial design", "text": "The 12-month randomized trial enrolled 840 adults across four centres."}
+      ],
+      "expected_verdict": "unsupported",
+      "acceptable_verdicts": ["unsupported", "not_enough_evidence"],
+      "label_basis": "The pool squarely addresses this trial's outcomes yet states nothing about sleep quality and nothing against it. Unsupported is the pinned label; not_enough_evidence is acceptable since the boundary is soft - what is wrong is supported or contradicted."
+    },
+    {
+      "case_id": "val-unsupported-02",
+      "claim": "The 2019 survey measured respondents' trust in television news.",
+      "passages": [
+        {"title": "Survey instrument", "text": "The 2019 survey asked 2,400 respondents to rate their trust in newspapers, radio bulletins and online news sources on a five-point scale."},
+        {"title": "Survey funding", "text": "The survey was funded by a consortium of regional broadcasters."}
+      ],
+      "expected_verdict": "unsupported",
+      "acceptable_verdicts": ["unsupported", "not_enough_evidence"],
+      "label_basis": "The passage describes exactly what the survey measured, and television is not among the media listed - but it never states television was excluded, so contradicted is wrong. Unsupported pinned; not_enough_evidence acceptable."
+    },
+    {
+      "case_id": "val-hedged-agreement-01",
+      "claim": "Moderate alcohol consumption may increase blood pressure.",
+      "passages": [
+        {"title": "Alcohol and hypertension review", "text": "Recent studies indicate that even moderate drinking can potentially lead to elevated blood pressure over time."},
+        {"title": "Consumption statistics", "text": "Per-capita alcohol consumption has declined slightly over the past decade."}
+      ],
+      "expected_verdict": "supported",
+      "label_basis": "A hedged claim ('may increase') matched by a hedged passage stating the same direction ('can potentially lead to elevated'). Agreement in hedged form is support; the verification-v1 judge marked this pattern contradicted in the stage-21 inspection."
+    },
+    {
+      "case_id": "val-range-01",
+      "claim": "Between 30% and 60% of patients reported side effects in the pooled trials.",
+      "passages": [
+        {"title": "Pooled safety analysis", "text": "Across the pooled trials, 58% of patients reported at least one side effect."},
+        {"title": "Trial registry note", "text": "Twelve trials met the inclusion criteria for the pooled analysis."}
+      ],
+      "expected_verdict": "supported",
+      "label_basis": "A point value (58%) inside the claimed range (30-60%) agrees with the claim. The verification-v1 judge marked an in-range value contradicted in the stage-21 inspection; this case pins that an in-range value is never a contradiction."
+    },
+    {
+      "case_id": "val-unit-mismatch-01",
+      "claim": "Participants received 500 g of vitamin C daily.",
+      "passages": [
+        {"title": "Supplementation protocol", "text": "Participants received 500 mg of vitamin C daily throughout the trial, taken with breakfast."},
+        {"title": "Compliance note", "text": "Pill counts indicated over 95% compliance with the protocol."}
+      ],
+      "expected_verdict": "contradicted",
+      "label_basis": "Same quantity, same protocol, but the units differ by a factor of one thousand (g vs mg). A unit mismatch on the same measurement is a contradiction, not support."
+    },
+    {
+      "case_id": "val-date-mismatch-01",
+      "claim": "The emissions policy took effect in 2015.",
+      "passages": [
+        {"title": "Policy timeline", "text": "The emissions policy, adopted after lengthy consultation, took effect in January 2019."},
+        {"title": "Consultation summary", "text": "Public consultation on the policy ran for eight months and drew over 3,000 submissions."}
+      ],
+      "expected_verdict": "contradicted",
+      "label_basis": "The passage states a materially different effective date (January 2019 vs the claimed 2015) for the same policy."
+    },
+    {
+      "case_id": "val-entity-swap-01",
+      "claim": "Alphaxin reduced migraine frequency by 40% in the head-to-head trial.",
+      "passages": [
+        {"title": "Head-to-head trial results", "text": "In the head-to-head trial, Betazol reduced migraine frequency by 40%, while Alphaxin showed no significant reduction."},
+        {"title": "Trial enrolment", "text": "The head-to-head trial enrolled 612 patients with chronic migraine."}
+      ],
+      "expected_verdict": "contradicted",
+      "label_basis": "The claimed figure exists in the passage but belongs to a different drug, and the passage explicitly states Alphaxin showed no significant reduction. Pins that a matching number attributed to the wrong entity is not support."
+    },
+    {
+      "case_id": "val-causal-01",
+      "claim": "Night-shift work causes metabolic syndrome.",
+      "passages": [
+        {"title": "Occupational health cohort review", "text": "Large cohort studies report a consistent association between night-shift work and metabolic syndrome; causality has not been established."},
+        {"title": "Shift prevalence", "text": "Roughly one in five employees in industrialized countries works shifts that include nights."}
+      ],
+      "expected_verdict": "partially_supported",
+      "label_basis": "The passage reports a consistent association, which partially supports the causal claim, and itself states causality is not established - so supported is wrong, and the association makes not_enough_evidence wrong too."
+    },
+    {
+      "case_id": "val-compound-partial-03",
+      "claim": "The programme increased vaccination coverage by 15 percentage points and was adopted nationwide.",
+      "passages": [
+        {"title": "Programme evaluation", "text": "The programme increased vaccination coverage by 15 percentage points in the pilot districts; a national rollout was proposed but has not been adopted."}
+      ],
+      "expected_verdict": "partially_supported",
+      "label_basis": "The coverage figure is stated exactly; the nationwide-adoption conjunct is explicitly negated ('has not been adopted'). Third anchor for compound partial support, the verdict verification-v1 scored 0/2 on."
+    },
+    {
+      "case_id": "val-conflicting-01",
+      "claim": "The supplement improves endurance performance.",
+      "passages": [
+        {"title": "Trial A results", "text": "In trial A, the supplement improved time-to-exhaustion by 12% versus placebo."},
+        {"title": "Trial B results", "text": "Trial B found no improvement in endurance performance with the supplement."}
+      ],
+      "expected_verdict": "partially_supported",
+      "acceptable_verdicts": ["partially_supported", "supported", "contradicted"],
+      "label_basis": "One passage supports the claim and the other contradicts it: the evidence CONFLICTS, it is not missing. Any verdict that weighs the two sides is acceptable; not_enough_evidence is the pinned wrong answer - conflicting evidence must never be filed as insufficient."
     }
   ]
 }

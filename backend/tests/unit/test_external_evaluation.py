@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from app.core.config import Settings
+from app.core.constants import VerificationVerdict
 from app.services.benchmark import metrics as formulas
 from app.services.benchmark.external_judge import judge_claims_against_pool
 from app.services.benchmark.external_pool import (
@@ -229,11 +230,38 @@ class TestValidationCases:
         )
         cases = payload["cases"]
         verdicts = {case["expected_verdict"] for case in cases}
-        assert {"supported", "partially_supported", "contradicted",
-                "not_enough_evidence"} <= verdicts
+        assert {"supported", "partially_supported", "unsupported", "contradicted",
+                "not_enough_evidence"} == verdicts  # all five statuses labeled
         absent = [case for case in cases if "absent" in case["case_id"]]
         assert absent, "the true-but-absent-from-pool case must exist"
         assert absent[0]["expected_verdict"] == "not_enough_evidence"
         for case in cases:
             assert case["label_basis"]
             assert len(case["passages"]) >= 1
+
+    def test_the_v2_failure_mode_anchors_exist(self):
+        """Each judge failure mode measured under verification-v1 has a labeled
+        case pinning the correct behaviour, plus the conflicting-vs-insufficient
+        distinction and the previously uncovered unsupported verdict."""
+        payload = json.loads(
+            Path("../data/benchmarks/verifier_validation.json").read_text(encoding="utf-8")
+        )
+        ids = {case["case_id"] for case in payload["cases"]}
+        for anchor in ("hedged-agreement", "range", "unit-mismatch", "date-mismatch",
+                       "entity-swap", "causal", "compound-partial", "conflicting",
+                       "unsupported"):
+            assert any(anchor in case_id for case_id in ids), f"missing anchor: {anchor}"
+
+    def test_acceptable_verdicts_are_wellformed_where_present(self):
+        """acceptable_verdicts always contains the expected verdict and only real
+        verdict values — a typo here would silently loosen the agreement measure."""
+        payload = json.loads(
+            Path("../data/benchmarks/verifier_validation.json").read_text(encoding="utf-8")
+        )
+        valid = {verdict.value for verdict in VerificationVerdict}
+        for case in payload["cases"]:
+            assert case["expected_verdict"] in valid
+            acceptable = case.get("acceptable_verdicts")
+            if acceptable is not None:
+                assert case["expected_verdict"] in acceptable
+                assert set(acceptable) <= valid

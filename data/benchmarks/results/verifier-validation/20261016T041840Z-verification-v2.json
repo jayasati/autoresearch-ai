@@ -1,0 +1,328 @@
+{
+  "prompt_version": "verification-v2",
+  "validation_set_version": "1.2.0",
+  "run_at": "2026-10-16T04:18:40.595972+00:00",
+  "model": "gpt-4o-mini-2024-07-18",
+  "agreement": "19/21",
+  "cases": [
+    {
+      "case_id": "val-supported-01",
+      "expected": "supported",
+      "acceptable": [
+        "supported"
+      ],
+      "verdict": "supported",
+      "agree": true,
+      "raw_verdict": "supported",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "Passage P1 states that the treatment group had a 12% reduction in hospital admissions, which matches the claim exactly.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-partial-01",
+      "expected": "partially_supported",
+      "acceptable": [
+        "partially_supported"
+      ],
+      "verdict": "partially_supported",
+      "agree": true,
+      "raw_verdict": "partially_supported",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "P1 supports the claim by stating a 12% reduction in hospital admissions overall. However, it also specifies that this reduction was not statistically significant in participants over 70, indicating that not all age groups experienced the same level of effectiveness.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-contradicted-01",
+      "expected": "contradicted",
+      "acceptable": [
+        "contradicted"
+      ],
+      "verdict": "contradicted",
+      "agree": true,
+      "raw_verdict": "contradicted",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The passages clearly establish that marathon finishing times did not improve with supplementation, as P1 states that the supplement group was on average 40 seconds slower than placebo, indicating a significant opposite effect.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-insufficient-01",
+      "expected": "not_enough_evidence",
+      "acceptable": [
+        "not_enough_evidence"
+      ],
+      "verdict": "not_enough_evidence",
+      "agree": true,
+      "raw_verdict": "not_enough_evidence",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The passages do not directly address the claim about daily meditation lowering systolic blood pressure or provide any specific evidence related to the effects of meditation on blood pressure in hypertensive adults.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-true-but-absent-01",
+      "expected": "not_enough_evidence",
+      "acceptable": [
+        "not_enough_evidence"
+      ],
+      "verdict": "unsupported",
+      "agree": false,
+      "raw_verdict": "unsupported",
+      "downgraded": false,
+      "confidence": 0.8,
+      "rationale": "The passages provided do not address the specific claim about the boiling point of water at sea-level atmospheric pressure. They mencion related topics, but do not confirm or contradict the boiling point of water.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-numeric-mismatch-01",
+      "expected": "contradicted",
+      "acceptable": [
+        "contradicted"
+      ],
+      "verdict": "contradicted",
+      "agree": true,
+      "raw_verdict": "contradicted",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The claim states the vaccine was 95% effective against symptomatic infection, while passage P1 reports that the efficacy was only 66%.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-supported-02",
+      "expected": "supported",
+      "acceptable": [
+        "supported"
+      ],
+      "verdict": "supported",
+      "agree": true,
+      "raw_verdict": "supported",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The passage states that participants were followed for a median of eight years and that dietary intake was recorded annually using a validated food-frequency questionnaire.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-partial-02",
+      "expected": "partially_supported",
+      "acceptable": [
+        "partially_supported"
+      ],
+      "verdict": "partially_supported",
+      "agree": true,
+      "raw_verdict": "partially_supported",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The passage supports that the medication lowered LDL cholesterol by 30%, but it contradicts the claim by stating that cardiovascular risk was not eliminated and that there remained substantial residual risk.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-contradicted-02",
+      "expected": "contradicted",
+      "acceptable": [
+        "contradicted"
+      ],
+      "verdict": "contradicted",
+      "agree": true,
+      "raw_verdict": "contradicted",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The claim states that screen time among teenagers declined between 2015 and 2020, but passage P1 directly states that average daily screen time among teenagers \"rose each year from 2015 to 2020.\"",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-insufficient-02",
+      "expected": "not_enough_evidence",
+      "acceptable": [
+        "not_enough_evidence"
+      ],
+      "verdict": "unsupported",
+      "agree": false,
+      "raw_verdict": "unsupported",
+      "downgraded": false,
+      "confidence": 0.8,
+      "rationale": "The passages do not provide specific information about the employment rate of participants after the retraining programme or any indication that it doubled. They are related to the programme and the labour market but do not directly address the claim's content.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-true-but-absent-02",
+      "expected": "not_enough_evidence",
+      "acceptable": [
+        "not_enough_evidence"
+      ],
+      "verdict": "not_enough_evidence",
+      "agree": true,
+      "raw_verdict": "not_enough_evidence",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The provided passages do not address the structure of the human heart or confirm whether it has four chambers. They discuss topics related to exercise physiology and cardiology departments but do not provide relevant information about heart anatomy.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-unsupported-01",
+      "expected": "unsupported",
+      "acceptable": [
+        "unsupported",
+        "not_enough_evidence"
+      ],
+      "verdict": "unsupported",
+      "agree": true,
+      "raw_verdict": "unsupported",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The passages discuss the trial's outcomes and design but do not address sleep quality in the treatment group. Therefore, the claim about improved sleep quality cannot be verified from the given evidence.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-unsupported-02",
+      "expected": "unsupported",
+      "acceptable": [
+        "unsupported",
+        "not_enough_evidence"
+      ],
+      "verdict": "unsupported",
+      "agree": true,
+      "raw_verdict": "unsupported",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The passages discuss a 2019 survey and its focus on trust in various news sources, but they do not specifically mention television news. Thus, there is no direct support or contradiction of the claim regarding television news.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-hedged-agreement-01",
+      "expected": "supported",
+      "acceptable": [
+        "supported"
+      ],
+      "verdict": "supported",
+      "agree": true,
+      "raw_verdict": "supported",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "Passage P1 states that moderate drinking can potentially lead to elevated blood pressure, supporting the claim.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-range-01",
+      "expected": "supported",
+      "acceptable": [
+        "supported"
+      ],
+      "verdict": "supported",
+      "agree": true,
+      "raw_verdict": "supported",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The passage states that 58% of patients reported at least one side effect, which falls within the range of 30% to 60%.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-unit-mismatch-01",
+      "expected": "contradicted",
+      "acceptable": [
+        "contradicted"
+      ],
+      "verdict": "contradicted",
+      "agree": true,
+      "raw_verdict": "contradicted",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The claim states that participants received 500 g of vitamin C daily, while P1 states that they received 500 mg daily. Since 500 g is equal to 500,000 mg, this contradicts the claim's central assertion regarding the dosage of vitamin C.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-date-mismatch-01",
+      "expected": "contradicted",
+      "acceptable": [
+        "contradicted"
+      ],
+      "verdict": "contradicted",
+      "agree": true,
+      "raw_verdict": "contradicted",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "P1 states that the emissions policy took effect in January 2019, which contradicts the claim that it took effect in 2015.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-entity-swap-01",
+      "expected": "contradicted",
+      "acceptable": [
+        "contradicted"
+      ],
+      "verdict": "contradicted",
+      "agree": true,
+      "raw_verdict": "contradicted",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The claim states that Alphaxin reduced migraine frequency by 40%, while the evidence passage explicitly states that 'Alphaxin showed no significant reduction.'",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-causal-01",
+      "expected": "partially_supported",
+      "acceptable": [
+        "partially_supported"
+      ],
+      "verdict": "partially_supported",
+      "agree": true,
+      "raw_verdict": "partially_supported",
+      "downgraded": false,
+      "confidence": 0.8,
+      "rationale": "P1 supports the claim that there is an association between night-shift work and metabolic syndrome, but it explicitly states that causality has not been established. P2 does not address the claim directly but provides context about the prevalence of night-shift work.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-compound-partial-03",
+      "expected": "partially_supported",
+      "acceptable": [
+        "partially_supported"
+      ],
+      "verdict": "partially_supported",
+      "agree": true,
+      "raw_verdict": "partially_supported",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "The passage supports the claim that the programme increased vaccination coverage by 15 percentage points but contradicts the part about it being adopted nationwide, as it states that a national rollout was proposed but has not been adopted.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    },
+    {
+      "case_id": "val-conflicting-01",
+      "expected": "partially_supported",
+      "acceptable": [
+        "partially_supported",
+        "supported",
+        "contradicted"
+      ],
+      "verdict": "contradicted",
+      "agree": true,
+      "raw_verdict": "contradicted",
+      "downgraded": false,
+      "confidence": 0.9,
+      "rationale": "One passage states that the supplement improved endurance performance by 12%, while another states that there was no improvement in endurance performance with the supplement. This constitutes a conflict regarding the claim.",
+      "enforcement_warnings": [],
+      "model": "gpt-4o-mini-2024-07-18"
+    }
+  ]
+}

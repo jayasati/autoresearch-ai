@@ -87,10 +87,12 @@ class ClaimVerificationModel(BaseModel):
 
     verdict: VerificationVerdict = Field(
         description=(
-            "supported: a passage states the claim. partially_supported: passages "
-            "establish part of it. unsupported: nothing relevant found. "
-            "contradicted: a passage states the opposite. not_enough_evidence: the "
-            "passages are too thin to judge."
+            "supported: a passage states the claim, specifics matching. "
+            "partially_supported: part is established, the rest unestablished or "
+            "explicitly negated. unsupported: the passages address the claim's "
+            "subject but state neither it nor its opposite. contradicted: a passage "
+            "states the opposite of the claim's central assertion. "
+            "not_enough_evidence: the passages are too thin or tangential to judge."
         )
     )
     confidence: float = Field(ge=0.0, le=1.0, description="How settled the verdict is.")

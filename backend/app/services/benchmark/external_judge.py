@@ -2,11 +2,11 @@
 The arm-blind external judge: one claim, one pool, one verdict.
 
 Reuses the verification stage's machinery wholesale — the same prompt version
-(`verification-v1`), the same structured-output schema, the same verbatim-quote
-enforcement and the same downgrade rule — against the external pool instead of the
-run's own evidence. Arm-blindness is structural: the judge's inputs are the claim
-text and pool passages, nothing else; no run id, mode or arm name can reach the
-prompt.
+(the current `VERIFICATION_PROMPT_VERSION`), the same structured-output schema,
+the same verbatim-quote enforcement and the same downgrade rule — against the
+external pool instead of the run's own evidence. Arm-blindness is structural:
+the judge's inputs are the claim text and pool passages, nothing else; no run
+id, mode or arm name can reach the prompt.
 
 Nothing here writes to run-owned tables. The verdicts are returned to the runner,
 which stores them in the raw results next to the pool hash — separate from
