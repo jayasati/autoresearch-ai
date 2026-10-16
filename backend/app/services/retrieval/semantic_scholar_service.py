@@ -29,6 +29,7 @@ toward whatever is well indexed.
 
 import asyncio
 import logging
+import re
 from collections.abc import Sequence
 
 from app.core.constants import EvidenceDepth
@@ -68,6 +69,51 @@ PAPER_FIELDS = (
 
 #: Hosts that only ever resolve a DOI, so their path *is* the DOI.
 DOI_RESOLVER_HOSTS = frozenset({"doi.org", "dx.doi.org", "www.doi.org"})
+
+#: Words that open a question. A query starting with one of these (or ending in a
+#: question mark) is a natural-language question, not a keyword search.
+INTERROGATIVE_LEADS = frozenset({
+    "what", "which", "who", "whom", "whose", "why", "how", "when", "where",
+    "does", "do", "did", "is", "are", "was", "were", "has", "have", "had",
+    "can", "could", "will", "would", "should", "shall", "may", "might",
+})
+
+#: Function words stripped from a question to make a keyword query. Content words
+#: are never touched, and the original order is preserved.
+QUERY_STOPWORDS = INTERROGATIVE_LEADS | frozenset({
+    "the", "a", "an", "of", "in", "on", "for", "to", "and", "or",
+    "it", "its", "about", "their", "there",
+})
+
+_WORD_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9.\-]*")
+
+
+def keywordize_academic_query(query: str) -> str:
+    """A question, reduced to the keyword form the paper-search endpoint can match.
+
+    Measured on the development questions (2026-10-16, live): the raw
+    interrogative form returned ZERO available papers for 5 of 7 probed questions
+    (`total: 0`), while the keyword form found matches for all of them — e.g.
+    "What are the health effects of regular moderate coffee consumption in
+    adults?" matched nothing, while "health effects moderate coffee consumption
+    adults" matched 31,143 papers. That starvation is why no stage-19 development
+    run ever had an academic passage in evidence.
+
+    Deliberately conservative: only a query that *looks like a question* (ends in
+    "?" or opens with an interrogative/auxiliary) is rewritten, so a deliberate
+    keyword query passes through untouched; content words are kept verbatim and in
+    order; and a rewrite that would empty the query falls back to the original.
+    """
+    stripped = query.strip()
+    first_word = stripped.split(maxsplit=1)[0].lower() if stripped else ""
+    if not (stripped.endswith("?") or first_word in INTERROGATIVE_LEADS):
+        return stripped
+    kept = [
+        word
+        for word in _WORD_PATTERN.findall(stripped)
+        if word.lower() not in QUERY_STOPWORDS
+    ]
+    return " ".join(kept) or stripped
 
 
 def normalise_doi(raw: str | None) -> str | None:
@@ -244,6 +290,14 @@ class SemanticScholarService(HttpSearchBackend):
             )
         )
 
+        original_query = request.query
+        effective = keywordize_academic_query(request.query)
+        if effective != request.query:
+            # A natural-language question starves this endpoint (see
+            # keywordize_academic_query); the keyword form is what is actually
+            # searched, and both forms are recorded on the result.
+            request = request.model_copy(update={"query": effective})
+
         limiter = self.rate_limiter
         waited_before = limiter.total_waited
 
@@ -269,7 +323,8 @@ class SemanticScholarService(HttpSearchBackend):
         candidates, duplicates, malformed = self._to_candidates(raw_results, request)
 
         result = AcademicSearchResult(
-            query=request.query,
+            query=original_query,
+            effective_query=effective if effective != original_query else None,
             provider=PROVIDER,
             candidates=candidates,
             requested_limit=request.limit,

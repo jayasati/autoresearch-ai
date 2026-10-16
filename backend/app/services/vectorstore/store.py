@@ -201,6 +201,83 @@ class VectorStore:
             )
         ]
 
+    def search_mmr(
+        self,
+        query: str,
+        top_k: int | None = None,
+        *,
+        fetch_k: int | None = None,
+        mmr_lambda: float = 0.7,
+    ) -> list[RetrievedChunk]:
+        """`top_k` chunks by maximal marginal relevance: relevant to the query, and
+        penalised for redundancy with what is already selected.
+
+        Measured offline on the stage-19 development pools (2026-10-16,
+        `scripts/experiment_selection.py`, relevance-judge-v1, n=12 cells):
+        plain cosine top-4 scored P@4 0.458 / nDCG 0.744 / 2.83 distinct sources;
+        MMR at lambda=0.7 scored P@4 0.583 / nDCG 0.819 / 3.5 distinct sources,
+        with recall unchanged at 1.0 — near-duplicate snippets from one source
+        were crowding out passages that establish something. Optional, selected
+        by `EVIDENCE_SELECTION=mmr`; plain similarity remains the default.
+
+        A candidate window of `fetch_k` (default 3x `top_k`) is ranked first;
+        MMR then picks from it. Ranks on the returned chunks are selection order.
+        """
+        if not query or not query.strip():
+            raise ValueError("query must contain text")
+        k = top_k if top_k is not None else get_settings().TOP_K
+        if k < 1:
+            raise ValueError(f"top_k must be at least 1, got {k}")
+        if not 0.0 <= mmr_lambda <= 1.0:
+            raise ValueError(f"mmr_lambda must be in [0, 1], got {mmr_lambda}")
+
+        total = self.count()
+        if total == 0:
+            return []
+        window = min(max(fetch_k or 3 * k, k), total)
+
+        query_embedding = self.embedder.embed_query(query)
+        result = self._collection.query(
+            query_embeddings=[query_embedding],  # type: ignore[arg-type]
+            n_results=window,
+            include=["documents", "metadatas", "distances", "embeddings"],
+        )
+        ids = result["ids"][0]
+        documents = (result.get("documents") or [[]])[0] or []
+        metadatas = (result.get("metadatas") or [[]])[0] or []
+        distances = (result.get("distances") or [[]])[0] or []
+        embeddings = result.get("embeddings")
+        vectors = list(embeddings[0]) if embeddings is not None else []
+
+        def dot(a, b) -> float:  # cosine: the embedder's vectors are normalised
+            return float(sum(x * y for x, y in zip(a, b, strict=True)))
+
+        remaining = list(range(len(ids)))
+        selected: list[int] = []
+        while remaining and len(selected) < k:
+            def mmr_score(index: int) -> float:
+                relevance = dot(query_embedding, vectors[index])
+                redundancy = max(
+                    (dot(vectors[index], vectors[j]) for j in selected), default=0.0
+                )
+                return mmr_lambda * relevance - (1 - mmr_lambda) * redundancy
+
+            best = max(remaining, key=mmr_score)
+            selected.append(best)
+            remaining.remove(best)
+
+        return [
+            self._rebuild(
+                chunk_id=ids[index],
+                text=documents[index],
+                metadata=dict(metadatas[index]),
+                distance=float(distances[index]),
+                query=query,
+                rank=rank,
+            )
+            for rank, index in enumerate(selected)
+        ]
+
     def _rebuild(
         self,
         *,

@@ -399,18 +399,27 @@ class ResearchOrchestrator:
         )
 
         if request.mode is ResearchMode.SEARCH_GROUNDED:
-            # Embed into a per-run collection; evidence is the top-k by similarity.
+            # Embed into a per-run collection; evidence is the top-k by similarity,
+            # or by MMR when configured (see EVIDENCE_SELECTION in config.py for
+            # the development measurement behind the option).
             collection = f"run_{run_id.hex}"
             store = self._store_for(collection)
             t0 = time.perf_counter()
             index_result = await asyncio.to_thread(store.index_chunks, chunks)
             timings["indexing"] = round(time.perf_counter() - t0, 3)
 
+            use_mmr = self.settings.EVIDENCE_SELECTION == "mmr"
             t0 = time.perf_counter()
-            hits = await asyncio.to_thread(store.search, request.topic, profile.top_k)
+            hits = await asyncio.to_thread(
+                store.search_mmr if use_mmr else store.search,
+                request.topic,
+                profile.top_k,
+            )
             timings["evidence_retrieval"] = round(time.perf_counter() - t0, 3)
             if not hits:
                 raise NoEvidenceError("The vector search returned no passages.")
+            if use_mmr:
+                evidence.selection = "semantic_mmr"
 
             evidence.collection = collection
             evidence.embedding_model = store.embedder.model_name
@@ -478,15 +487,44 @@ class ResearchOrchestrator:
         if len(errors) == len(outcomes):
             raise errors[0]
 
+        # Deduplicate across channels on ANY shared identity key (fingerprint, DOI,
+        # PMID/PMCID/arXiv id, scholarly URL alias): the same paper arriving as a
+        # PMC web page and as an academic record is one document. On a collision
+        # the candidate with MORE text wins — content decides, not channel — so a
+        # metadata-only paper never displaces a quotable snippet of itself, and a
+        # fuller abstract replaces a thinner snippet.
         candidates: list[Candidate] = []
-        seen: set[str] = set()
+        key_owner: dict[str, int] = {}
+        cross_duplicates = 0
         for _, outcome in outcomes:
             if isinstance(outcome, BaseException):
                 continue
             for candidate in outcome.candidates:
-                if candidate.fingerprint not in seen:
-                    seen.add(candidate.fingerprint)
+                keys = candidate.identity_keys()
+                existing = {key_owner[key] for key in keys if key in key_owner}
+                if not existing:
+                    index = len(candidates)
                     candidates.append(candidate)
+                elif len(existing) == 1:
+                    cross_duplicates += 1
+                    index = existing.pop()
+                    if candidate.text_length() > candidates[index].text_length():
+                        candidates[index] = candidate
+                else:
+                    # The candidate bridges two already-kept documents; keeping the
+                    # first match is arbitrary but stable, and the case is logged.
+                    cross_duplicates += 1
+                    index = min(existing)
+                    logger.warning(
+                        "Candidate %r matches multiple kept documents; merged into one",
+                        candidate.fingerprint,
+                    )
+                for key in keys:
+                    key_owner[key] = index
+        if cross_duplicates:
+            logger.info(
+                "Deduplicated %d candidate(s) across retrieval channels", cross_duplicates
+            )
         return candidates
 
     def _attach_sources(

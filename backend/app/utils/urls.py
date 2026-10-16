@@ -12,6 +12,7 @@ So there is exactly one definition here, and both callers use it.
 """
 
 import hashlib
+import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 # Parameters that identify a *referrer*, not a document. Two URLs differing only in
@@ -126,6 +127,47 @@ def _identity_basis(url: str) -> str:
 def url_fingerprint(url: str) -> str:
     """SHA-256 identity of a web address. The deduplication key for a web source."""
     return hashlib.sha256(_identity_basis(url).encode("utf-8")).hexdigest()
+
+
+# Hosts whose URL paths carry a scholarly identifier. A PMC page found by web
+# search and the same paper found by academic search are one source; these
+# patterns are what lets retrieval notice that across channels.
+_SCHOLARLY_URL_PATTERNS: tuple[tuple[str, "re.Pattern[str]", str], ...] = (
+    ("pmc.ncbi.nlm.nih.gov", re.compile(r"/articles/(pmc\d+)", re.I), "pmcid"),
+    ("ncbi.nlm.nih.gov", re.compile(r"/pmc/articles/(pmc\d+)", re.I), "pmcid"),
+    ("pubmed.ncbi.nlm.nih.gov", re.compile(r"^/(\d+)"), "pmid"),
+    ("arxiv.org", re.compile(r"^/(?:abs|pdf)/([\w.\-]+?)(?:v\d+)?(?:\.pdf)?$", re.I), "arxiv"),
+    ("doi.org", re.compile(r"^/(10\..+)$"), "doi"),
+    ("dx.doi.org", re.compile(r"^/(10\..+)$"), "doi"),
+)
+
+
+def scholarly_aliases(url: str | None) -> set[str]:
+    """Identifier aliases carried by a URL: `{"pmcid:pmc123"}`, `{"doi:10...."}`, ….
+
+    Used for retrieval-time deduplication across channels — the measured case is
+    PMC articles arriving via web search while the same paper arrives via academic
+    search. **Deliberately NOT part of `source_fingerprint`**: the fingerprint is
+    the stored, global identity of a source row, and changing how it is computed
+    would split every already-persisted source's identity. Aliases only let two
+    candidates in one retrieval pass be recognised as the same document.
+    """
+    if not url:
+        return set()
+    canonical = canonicalize_url(url)
+    if "://" not in canonical:
+        return set()
+    remainder = canonical.split("://", 1)[1]
+    host, _, path = remainder.partition("/")
+    host = host.split(":", 1)[0]
+    path = "/" + path
+    aliases: set[str] = set()
+    for pattern_host, pattern, kind in _SCHOLARLY_URL_PATTERNS:
+        if host == pattern_host:
+            match = pattern.search(path)
+            if match:
+                aliases.add(f"{kind}:{match.group(1).lower()}")
+    return aliases
 
 
 def source_fingerprint(

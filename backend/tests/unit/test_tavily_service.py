@@ -656,6 +656,41 @@ class TestUrlNormalisationAndDeduplication:
         assert candidate.to_source_create().fingerprint == candidate.fingerprint
 
 
+class TestPublicationProvenance:
+    """The provider's published_date, preserved as far as it can be trusted.
+
+    The string is unparsed and "often absent or wrong", so only a leading
+    four-digit year in a plausible range reaches the source row — publication
+    provenance without invented precision.
+    """
+
+    def make(self, published_date):
+        candidate = CandidateSource.from_provider_result(
+            {"url": "https://a.invalid/x", "published_date": published_date},
+            rank=0,
+            query=QUERY,
+        )
+        assert candidate is not None
+        return candidate
+
+    @pytest.mark.parametrize(
+        ("raw", "year"),
+        [
+            ("2023-06-15", 2023),
+            ("2021", 2021),
+            (" 1998-01-01T00:00:00Z", 1998),
+            ("June 2020", None),      # no leading year: not trusted
+            ("0000-01-01", None),     # implausible
+            ("next tuesday", None),
+            (None, None),
+        ],
+    )
+    def test_only_a_plausible_leading_year_is_kept(self, raw, year):
+        candidate = self.make(raw)
+        assert candidate.publication_year == year
+        assert candidate.to_source_create().publication_year == year
+
+
 # --------------------------------------------------------------------------- #
 # Candidates are not evidence
 # --------------------------------------------------------------------------- #

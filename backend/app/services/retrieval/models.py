@@ -22,6 +22,7 @@ Evidence is created in the evidence layer, by linking a *claim* to a *chunk* of 
 fetched document. A `CandidateSource` is two stages away from that.
 """
 
+import re
 from datetime import datetime
 from typing import Any, Literal
 
@@ -30,7 +31,7 @@ from pydantic import Field, computed_field, field_validator, model_validator
 from app.core.constants import EvidenceDepth, SourceType
 from app.db.base import utcnow
 from app.schemas.base import ReadModel, WriteModel
-from app.utils.urls import canonicalize_url, source_fingerprint
+from app.utils.urls import canonicalize_url, scholarly_aliases, source_fingerprint
 
 SearchDepth = Literal["basic", "advanced"]
 
@@ -133,6 +134,19 @@ class CandidateSource(ReadModel):
         remainder = self.canonical_url.split("://", 1)[-1]
         return remainder.split("/", 1)[0].split(":", 1)[0]
 
+    def identity_keys(self) -> set[str]:
+        """Every key under which this candidate is the same document as another.
+
+        The fingerprint plus any scholarly identifier the URL carries (a PMC or
+        PubMed page, a DOI resolver link). Retrieval deduplicates across channels
+        on ANY shared key; the stored fingerprint itself is unchanged.
+        """
+        return {self.fingerprint} | scholarly_aliases(self.canonical_url)
+
+    def text_length(self) -> int:
+        """How much quotable text this candidate carries (its snippet)."""
+        return len(self.snippet or "")
+
     @classmethod
     def from_provider_result(
         cls, result: dict[str, Any], *, rank: int, query: str, provider: str = "tavily"
@@ -177,6 +191,22 @@ class CandidateSource(ReadModel):
             provider=provider,
         )
 
+    @property
+    def publication_year(self) -> int | None:
+        """A plausible year parsed from the provider's `published_date`, or None.
+
+        The provider's date is an unparsed string that is "often absent or wrong",
+        so only a leading four-digit year in a plausible range is trusted — enough
+        to preserve publication provenance without inventing precision.
+        """
+        if not self.published_date:
+            return None
+        match = re.match(r"\s*(\d{4})\b", self.published_date)
+        if not match:
+            return None
+        year = int(match.group(1))
+        return year if 1400 < year < 2200 else None
+
     def to_source_create(self):
         """Convert to the persistence schema for a `source` row.
 
@@ -193,6 +223,7 @@ class CandidateSource(ReadModel):
             url=self.url,
             canonical_url=self.canonical_url,
             title=self.title,
+            publication_year=self.publication_year,
         )
 
 
@@ -400,6 +431,38 @@ class AcademicCandidateSource(ReadModel):
         """Whether there is anything to quote. False for a metadata-only paper."""
         return self.evidence_depth.has_text
 
+    def identity_keys(self) -> set[str]:
+        """Every key under which this paper is the same document as another.
+
+        The fingerprint, the DOI, the provider's external identifiers (PubMed,
+        PubMed Central, arXiv) and any scholarly identifier in the landing URL —
+        so the same paper arriving as a PMC web page and as an academic record is
+        recognised as one document at retrieval time. The stored fingerprint
+        itself is unchanged.
+        """
+        keys = {self.fingerprint}
+        if self.doi:
+            keys.add(f"doi:{self.doi.lower()}")
+        for name, value in self.external_ids.items():
+            if not value:
+                continue
+            lowered = str(value).strip().lower()
+            if name == "PubMed":
+                keys.add(f"pmid:{lowered}")
+            elif name == "PubMedCentral":
+                keys.add(f"pmcid:{'pmc' + lowered if not lowered.startswith('pmc') else lowered}")
+            elif name == "ArXiv":
+                keys.add(f"arxiv:{lowered}")
+            elif name == "DOI":
+                keys.add(f"doi:{lowered}")
+        if self.url:
+            keys |= scholarly_aliases(canonicalize_url(self.url))
+        return keys
+
+    def text_length(self) -> int:
+        """How much quotable text this candidate carries (its abstract)."""
+        return len(self.abstract or "")
+
     @property
     def citation_label_hint(self) -> str:
         """A human-readable label for a source list. Not a citation.
@@ -450,6 +513,14 @@ class AcademicSearchResult(ReadModel):
     """
 
     query: str
+    effective_query: str | None = Field(
+        default=None,
+        description=(
+            "The keyword form actually sent to the provider when the query was a "
+            "natural-language question, None when the query went through verbatim. "
+            "Recorded because candidates' own `query` carries what produced them."
+        ),
+    )
     provider: str = "semantic_scholar"
     candidates: list[AcademicCandidateSource] = Field(default_factory=list)
 

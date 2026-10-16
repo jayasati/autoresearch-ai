@@ -305,6 +305,69 @@ class TestTopK:
             store.search("memory", top_k=0)
 
 
+class TestMMRSearch:
+    """Maximal marginal relevance: the optional selection behind EVIDENCE_SELECTION.
+
+    Measured on the stage-19 development pools: near-duplicate snippets from one
+    source crowded out passages that establish something (P@4 0.458 plain vs
+    0.583 MMR, distinct sources 2.83 vs 3.5, recall unchanged — stage 26).
+    """
+
+    def diversified_store(self, tmp_path):
+        """One source whose text chunks into near-identical coffee passages, one
+        coffee-adjacent chunk from another: plain top-2 takes two of the
+        duplicates, MMR should not."""
+        store = store_in(tmp_path)
+        repetitive = "Coffee consumption improves working memory in healthy adults. " * 8
+        repetitive_chunks = chunks_for(
+            repetitive.strip(), web_source("https://a.invalid/coffee")
+        )
+        assert len(repetitive_chunks) >= 2  # the premise: several near-duplicates
+        store.index_chunks(
+            repetitive_chunks
+            + chunks_for(
+                "Working memory gains from coffee were smaller in older adults, "
+                "a second study of memory and coffee reports.",
+                web_source("https://b.invalid/other"),
+            )
+        )
+        return store
+
+    def test_the_first_pick_is_the_plain_best_hit(self, tmp_path):
+        store = self.diversified_store(tmp_path)
+        plain = store.search("coffee working memory", top_k=1)
+        mmr = store.search_mmr("coffee working memory", top_k=1)
+        assert mmr[0].chunk_id == plain[0].chunk_id  # relevance dominates pick one
+
+    def test_mmr_breaks_up_near_duplicates(self, tmp_path):
+        store = self.diversified_store(tmp_path)
+        plain = store.search("coffee working memory", top_k=2)
+        mmr = store.search_mmr("coffee working memory", top_k=2)
+
+        plain_sources = {hit.source_fingerprint for hit in plain}
+        mmr_sources = {hit.source_fingerprint for hit in mmr}
+        assert len(plain_sources) == 1  # the failure mode: two near-duplicates
+        assert len(mmr_sources) == 2
+
+    def test_ranks_are_selection_order_and_results_validate(self, tmp_path):
+        store = self.diversified_store(tmp_path)
+        hits = store.search_mmr("coffee working memory", top_k=3)
+        assert [hit.rank for hit in hits] == [0, 1, 2]
+        for hit in hits:
+            assert isinstance(hit, RetrievedChunk)
+            assert 0.0 <= hit.similarity <= 1.0
+
+    def test_empty_collection_and_bad_inputs_behave_like_plain_search(self, tmp_path):
+        store = store_in(tmp_path)
+        assert store.search_mmr("anything", top_k=3) == []
+        with pytest.raises(ValueError, match="top_k"):
+            store.search_mmr("x", top_k=0)
+        with pytest.raises(ValueError, match="query"):
+            store.search_mmr("   ", top_k=2)
+        with pytest.raises(ValueError, match="mmr_lambda"):
+            store.search_mmr("x", top_k=2, mmr_lambda=1.5)
+
+
 class TestEmptyDatabase:
     def test_searching_an_empty_collection_returns_no_results(self, tmp_path):
         """Before anything is indexed, 'nothing similar exists' is an answer,

@@ -316,10 +316,16 @@ class ExperimentRunner:
         k = DEPTH_PROFILES[self.depth].top_k
         ranked = self.research.persisted_chunks_for_run(run.research_id)
         if arm in ("search_grounded", "full_autoresearch_verified"):
-            # Replay the run's own deterministic evidence ranking.
+            # Replay the run's own deterministic evidence ranking, under the same
+            # selection strategy the run used (EVIDENCE_SELECTION).
             store = self.verifier._evidence_store(run.research_id, ResearchMode.SEARCH_GROUNDED)
             assert store is not None  # only MODEL_ONLY yields no store
-            hits = await asyncio.to_thread(store.search, item.question, k)
+            search = (
+                store.search_mmr
+                if self.settings.EVIDENCE_SELECTION == "mmr"
+                else store.search
+            )
+            hits = await asyncio.to_thread(search, item.question, k)
             passages = [hit.text for hit in hits]
         else:
             passages = [chunk.text for chunk in ranked[:k]]

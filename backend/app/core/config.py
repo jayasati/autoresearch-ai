@@ -151,6 +151,12 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 900
     CHUNK_OVERLAP: int = 150
     TOP_K: int = 6
+    # How SEARCH_GROUNDED picks its top-k evidence passages. "similarity" is the
+    # original plain cosine top-k; "mmr" adds a redundancy penalty (lambda 0.7),
+    # which measured better on the development pools (P@4 0.458 -> 0.583,
+    # distinct sources 2.83 -> 3.5, recall unchanged; stage 26). Kept optional so
+    # the change is a recorded configuration, never a silent redefinition.
+    EVIDENCE_SELECTION: Literal["similarity", "mmr"] = "similarity"
 
     # --- Orchestration limits (cost guardrails) ---
     MAX_SUBQUESTIONS: int = 6

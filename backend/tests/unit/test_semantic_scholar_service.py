@@ -32,6 +32,7 @@ from app.services.retrieval import (
     reset_limiters,
 )
 from app.services.retrieval.semantic_scholar_service import (
+    keywordize_academic_query,
     normalise_authors,
     normalise_count,
     normalise_doi,
@@ -345,6 +346,71 @@ class TestTheRequestSent:
 # --------------------------------------------------------------------------- #
 # 2. No results
 # --------------------------------------------------------------------------- #
+
+
+class TestQuestionKeywordization:
+    """Natural-language questions starve the paper-search endpoint.
+
+    Measured live on the development questions (2026-10-16): the raw interrogative
+    form returned `total: 0` for 5 of 7 probed questions while the keyword form
+    matched papers for all of them (e.g. 0 → 31,143 for the coffee question) —
+    the reason no stage-19 development run ever had an academic passage in
+    evidence. The rewrite is conservative: question-shaped queries only, content
+    words kept verbatim and in order.
+    """
+
+    @pytest.mark.parametrize(
+        ("question", "expected"),
+        [
+            (
+                "What are the health effects of regular moderate coffee "
+                "consumption in adults?",
+                "health effects regular moderate coffee consumption adults",
+            ),
+            (
+                "Does vitamin D supplementation reduce the risk of acute "
+                "respiratory infections?",
+                "vitamin D supplementation reduce risk acute respiratory infections",
+            ),
+            # The "?" alone is enough to mark a question.
+            ("coffee consumption helps memory?", "coffee consumption helps memory"),
+        ],
+    )
+    def test_questions_are_reduced_to_their_content_words(self, question, expected):
+        assert keywordize_academic_query(question) == expected
+
+    def test_a_keyword_query_passes_through_untouched(self):
+        assert keywordize_academic_query(QUERY) == QUERY
+        assert (
+            keywordize_academic_query("theory of mind development")
+            == "theory of mind development"
+        )
+
+    def test_a_rewrite_that_would_empty_the_query_falls_back_to_the_original(self):
+        assert keywordize_academic_query("Why?") == "Why?"
+        assert keywordize_academic_query("What is it about?") == "What is it about?"
+
+    @pytest.mark.asyncio
+    async def test_the_keyword_form_is_sent_and_both_forms_are_recorded(self):
+        handler = ok(paper())
+        svc, _ = service(handler)
+        question = "Does coffee improve memory in adults?"
+
+        found = await svc.search(question)
+
+        assert handler.params()["query"] == "coffee improve memory adults"
+        assert found.query == question  # the caller's query, as asked
+        assert found.effective_query == "coffee improve memory adults"
+        # Candidates record what actually produced them.
+        assert found.candidates[0].query == "coffee improve memory adults"
+
+    @pytest.mark.asyncio
+    async def test_a_keyword_query_records_no_rewrite(self):
+        handler = ok(paper())
+        svc, _ = service(handler)
+        found = await svc.search(QUERY)
+        assert handler.params()["query"] == QUERY
+        assert found.effective_query is None
 
 
 class TestNoResults:

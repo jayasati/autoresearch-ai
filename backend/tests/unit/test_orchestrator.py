@@ -166,8 +166,9 @@ def orchestrator_factory(service_session, tmp_path):
         web=None,
         academic=None,
         llm=None,
+        **setting_overrides,
     ) -> ResearchOrchestrator:
-        test_settings = settings()
+        test_settings = settings().model_copy(update=setting_overrides)
         return ResearchOrchestrator(
             settings=test_settings,
             research_service=ResearchService(settings=test_settings),
@@ -248,6 +249,89 @@ class TestHappyPath:
         academic = FakeAcademicSearch(academic_result(*(academic_candidate(i) for i in range(4))))
         response = await start(orchestrator_factory(web=web, academic=academic), depth="quick")
         assert response.execution_metadata.chunks_retrieved <= DEPTH_PROFILES["quick"].top_k
+
+    async def test_mmr_selection_is_optional_and_recorded(self, orchestrator_factory):
+        """EVIDENCE_SELECTION=mmr flips the selection and says so in the metadata;
+        the default stays plain similarity, recorded as semantic_top_k."""
+        response = await start(orchestrator_factory(EVIDENCE_SELECTION="mmr"))
+        assert response.execution_metadata.evidence_selection == "semantic_mmr"
+        assert response.status is RunStatus.COMPLETED
+        assert response.sources  # evidence still flows end to end
+
+        default = await start(orchestrator_factory())
+        assert default.execution_metadata.evidence_selection == "semantic_top_k"
+
+
+class TestCrossChannelDeduplication:
+    """The same document arriving through both channels is one source.
+
+    The measured case (stage-19 development runs): PMC articles were the single
+    most-retrieved web domain, and the identical literature arrives through
+    academic search as papers with PubMed Central ids. Identity is matched on any
+    shared scholarly alias; on a collision the candidate with more text wins —
+    content decides, never the channel.
+    """
+
+    PMC_URL = "https://pmc.ncbi.nlm.nih.gov/articles/PMC7696347/"
+
+    def pmc_web_candidate(self) -> CandidateSource:
+        candidate = CandidateSource.from_provider_result(
+            {"url": self.PMC_URL, "title": "A PMC Article", "content": WEB_TEXT,
+             "score": 0.9},
+            rank=0,
+            query=TOPIC,
+        )
+        assert candidate is not None
+        return candidate
+
+    def same_paper_academic(self, *, abstract: str | None) -> AcademicCandidateSource:
+        return AcademicCandidateSource(
+            paper_id="paper-pmc",
+            title="A PMC Article",
+            abstract=abstract,
+            doi="10.0000/invalid.pmc",
+            url="https://example.invalid/paper-pmc",
+            external_ids={"PubMedCentral": "7696347"},
+            authors=["A. Author"],
+            year=2024,
+            fingerprint="test-paper-pmc",
+            rank=0,
+            query=TOPIC,
+            evidence_depth=EvidenceDepth.ABSTRACT if abstract else EvidenceDepth.METADATA,
+        )
+
+    async def test_a_pmc_page_and_its_paper_become_one_source(self, orchestrator_factory):
+        web = FakeWebSearch(web_result(self.pmc_web_candidate()))
+        academic = FakeAcademicSearch(
+            academic_result(self.same_paper_academic(abstract=None))
+        )
+        response = await start(orchestrator_factory(web=web, academic=academic))
+
+        assert response.execution_metadata.sources_attached == 1
+        [source] = response.sources
+        # The metadata-only paper never displaces the quotable snippet of itself.
+        assert source.url == self.PMC_URL
+
+    async def test_on_a_collision_the_candidate_with_more_text_wins(
+        self, orchestrator_factory
+    ):
+        longer_abstract = ABSTRACT_TEXT + " " + WEB_TEXT
+        web = FakeWebSearch(web_result(self.pmc_web_candidate()))
+        academic = FakeAcademicSearch(
+            academic_result(self.same_paper_academic(abstract=longer_abstract))
+        )
+        response = await start(orchestrator_factory(web=web, academic=academic))
+
+        assert response.execution_metadata.sources_attached == 1
+        [source] = response.sources
+        assert source.source_type == "academic"  # fuller abstract beat the snippet
+        assert source.doi == "10.0000/invalid.pmc"
+
+    async def test_unrelated_candidates_are_not_merged(self, orchestrator_factory):
+        web = FakeWebSearch(web_result(web_candidate()))
+        academic = FakeAcademicSearch(academic_result(academic_candidate()))
+        response = await start(orchestrator_factory(web=web, academic=academic))
+        assert response.execution_metadata.sources_attached == 2
 
 
 class TestPartialRetrieval:

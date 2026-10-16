@@ -9,7 +9,12 @@ quietly distort every per-source metric.
 
 import pytest
 
-from app.utils.urls import canonicalize_url, source_fingerprint, url_fingerprint
+from app.utils.urls import (
+    canonicalize_url,
+    scholarly_aliases,
+    source_fingerprint,
+    url_fingerprint,
+)
 
 
 class TestCanonicalisation:
@@ -135,3 +140,43 @@ class TestSourceFingerprint:
         assert value is not None
         assert len(value) == 64
         assert all(c in "0123456789abcdef" for c in value)
+
+
+class TestScholarlyAliases:
+    """URL-borne scholarly identifiers, used for cross-channel deduplication.
+
+    The measured case (stage-19 development runs): PMC articles were the single
+    most-retrieved web domain while the same literature arrived — or will arrive —
+    through academic search as papers. These aliases are how one retrieval pass
+    recognises both as one document. They deliberately do NOT change
+    `source_fingerprint`: stored identities stay as they are.
+    """
+
+    @pytest.mark.parametrize(
+        ("url", "alias"),
+        [
+            ("https://pmc.ncbi.nlm.nih.gov/articles/PMC7696347/", "pmcid:pmc7696347"),
+            ("https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7696347", "pmcid:pmc7696347"),
+            ("https://pubmed.ncbi.nlm.nih.gov/33247547/", "pmid:33247547"),
+            ("https://arxiv.org/abs/2104.08691", "arxiv:2104.08691"),
+            ("https://arxiv.org/abs/2104.08691v2", "arxiv:2104.08691"),
+            ("https://arxiv.org/pdf/2104.08691.pdf", "arxiv:2104.08691"),
+            ("https://doi.org/10.1136/bmj.i6583", "doi:10.1136/bmj.i6583"),
+            ("http://dx.doi.org/10.1136/BMJ.I6583", "doi:10.1136/bmj.i6583"),
+        ],
+    )
+    def test_known_hosts_yield_their_identifier(self, url, alias):
+        assert scholarly_aliases(url) == {alias}
+
+    def test_an_ordinary_page_has_no_alias(self):
+        assert scholarly_aliases("https://example.com/articles/PMC123") == set()
+        assert scholarly_aliases("https://healthline.com/nutrition/coffee") == set()
+
+    def test_blank_and_none_yield_nothing(self):
+        assert scholarly_aliases(None) == set()
+        assert scholarly_aliases("") == set()
+
+    def test_pmc_and_pubmed_pages_for_different_articles_stay_different(self):
+        a = scholarly_aliases("https://pubmed.ncbi.nlm.nih.gov/111/")
+        b = scholarly_aliases("https://pubmed.ncbi.nlm.nih.gov/222/")
+        assert a and b and a != b
