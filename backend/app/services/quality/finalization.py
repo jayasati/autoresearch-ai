@@ -256,9 +256,7 @@ class Finalizer:
             except ExternalServiceError as exc:
                 return None, True, f"revision not produced: provider failure ({exc.message})"
             report = _validated(response.data, plan, warnings, allow_claims=True)
-            report, self.restored_sections = restore_dropped_sections(
-                report, draft, records, plan
-            )
+            report, self.restored_sections = restore_dropped_sections(report, draft, records, plan)
             for alias, _ in self.restored_sections:
                 warnings.append(f"The revision dropped planned section {alias}; re-inserted.")
             return report, True, None
@@ -469,6 +467,50 @@ class Finalizer:
                     }
                 )
         return body.rstrip() + ReportFinalizer._references_section(sources, markers) + "\n"
+
+    @staticmethod
+    def body_record(
+        validated: ValidatedReport, final: StructuredReport, records: list[ClaimRecord], aliases
+    ) -> tuple[list[dict], dict[str, list[dict]]]:
+        """The validated body as data, for evaluation: each sentence as rendered, its
+        subquestion, claims, and — per rendered marker — the passages behind it (the
+        sentence's cited passages of that source; for a restoration, its claim's
+        supporting passages). Plus every labelled-section entry. Audit-only."""
+        by_alias = {r.alias: r for r in records}
+        body = []
+        for section in validated.sections:
+            for placed in section.sentences:
+                if placed.key is not None:
+                    source = final.sections[placed.key[0]].sentences[placed.key[1]]
+                    cited = [a for a in source.evidence_ids if a in aliases.passages]
+                else:
+                    chunks = frozenset().union(
+                        *(supported_chunks(by_alias[a], aliases) for a in placed.claim_aliases)
+                    )
+                    cited = [a for a, ref in aliases.passages.items() if ref.chunk_id in chunks]
+                body.append(
+                    {
+                        "subquestion": section.subquestion,
+                        "heading": section.heading,
+                        "text": placed.text,
+                        "kind": placed.kind,
+                        "origin": placed.origin,
+                        "placement": placed.placement.value,
+                        "claim_aliases": list(placed.claim_aliases),
+                        "citations": {
+                            marker: [a for a in cited if aliases.passages[a].source_label == marker]
+                            for marker in placed.markers
+                        },
+                    }
+                )
+        labelled = {
+            where.value: [
+                {"text": p.text, "kind": p.kind, "claim_aliases": list(p.claim_aliases)}
+                for p in sentences
+            ]
+            for where, sentences in validated.labelled.items()
+        }
+        return body, labelled
 
     def record_placements(self, validated: ValidatedReport, records: list[ClaimRecord]) -> dict:
         placement: dict[str, Placement] = {}

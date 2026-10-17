@@ -5,6 +5,50 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 38 — Paired evaluator for the verification comparison (Phase A) — 2026-10-17
+
+The comparison protocol was approved with five decisions (recorded in
+`docs/VERIFICATION_COMPARISON_PROTOCOL.md` §0): a paired draft-vs-final evaluator;
+independent judging and blinded human annotation, never the pipeline's verifier alone;
+the pilot estimates verification *plus revision*; one run per question for a
+two-question pilot; strict citation-specific support primary, lenient as sensitivity.
+Phase A only: offline, fakes, no provider calls.
+
+**What was implemented:**
+
+- `finalization.body_record` + audit `finalization.body` / `labelled`: the validated
+  body as data — sentence, subquestion, kind, claims and, per rendered marker, the
+  passages behind it. Without it the final report's sentence-to-passage mapping existed
+  only as markdown. Audit-only; the report and verdicts are unchanged.
+- `scripts/evaluate_quality_pair.py`: builds OFF (draft as rendered) and ON (final body)
+  from one artifact; a failed finalization is a missing ON, never the draft. Units:
+  assertion sentences vs the frozen pool, and citation pairs (sentence, marker, passages
+  behind it). Blinded items (seeded random ids, cross-arm dedupe, shuffle; key joined
+  after judgments are stored). Judges: the existing external judge (pool items) and
+  verification-v2 with quote enforcement (pairs) on `--judge-model` — the pipeline's
+  own model refused unless overridden and labelled; or human labels via an exported
+  blinded sheet. Scores per arm with counts (strict/lenient citation support, pool
+  support, unsupported-or-contradicted, contradicted, not-enough-evidence, core
+  coverage), paired fates (contradiction handling, supported findings lost in revision),
+  usage per arm; `aggregate` gives the paired macro primary and the missing-ON-as-zero
+  sensitivity. Guards: dev questions only, artifact question must match, pool must exist
+  and match `MANIFEST.sha256` (never built), indexed in the evaluation directory;
+  dry run by default; `--max-usd` against a 1.5× cost cap enforced as a token cap.
+
+**Tests:** 28 new (arm pairing, citation-to-passage mapping incl. multi-passage and
+unresolvable markers, strict vs lenient, pool metrics, missing judgments, core coverage,
+fates of contradicted and supported findings incl. recorded omissions and unaccounted
+claims, failed finalization, aggregation and sensitivity, blinding, seeding, judgments
+stored before unblinding, guards, dry run, cost refusal, human annotation round trip,
+the reused judges on a fake model and store, and a real runner artifact on fakes).
+Mutation probes (draft substituted for a failed ON, arm leaked into items, lenient
+reported as strict, missing judgments counted as unsupported, cross-arm dedupe off) made
+3, 1, 2, 1 and 14 tests fail.
+
+**Not done:** the pilot (needs approval), any paid call, a rewrite-only control.
+
+---
+
 ## Stage 37 — Minimum report-integrity fixes before the controlled comparison — 2026-10-17
 
 Directive: stop feature work; fix only what makes the next experiment auditable and

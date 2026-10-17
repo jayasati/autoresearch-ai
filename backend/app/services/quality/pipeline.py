@@ -734,6 +734,8 @@ class ReportQualityPipeline:
             actions: list[dict] = []
             metrics: dict = {}
             placements: dict = {}
+            body: list[dict] = []
+            labelled: dict = {}
         else:
             if validated.needs_reverification:  # cannot happen: every key got a result
                 raise RuntimeError("validation still awaits re-verification")
@@ -741,6 +743,7 @@ class ReportQualityPipeline:
             actions = [a.__dict__ for a in validated.actions]
             metrics = dict(validated.metrics)
             placements = finalizer.record_placements(validated, records)
+            body, labelled = finalizer.body_record(validated, final, records, drafted.aliases)
             markdown = None
             if status != "finalization_failed":
                 conflicts = conflict_contexts(
@@ -768,6 +771,8 @@ class ReportQualityPipeline:
                     "actions": actions,
                     "metrics": metrics,
                     "placements": placements,
+                    "body": body,
+                    "labelled": labelled,
                     "reverified": reverified_audit,
                 },
                 "budget": budget.as_record(),
