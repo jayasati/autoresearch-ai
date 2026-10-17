@@ -379,3 +379,167 @@ evidence gap with the outcome degraded. Q2's revision dropped nothing.
    as a limitation only.
 5. **Human annotation** of the 69 prepared items, so P1-style pipeline/judge
    disagreements can be adjudicated.
+
+---
+
+## Retrospective offline analysis of the pilot: P3, P4, P2 — 2026-10-18
+
+**Retrospective and offline.** Everything below is derived from the saved pilot artifacts
+(`run.json`, `diagnostics.json`, `model_calls.json`, `evaluation/`), with no new run,
+provider call or judgment. The pilot section and its figures above are unchanged; any
+number recomputed here is a retrospective view and does not replace them.
+
+Q1 = `data/exports/quality-runs/20261017T151541Z-a8a44720/`;
+Q2 = `data/exports/quality-runs/20261017T173313Z-e7da20d5/`.
+
+### P3 — Were Q1's untracked supported findings lost, or only unlinked?
+
+**Root cause.** The drafting model emitted the synthesis section **three times**: its raw
+answer (`model_calls.json`, the `synthesis-structured-v1` call) has sections 3, 4 and 5 all
+`SYNTHESIS`, with identical headings and sentences, and the stored draft keeps all three
+(`persisted.audit.payload.draft.report.sections[3..5]`). Nothing downstream merges them.
+With three identical candidate sentences, claim alignment for the claims extracted from
+them was `unaligned` / `ambiguous` (`alignments`: C12, C13, C14), so those claims got no
+citation check and C12 and C13 ended `not_evaluated`. The evaluator links a draft
+sentence to the final report only through alignment, so those sentences became
+`untracked` — and, scoring per sentence, it counted each copy separately.
+
+Reconciliation, one row per unique supported draft finding (D# = draft sentence index in
+reading order; pool verdict = the independent judge, OFF arm; F# = final body sentence):
+
+| ID | Draft finding | Pool verdict | Pipeline claim | Final report | Classification | Evidence |
+|---|---|---|---|---|---|---|
+| D0 | "Moderate coffee intake is more beneficial than harmful across a wide range of health outcomes" | supported | C1, supported by cited source (E2 supports) | F0, body, same text, [S2] → E2 | preserved, traceable | same alias, same passage, text identical apart from the draft's kind tag |
+| D1 | "Numerous large-scale, prospective cohort studies have consistently shown … can be moderately beneficial" | supported | C2, supported by cited source (E2 supports) | F1, body, same text, [S2] → E2 | preserved, traceable | as D0 |
+| D4 | "High coffee consumption (≥ 3 cups/day) was inversely associated with mortality and disability" | partially supported (lenient only) | C6, partial (E6 partially supports) | F5, body: threshold dropped, "with some qualification" added | materially changed | P1 |
+| D7 | "In health research, moderate coffee consumption is typically defined as three to five cups per day" | supported | C9, supported by cited source, but E2 only partially supports (partial) | "Unresolved findings", same text, partial prefix | preserved, traceable; moved out of the body | action `partial_not_narrowed` (stage-37 policy) |
+| D8 | "While some studies have cited moderate intake as 2-3 cups a day, others suggest three to four …" | partially supported (lenient only) | C10, citation not confirmed (E4 does not establish) | "Supported by other evidence — citation not confirmed", same text | preserved, traceable; listed | action `moved` |
+| D10 = D13 = D16 | "Regular moderate coffee consumption appears to provide several health benefits, including lower risks of early death, cardiovascular disease, and disability" | supported (one item, credited three times) | C12, unaligned (ambiguous), not evaluated | "Not evaluated", same text | substantively preserved but no longer linked to an evaluated claim; listed, not in the body | text identical apart from the kind tag; action `omission_listed` for C12 |
+| D11 = D14 = D17 | "The specific definition of 'moderate' varies in health research, generally falling between two to five cups per day" | partially supported (lenient only) | C13, unaligned (ambiguous), not evaluated | "Not evaluated", same text | as D10 | action `omission_listed` for C13 |
+
+Genuinely omitted: **0**. Indeterminate: **0**. (The draft sentences carry a literal
+"(finding)"/"(qualification)" tag the drafting model wrote into the text; apart from that
+tag, the matched texts are identical.)
+
+Reconciled fates, counting each unique finding once:
+
+| | Stored metric (per sentence) | Reconciled (per unique finding) |
+|---|---|---|
+| Strict-supported | 6 → body 2, listed 1, untracked 3 | 4 → body 2, listed 2 (1 unresolved, 1 not evaluated) |
+| Lenient-supported | 11 → body 3, listed 2, untracked 6 | 7 → body 3 (1 materially changed), listed 4 |
+
+Retained **in the report** (body or a labelled section): 4 of 4 strict-supported and 7
+of 7 lenient-supported unique findings. Retained **in the body**: 2 of 4 strict and 3 of
+7 lenient (one of those three materially changed).
+
+**Effect on interpretation.** No supported finding was silently omitted: the untracked
+ones were lost to the *evaluator's linkage*, not to the report — they are listed verbatim
+in its "Not evaluated" section. But they were lost from the **body**: of 4 unique
+strict-supported draft findings, 2 left the body, one by the partial-support policy and
+one because the duplication made it unalignable, hence never citation-checked. The
+duplication also inflates Q1's OFF per-sentence metrics. *Retrospective sensitivity view,
+not a replacement for the frozen pilot figures above* — counting each unique sentence
+once: OFF strict citation support 9/13 = 0.692 (stored 0.652), lenient
+12/13 = 0.923 (stored 0.957); OFF strict pool support 4/10 = 0.400 (stored 0.429), lenient
+7/10 = 0.700 (stored 0.786). Q2 has no duplicated sentences. The two-question strict
+citation support, as the unweighted mean of the two per-question rates (the protocol's
+macro convention), would read OFF 0.780 vs ON 0.878 (stored OFF 0.759); pooled over
+citation pairs instead it would be OFF 22/28 = 0.786 vs ON 17/19 = 0.895. Same
+direction either way.
+
+Further observations (not fixed): the drafting validation accepts a repeated section;
+the drafting model's kind tags ("(uncertainty)", "(finding)") reach the final report's
+labelled lists; and the independent judge rated D1's citation `does_not_establish` but
+F1's `supports`, though the two texts differ only by that tag — judge variability on
+near-identical inputs.
+
+### P4 — Which core-coverage definition matches the protocol?
+
+**The definitions in use:**
+
+| | Evaluator (`pair-eval-v1`) | Pipeline (validation V9) |
+|---|---|---|
+| Unit | assertion sentences in the core subquestion's own section (synthesis sentences do not count) | body sentences in that section |
+| Evidence | the independent judge, against the **frozen pool** | the pipeline's own verifier, against the sentence's **cited passages** |
+| Covered when | ≥1 sentence judged `supported` (strict); or `supported` / `partially_supported` (lenient sensitivity) | ≥1 body sentence with a rendered marker (support established on its cited passage) and a claim |
+| Partial support | lenient only | partial claims are not in the body since stage 37 |
+| Unsupported, not enough evidence, unresolved, labelled | not counted | not counted (not in the body) |
+| Disclosed gaps | reported separately (`on_unanswered_core_disclosed`), never counted as coverage | an uncovered core question is listed as a gap and degrades the outcome |
+
+**Protocol wording (verbatim, §4):** "Core-question coverage: core subquestions with ≥1
+assertion sentence judged supported (strict; lenient sensitivity) / core subquestions;
+plus the core questions ON itself disclosed as unanswered." In §4, "supported" is the
+pool-item verdict vocabulary (pair items get "supports"), and the line is in the
+per-arm "Also reported" list after the pool metrics, so the literal reading is the evaluator's pool-based definition;
+the pipeline's own judgment is what "the core questions ON itself disclosed as
+unanswered" reports. The wording never states the evidence source explicitly, though —
+a minor ambiguity.
+
+**Manual recomputation for Q2 (ON).** Core subquestions Q1 and Q2. Q2's section has five
+assertion sentences, F7–F11:
+
+| | F7 | F8 | F9 | F10 | F11 |
+|---|---|---|---|---|---|
+| Pool verdict (judge) | not enough evidence | partially supported | not enough evidence | partially supported | not enough evidence |
+| Cited-passage outcome (judge)¹ | supports | supports | supports | partially supports | supports |
+| Pipeline | supported by cited source, in body with a marker (all five) | | | | |
+
+Strict pool-based: no `supported` sentence → Q2 not covered; coverage 1/2 = **0.5**, as
+stored. Lenient: F8, F10 → covered; **1.0**, as stored. The OFF arm gives the same. The
+evaluator computes the protocol's metric correctly.
+
+¹ Shown only to explain the discrepancy. Pool-supported coverage (the protocol's
+metric) and coverage by cited-passage support are distinct measures; only the first is
+defined by the protocol or computed by the evaluator.
+
+**Explanation.** Not an implementation error: the two systems measure different
+constructs — pool supportability versus cited-passage support — and the gap is driven by
+pool coverage. The pool was built from the question text (the clinical effect of vitamin
+D); Q2 asks about immune mechanisms, and three of its five sentences are "not enough
+evidence" against the pool while the independent judge finds four of five fully supported
+by their own cited passages. "Unanswered" under the pool metric here reflects what the
+pool contains, not what the report says.
+
+**Proposal only — not implemented in the evaluator and not adopted by the protocol; the
+locked plan is not affected.** Before further runs, amend the comparison protocol to name the current metric "pool-supported
+core coverage" and to add "citation-supported core coverage" from the evaluator's own
+pair outcomes, both reported, with a note that pool-based coverage is unreliable for
+subquestions outside the pool's retrieval scope.
+
+### P2 — What the conflict item can and cannot tell us
+
+- **Does the pool contain conflicting passages?** Lexically it holds both directions:
+  benefit-like passages ("modest protection … reducing incidence"; "reduced ARI risk by
+  about 30% … in children aged 1–16") and null-like ones ("no statistically significant
+  overall effect … OR 0.94"). That is consistent with the overall-versus-subgroup
+  disagreement the item targets, but it is a keyword signal, not a judgment; the records
+  cannot establish that the passages genuinely conflict.
+- **Did the pipeline detect conflicts?** Partly at the passage level, not as conflicts.
+  The verifier recorded four `contradicts` relations with verbatim quotes on claims C4, C6
+  and C7 (`diagnostics.json`, evidence rows; raw answers in `model_calls.json`, calls 6–8).
+  No answer reported a `conflict` object, no conflict was stored
+  (`persisted.audit.payload.conflicts` is empty), and the claims' verdicts stayed
+  `supported` / `partially_supported`.
+- **Was contradiction handling invoked?** The passage-relation step ran; the
+  conflict-recording and contested-placement paths did not trigger. Contested status
+  requires a contradicting **cited** passage, and every cited-passage outcome here was
+  `supports` or `partially_supports`; contradicting evidence on uncited passages does not
+  reach the report by design. (C4's and C7's contradicting chunks were not among the
+  run's selected passages; C6's was E1, a selected passage its sentence does not cite.)
+- **Did the final report present anything as contested?** No: no contested section. The
+  disagreement appears only in body prose ("Randomized controlled trials of vitamin D
+  supplementation have provided inconsistent results", C7).
+- **On their face** (a reading, not a measurement), the four `contradicts` relations look
+  weak: C4's "contradicting" quote ("does not prevent ARI in older adults") agrees with
+  its claim of "little to no difference"; C6's concerns the effect of supplementation
+  against a claim about the risk of low vitamin D status; C7's are null trial results set
+  against a claim that results are inconsistent. This assessment is **provisional**: the
+  saved evidence does not establish whether these relations are genuine
+  contradictions, and human review is needed to decide.
+- The independent judge found no draft or final sentence contradicted by the pool.
+
+**Conclusion.** Contradiction handling — recording a conflict and presenting a claim as
+contested — was **not exercised** by the pilot. The absence of contested findings is not
+evidence that it works, nor that the report misses a real conflict: the saved records
+cannot settle whether a competent detector should have flagged one here. It remains a
+test-coverage gap.
