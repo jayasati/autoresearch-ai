@@ -500,6 +500,33 @@ S5b brief were resolved conservatively:
 Neon or any PostgreSQL database; the Neon-branch round trip needs the user's
 approval before any run of this pipeline can be persisted there.
 
+### Local runner (stage 34)
+
+`scripts/run_quality_pipeline.py` runs the four pipeline methods in order for one
+question — nothing re-implemented — in an isolated workspace: a fresh temporary
+directory holding a SQLite file (migrated to head through Alembic on that file's own
+connection) and the ChromaDB directory, with `REPORT_QUALITY_ENABLED` on for that
+process only. A configuration that does not resolve inside the workspace (e.g. a
+PostgreSQL URL) is refused before anything is migrated; only a directory carrying the
+runner's marker is ever deleted.
+
+- **Preflight by default:** migrates the throwaway database, checks provider
+  configuration and the budget minimum, prints the limits and the cost range at the
+  token cap; no provider call, no research result, workspace removed.
+- **`--execute`** is the only way to make provider calls; it is refused (exit 2)
+  without an LLM credential and a Tavily key or with a budget below the minimum.
+- **Artifact** `data/exports/quality-runs/<timestamp>-<run>/run.json` (+
+  `final_report.md`): question, whitelisted configuration (no credentials; known
+  secret values are also scrubbed), budget plan and use, outcome, per-claim
+  citation results, unresolved claims with placements, persisted audit, errors.
+- **Usage:** measured tokens (with their prompt/completion split, now recorded per
+  stage by `BudgetedLLM`) priced at list prices; estimated tokens priced separately
+  as an upper bound at the output price.
+- **Exit codes:** 0 complete / preflight ready, 1 failed or `finalization_failed`,
+  2 refused, 3 degraded.
+
+No real-provider run has been made with it; one needs explicit authorization.
+
 ## 9. Staged sequence
 
 | Stage | Scope | Paid calls |
@@ -511,6 +538,7 @@ approval before any run of this pipeline can be persisted there.
 | S4 | structured draft + rendering + alignment wiring | none — **done (stage 31)**: stages 10a, 6 and alignment; run left in DRAFTING |
 | S5a | pool verification, citation-check-v1, budget wrapper, claim/citation records, quantitative and subquestion/conflict assessment (fakes) | none — **done (stage 32)**; run left in VERIFYING |
 | S5b | revision, V1–V7 validation with re-verification, final_claim_check, final render, outcome and audit finalization (fakes) | none — **done (stage 33)**: full path exercised end to end on fakes |
+| runner | local one-question runner, isolated SQLite + vector store, preflight by default | none — **done (stage 34)**; `--execute` makes paid calls and **requires separate authorization** |
 | S6 | additive API (jobs, progress, quality) + frontend | none |
 | S7 | opt-in benchmark arm; development evaluation | **requires separate authorization** |
 

@@ -5,6 +5,60 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 34 — Report-quality pipeline v1: local experiment runner — 2026-10-17
+
+S5a and S5b were reviewed and committed first (`37367a6`; the review found one garbled
+docstring in `drafting.py`, fixed before the commit). This stage adds the narrowest
+harness that can run the pipeline for real. **No real-provider run has been made.**
+
+**What was implemented:**
+
+- `scripts/run_quality_pipeline.py` — one question, quick depth by default; calls
+  `prepare_evidence → draft_and_align → verify_claims → finalize` as they are. Isolated
+  workspace per run: a fresh temporary directory with its own SQLite file (Alembic
+  upgraded to head on that file's connection, no ini file so logging is untouched) and
+  ChromaDB directory, set through this process's environment and restored afterwards;
+  refused if the effective configuration does not resolve inside it (e.g. PostgreSQL).
+  Preflight by default (migrate, readiness, budget minimum, limits and cost range at the
+  token cap — no provider call, no research result). `--execute` is the only opt-in to
+  provider calls and is refused without an LLM credential and a Tavily key or with a
+  budget below the minimum. Prints the final report, outcome and reasons,
+  citation-specific results per claim, unresolved/contested claims with placements,
+  per-stage attempts and measured vs estimated tokens, latency and cost. Writes
+  `data/exports/quality-runs/<timestamp>-<run>/run.json` (+ `final_report.md`) with a
+  whitelisted configuration (prompt versions, knobs, git commit and dirty flag) and
+  known secret values scrubbed. Exit 0 complete, 1 failed/`finalization_failed`,
+  2 refused, 3 degraded. Only a directory carrying the runner's marker is deleted.
+- `budget.py` — each stage account now also records the prompt/completion split of its
+  measured tokens, so measured usage is priced as billed; estimated tokens stay separate
+  and are priced only as an upper bound.
+
+**Files changed:** new — `scripts/run_quality_pipeline.py`,
+`backend/tests/unit/test_quality_runner.py`; modified —
+`backend/app/services/quality/budget.py`, `scripts/README.md`,
+`docs/REPORT_QUALITY_PIPELINE.md`, this log.
+
+**Tests:** 22 new, all on fakes injected through `pipeline_factory`, with the working
+directory moved so no `.env` is read: argument parsing and refusal; a preflight that
+calls nothing, writes no artifact, removes its workspace and restores the environment;
+the migration applied to the workspace database; missing and placeholder credentials;
+budget refusal; PostgreSQL/outside-database refusal; an unmarked directory never
+deleted; a complete run's printout and artifact with no secret in any file; an
+unconfirmed citation listed as unresolved; a failed stage, a late error and
+`finalization_failed` each exiting 1 with diagnostics kept; exit-code mapping; measured
+and estimated tokens priced apart. Scratch-only mutation probes (execution forced
+without the flag; full settings dumped unscrubbed; exit code always 0; marker check
+removed) made 3, 1, 6 and 1 tests fail. `pytest` 1139 passed in two
+consecutive full runs (exit 0); `ruff check .` and the script clean; `mypy app` plus the
+script clean (114 files). No provider calls.
+
+**Not done (deliberately):** no paid run, no route, UI, benchmark arm, job system or
+Neon integration. Retrieval searches (≤ one Tavily and one Semantic Scholar search per
+subquestion, with the clients' own retries) are outside the model budget; the preflight
+prints that bound. **The Neon-branch migration round trip remains an outstanding gate.**
+
+---
+
 ## Stage 33 — Report-quality pipeline v1, S5b: revision, re-verification and finalization — 2026-10-17
 
 The last planned implementation stage before a real experiment. **Still unreachable

@@ -61,6 +61,8 @@ class StageAccount:
     successes: int = 0
     failures: int = 0
     measured_tokens: int = 0
+    measured_prompt_tokens: int = 0  # the split of measured_tokens, for pricing
+    measured_completion_tokens: int = 0
     estimated_tokens: int = 0  # failed attempts and responses without usage
     refused: int = 0  # attempts refused by the budget before sending
     seconds: float = 0.0
@@ -197,6 +199,8 @@ class BudgetedLLM:
         usage = getattr(response, "usage", None)
         if isinstance(usage, TokenUsage) and usage.total_tokens:
             account.measured_tokens += usage.total_tokens
+            account.measured_prompt_tokens += usage.prompt_tokens
+            account.measured_completion_tokens += usage.completion_tokens
             self.total_usage = self.total_usage + usage
         else:
             account.estimated_tokens += estimate
