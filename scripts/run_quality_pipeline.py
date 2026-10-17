@@ -28,10 +28,13 @@ workspace, and REPORT_QUALITY_ENABLED is on for this process only. A configurati
 that does not resolve to that workspace is refused before anything is migrated. Only
 a directory carrying this runner's marker file is ever deleted.
 
-The artifact (`<out>/<timestamp>-<run>/run.json`, plus `final_report.md` when a
-report was produced) holds the question, configuration, budget limits and use,
-outcome, per-claim citation results, the persisted audit and any errors — never a
-credential.
+The artifact directory `<out>/<timestamp>-<run>/` holds `run.json` (question,
+configuration, budget limits and use, outcome, per-claim citation results, the
+persisted audit, errors), `final_report.md` when a report was produced, and — for
+error analysis — `diagnostics.json` (selected passage texts and sources, each claim's
+verification result and evidence rows, every citation and final claim check) and
+`model_calls.json` (every model attempt the budget let through: prompt, raw answer or
+error, model, usage, latency). Never a credential.
 
 Exit codes: 0 complete (or preflight ready) · 1 failed (an error, or
 finalization_failed) · 2 refused (invalid arguments, missing provider configuration,
@@ -44,6 +47,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import gc
+import hashlib
 import json
 import os
 import shutil
@@ -51,6 +55,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -64,17 +69,29 @@ sys.path.insert(0, str(BACKEND))
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from pydantic import ValidationError  # noqa: E402
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import select, text  # noqa: E402
 from sqlalchemy.engine import make_url  # noqa: E402
 
 from app.core.config import Settings, get_settings  # noqa: E402
 from app.core.constants import ResearchMode  # noqa: E402
 from app.core.exceptions import AppError  # noqa: E402
-from app.db.session import build_engine, reset_engine  # noqa: E402
+from app.db.session import build_engine, reset_engine, unit_of_work  # noqa: E402
+from app.models import (  # noqa: E402
+    CitationCheck,
+    DocumentChunk,
+    FinalClaimCheck,
+    ResearchRun,
+    VerificationResult,
+)
 from app.schemas.research import ResearchStartRequest  # noqa: E402
 from app.services.benchmark.metrics import MODEL_PRICES_PER_TOKEN  # noqa: E402
 from app.services.claims.prompts import CLAIM_EXTRACTION_PROMPT_VERSION  # noqa: E402
-from app.services.quality.budget import BudgetInsufficient, RunBudget  # noqa: E402
+from app.services.llm import LLMService  # noqa: E402
+from app.services.quality.budget import (  # noqa: E402
+    BudgetInsufficient,
+    RunBudget,
+    no_sdk_retries,
+)
 from app.services.quality.pipeline import (  # noqa: E402
     ReportQualityPipeline,
     budget_for,
@@ -362,8 +379,14 @@ def git_state() -> dict:
 # --- the run ------------------------------------------------------------------------
 
 
-def default_pipeline(settings: Settings) -> ReportQualityPipeline:
-    return ReportQualityPipeline(settings=settings)
+def default_llm(settings: Settings) -> LLMService:
+    """The real client with SDK retries off — what the pipeline builds for itself
+    when no client is injected — so every attempt is one counted HTTP request."""
+    return LLMService(settings=no_sdk_retries(settings))
+
+
+def default_pipeline(settings: Settings, llm) -> ReportQualityPipeline:
+    return ReportQualityPipeline(settings=settings, llm=llm)
 
 
 def error_record(stage: str, exc: BaseException) -> dict:
@@ -372,8 +395,170 @@ def error_record(stage: str, exc: BaseException) -> dict:
     return {"stage": stage, "code": type(exc).__name__, "message": str(exc)[:1000]}
 
 
-async def run_pipeline(pipeline: ReportQualityPipeline, question: str, depth: str) -> dict:
-    """The four pipeline stages in order; the first error stops the run and is kept."""
+# --- diagnostics (error analysis R1) --------------------------------------------------
+
+
+class RecordingLLM:
+    """The run's model client, keeping every attempt it sends: prompt, raw response (or
+    error), model, usage and latency. It sits INSIDE the pipeline's `BudgetedLLM`, so it
+    sees exactly the attempts the budget let through and changes nothing about what is
+    counted or refused. System prompts are stored once, keyed by a short hash."""
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+        self.calls: list[dict] = []
+        self.systems: dict[str, str] = {}
+
+    async def generate_structured_output(self, prompt, schema, **kwargs):
+        return await self._record("generate_structured_output", prompt, kwargs, schema)
+
+    async def generate_text(self, prompt, **kwargs):
+        return await self._record("generate_text", prompt, kwargs, None)
+
+    async def _record(self, method: str, prompt: str, kwargs: dict, schema):
+        system: str | None = kwargs.get("system")
+        key = None
+        if system:
+            key = hashlib.sha256(system.encode()).hexdigest()[:12]
+            self.systems.setdefault(key, system)
+        call: dict = {
+            "index": len(self.calls),
+            "method": method,
+            "schema": getattr(schema, "__name__", None),
+            "system": key,
+            "max_tokens": kwargs.get("max_tokens"),
+            "prompt": prompt,
+        }
+        self.calls.append(call)
+        args = (prompt,) if schema is None else (prompt, schema)
+        started = time.perf_counter()
+        try:
+            response = await getattr(self._inner, method)(*args, **kwargs)
+        except Exception as exc:
+            call["error"] = error_record("model_call", exc)
+            raise
+        finally:
+            call["seconds"] = round(time.perf_counter() - started, 3)
+        usage = getattr(response, "usage", None)
+        raw = getattr(response, "text", None)
+        if raw is None and hasattr(response, "data"):  # a response without raw text
+            data = response.data
+            raw = data.model_dump_json() if hasattr(data, "model_dump_json") else repr(data)
+        call.update(
+            model=getattr(response, "model", None),
+            finish_reason=getattr(response, "finish_reason", None),
+            usage=usage.model_dump() if usage is not None else None,
+            response_text=raw,
+        )
+        return response
+
+    async def aclose(self) -> None:
+        close = getattr(self._inner, "aclose", None)
+        if close is not None:
+            await close()
+
+
+def _columns(row) -> dict:
+    return {attr.key: getattr(row, attr.key) for attr in row.__mapper__.column_attrs}
+
+
+def read_diagnostics(payload: dict | None) -> dict:
+    """What the workspace database holds that explains the verdicts, read before the
+    workspace is deleted: the selected passages' texts and sources, each claim's
+    verification-v2 result and evidence rows (relation, enforced quote, rank), every
+    citation check and every final claim check, rationales included. Read-only."""
+    evidence = (payload or {}).get("evidence") or {}
+    passages = (evidence.get("aliases") or {}).get("passages", {})
+    subquestion_of = {
+        alias: entry["alias"]
+        for entry in evidence.get("per_subquestion", [])
+        for alias in entry["passages"]
+    }
+    alias_of_chunk = {ref["chunk_id"]: alias for alias, ref in passages.items()}
+    with unit_of_work() as session:
+        runs = session.scalars(select(ResearchRun)).all()
+        if len(runs) != 1:
+            return {"error": f"expected one run in the workspace, found {len(runs)}"}
+        report = runs[0].report
+        selected = []
+        for alias, ref in passages.items():
+            chunk = session.get(DocumentChunk, uuid.UUID(ref["chunk_id"]))
+            source = chunk.document.source if chunk is not None else None
+            selected.append(
+                {
+                    "alias": alias,
+                    "source_label": ref["source_label"],
+                    "subquestion": subquestion_of.get(alias),
+                    "chunk_id": ref["chunk_id"],
+                    "text": chunk.text if chunk is not None else None,
+                    "source": None
+                    if source is None
+                    else {
+                        "title": source.title,
+                        "url": source.url,
+                        "doi": source.doi,
+                        "venue": source.venue,
+                        "year": source.publication_year,
+                        "source_type": source.source_type,
+                    },
+                }
+            )
+        claims = sorted(report.claims, key=lambda c: c.position) if report else []
+        claim_ids = [claim.id for claim in claims]
+        verified = []
+        for claim in claims:
+            result = session.scalars(
+                select(VerificationResult).where(VerificationResult.claim_id == claim.id)
+            ).first()
+            verified.append(
+                {
+                    "claim_id": claim.id,
+                    "text": claim.text,
+                    "importance": claim.importance,
+                    "verification": None if result is None else _columns(result),
+                    "evidence": [
+                        {
+                            "passage": alias_of_chunk.get(str(row.document_chunk_id)),
+                            "chunk_id": row.document_chunk_id,
+                            "relation": row.relation,
+                            "quoted_text": row.quoted_text,
+                            "similarity": row.similarity,
+                            "rank": row.rank,
+                        }
+                        for row in sorted(claim.evidence, key=lambda r: r.rank or 0)
+                    ],
+                }
+            )
+        checks = session.scalars(
+            select(CitationCheck).where(CitationCheck.claim_id.in_(claim_ids))
+        ).all()
+        finals = (
+            session.scalars(
+                select(FinalClaimCheck).where(FinalClaimCheck.report_id == report.id)
+            ).all()
+            if report
+            else []
+        )
+        return {
+            "passages": selected,
+            "claims": verified,
+            "citation_checks": [_columns(row) for row in checks],
+            "final_claim_checks": [_columns(row) for row in finals],
+        }
+
+
+async def run_pipeline(
+    settings: Settings,
+    question: str,
+    depth: str,
+    *,
+    pipeline_factory: Callable[[Settings, object], ReportQualityPipeline] = default_pipeline,
+    llm_factory: Callable[[Settings], object] = default_llm,
+) -> dict:
+    """The four pipeline stages in order; the first error stops the run and is kept.
+    The client and pipeline are built here, inside the event loop that uses them."""
+    recorder = RecordingLLM(llm_factory(settings))
+    pipeline = pipeline_factory(settings, recorder)
     request = ResearchStartRequest(topic=question, mode=ResearchMode.SEARCH_GROUNDED, depth=depth)
     seconds: dict[str, float] = {}
     result: dict = {"stage_seconds": seconds, "errors": []}
@@ -395,6 +580,8 @@ async def run_pipeline(pipeline: ReportQualityPipeline, question: str, depth: st
     except Exception as exc:  # noqa: BLE001 - recorded and reported, never swallowed
         seconds[stage] = round(time.perf_counter() - started, 3)
         result["errors"].append(error_record(stage, exc))
+    finally:
+        await recorder.aclose()  # injected, so the pipeline does not close it
 
     result["research_id"] = str(prepared.research_id) if prepared else None
     result["budget"] = prepared.budget.as_record() if prepared and prepared.budget else None
@@ -416,6 +603,13 @@ async def run_pipeline(pipeline: ReportQualityPipeline, question: str, depth: st
             result["persisted"] = pipeline.store.quality_record(prepared.research_id)
         except Exception as exc:  # noqa: BLE001 - diagnostics only
             result["errors"].append(error_record("read_back", exc))
+    try:
+        audit = (result.get("persisted") or {}).get("audit") or {}
+        result["diagnostics"] = read_diagnostics(audit.get("payload"))
+    except Exception as exc:  # noqa: BLE001 - diagnostics only
+        result["errors"].append(error_record("diagnostics", exc))
+    result["model_calls"] = recorder.calls
+    result["system_prompts"] = recorder.systems
     return result
 
 
@@ -486,14 +680,27 @@ def write_artifact(out: Path, record: dict, settings: Settings) -> Path:
     run = (record.get("research_id") or "no-run")[:8]
     directory = out / f"{stamp}-{run}"
     directory.mkdir(parents=True, exist_ok=False)
-    payload = json.dumps(record, indent=2, default=str, ensure_ascii=False)
-    markdown = record.get("final_markdown") or ""
-    for secret in secret_values(settings):
-        payload = payload.replace(secret, "[redacted]")
-        markdown = markdown.replace(secret, "[redacted]")
-    (directory / "run.json").write_text(payload + "\n", encoding="utf-8")
-    if markdown:
-        (directory / "final_report.md").write_text(markdown, encoding="utf-8")
+    record = dict(record)
+    files = {
+        # bulky diagnostics live beside run.json so it stays readable
+        "model_calls.json": {
+            "system_prompts": record.pop("system_prompts", {}),
+            "calls": record.pop("model_calls", []),
+        },
+        "diagnostics.json": record.pop("diagnostics", None),
+        "run.json": record,
+    }
+    contents = {
+        name: json.dumps(value, indent=2, default=str, ensure_ascii=False) + "\n"
+        for name, value in files.items()
+        if value is not None
+    }
+    if record.get("final_markdown"):
+        contents["final_report.md"] = record["final_markdown"]
+    for name, content in contents.items():
+        for secret in secret_values(settings):
+            content = content.replace(secret, "[redacted]")
+        (directory / name).write_text(content, encoding="utf-8")
     return directory
 
 
@@ -578,7 +785,8 @@ def print_result(record: dict) -> None:
 def main(
     argv: list[str] | None = None,
     *,
-    pipeline_factory: Callable[[Settings], ReportQualityPipeline] = default_pipeline,
+    pipeline_factory: Callable[[Settings, object], ReportQualityPipeline] = default_pipeline,
+    llm_factory: Callable[[Settings], object] = default_llm,
     workspace_root: Path | None = None,
 ) -> int:
     args = parse_args(argv)
@@ -610,7 +818,13 @@ def main(
 
             started = datetime.now(UTC)
             result = asyncio.run(
-                run_pipeline(pipeline_factory(settings), args.question, args.depth)
+                run_pipeline(
+                    settings,
+                    args.question,
+                    args.depth,
+                    pipeline_factory=pipeline_factory,
+                    llm_factory=llm_factory,
+                )
             )
             record = {
                 "runner_version": RUNNER_VERSION,

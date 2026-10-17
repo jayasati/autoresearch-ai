@@ -5,6 +5,40 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 36 — Runner diagnostics for error analysis (R1) — 2026-10-17
+
+Recommendation R1 of the run-1 error analysis: the artifact could not confirm F3
+(overstated partial claim) or F5 (verbatim-quote downgrades), because passage texts and
+the verifier's raw quotes were never saved, and the quotes rejected by the verbatim check
+are stored nowhere in the database at all.
+
+**What was implemented** (runner only; no pipeline or verifier change):
+
+- `RecordingLLM` wraps the real client and records every attempt it sends — prompt,
+  raw answer (`StructuredLLMResponse.text`) or error, model, finish reason, usage,
+  latency; system prompts stored once by short hash. It is passed to the pipeline as its
+  injected client, so it sits *inside* `BudgetedLLM`: it sees exactly the attempts the
+  budget let through and changes nothing that is counted or refused. The runner builds
+  the client as the pipeline would (`no_sdk_retries`) and closes it itself.
+- `read_diagnostics` reads the workspace database before deletion: selected passages
+  (text, source, subquestion), each claim's verification-v2 result (verdict,
+  confidence, rationale, downgraded) and evidence rows (passage, relation, enforced
+  quote, similarity, rank), all citation checks and final claim checks.
+- The artifact gains `diagnostics.json` and `model_calls.json` beside `run.json`; secret
+  scrubbing applies to every file. `pipeline_factory` now takes the client; a new
+  `llm_factory` supplies it (fakes in tests).
+
+**Tests:** 4 new — the transcript has exactly the budget's attempts, each with prompt and
+raw answer; passages and verifier output saved; a quote rejected by enforcement absent
+from stored evidence but present in the transcript; failed attempts recorded with their
+error. Existing runner tests moved to the new factory signature. Mutation probes (raw
+answer dropped; diagnostics emptied) made 2 and 1 tests fail. `pytest` 1145 passed
+(exit 0); ruff and mypy clean; a real preflight still exits 0 and leaves no workspace.
+
+**Not done:** R2–R6. Run 1's artifact predates this and cannot be back-filled.
+
+---
+
 ## Stage 35 — First paid development run, error analysis, runner cleanup fix — 2026-10-17
 
 **Run (user-approved, the first real-provider run of `report-quality-v1`):**

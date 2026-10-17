@@ -24,6 +24,7 @@ from tests.unit.test_quality_finalization import FinalLLM, exact_support
 from tests.unit.test_quality_pipeline import TOPIC
 from tests.unit.test_quality_planner_evidence import EMBED
 from tests.unit.test_quality_verification import (
+    ALPHA,
     FakeStore,
     PerQuerySearch,
     alpha_first,
@@ -72,40 +73,47 @@ def configured(env, monkeypatch):
 
 
 def fake_pipeline(llm, *, order=alpha_first, web=None, academic=None):
-    def factory(settings: Settings) -> ReportQualityPipeline:
+    """A pipeline factory on fakes. The runner wraps `llm` in its recorder and hands the
+    recorder to the factory, exactly as it does with the real client."""
+
+    def factory(settings: Settings, recorded) -> ReportQualityPipeline:
+        assert isinstance(recorded, runner.RecordingLLM)
         default_web, default_academic = providers()
         store = FakeStore(order)
         return ReportQualityPipeline(
             settings=settings,
             research_service=ResearchService(settings=settings),
-            llm=llm,
+            llm=recorded,
             web_search=web or default_web,
             academic_search=academic or default_academic,
             embedder=EMBED,
             store_factory=lambda name: store,
         )
 
+    factory.llm = llm  # type: ignore[attr-defined]
     return factory
 
 
-def never_called(settings):
-    raise AssertionError("the pipeline must not be built")
+def never_called(settings, *rest):
+    raise AssertionError("neither the client nor the pipeline may be built")
 
 
 def run(tmp_path, *args, factory=never_called):
     workspaces = tmp_path / "workspaces"
     workspaces.mkdir(exist_ok=True)
+    llm = getattr(factory, "llm", None)
     code = runner.main(
         [TOPIC, "--out", str(tmp_path / "artifacts"), *args],
         pipeline_factory=factory,
+        llm_factory=(lambda settings: llm) if llm is not None else never_called,
         workspace_root=workspaces,
     )
     return code, workspaces
 
 
-def artifact(tmp_path) -> tuple[Path, dict]:
+def artifact(tmp_path, name="run.json") -> tuple[Path, dict]:
     [directory] = (tmp_path / "artifacts").iterdir()
-    return directory, json.loads((directory / "run.json").read_text(encoding="utf-8"))
+    return directory, json.loads((directory / name).read_text(encoding="utf-8"))
 
 
 class TestArguments:
@@ -353,6 +361,68 @@ class TestExecute:
         }
         assert record["final_markdown"] is None
         assert record["budget"]["stages"]["revision"]["failures"] == 2
+
+
+class TestDiagnostics:
+    """Error-analysis R1: the artifact keeps what is needed to explain each verdict."""
+
+    def test_every_sent_attempt_is_recorded_with_its_prompt_and_raw_answer(self, configured):
+        code, _ = run(configured, "--execute", factory=fake_pipeline(FinalLLM(pool=exact_support)))
+        assert code == runner.EXIT_COMPLETE
+        directory, record = artifact(configured)
+        _, transcript = artifact(configured, "model_calls.json")
+        calls = transcript["calls"]
+        # exactly the attempts the budget let through, in order
+        assert len(calls) == record["budget"]["attempts"]
+        assert [c["index"] for c in calls] == list(range(len(calls)))
+        assert all(c["prompt"] and c["response_text"] and "error" not in c for c in calls)
+        assert {"CoveragePlan", "StructuredReport", "ClaimVerificationModel"} <= {
+            c["schema"] for c in calls
+        }
+        assert all(c["system"] in transcript["system_prompts"] for c in calls if c["system"])
+        assert "model_calls" not in record and "diagnostics" not in record
+
+    def test_passages_and_verifier_output_are_saved(self, configured):
+        run(configured, "--execute", factory=fake_pipeline(FinalLLM(pool=exact_support)))
+        _, diagnostics = artifact(configured, "diagnostics.json")
+        passages = {p["alias"]: p for p in diagnostics["passages"]}
+        assert passages and all(p["text"] and p["source"]["url"] for p in passages.values())
+        assert any(ALPHA[:40] in p["text"] for p in passages.values())
+        assert all(p["subquestion"] for p in passages.values())
+        [claim, *_] = diagnostics["claims"]
+        assert claim["verification"]["rationale"] == "<scripted rationale>"
+        assert claim["verification"]["verdict"] == "supported"
+        supporting = [e for e in claim["evidence"] if e["relation"] == "supports"]
+        assert supporting and all(e["quoted_text"] and e["passage"] for e in supporting)
+        assert diagnostics["citation_checks"]
+        assert all("rationale" in row for row in diagnostics["citation_checks"])
+
+    def test_a_rejected_quote_stays_visible_in_the_transcript(self, configured):
+        invented = "coffee cures everything, says this passage"
+        llm = FinalLLM(pool=judge(pick="Alpha", quote=invented))
+        run(configured, "--execute", factory=fake_pipeline(llm))
+        _, diagnostics = artifact(configured, "diagnostics.json")
+        _, transcript = artifact(configured, "model_calls.json")
+        # enforcement dropped the quote from the stored evidence ...
+        stored = [e["quoted_text"] for c in diagnostics["claims"] for e in c["evidence"]]
+        assert invented not in stored
+        # ... but the model's raw answer, which F5 needs, is kept
+        assert any(invented in (c["response_text"] or "") for c in transcript["calls"])
+
+    def test_failed_attempts_are_recorded_with_their_error(self, configured):
+        from app.services.llm import LLMResponseInvalid
+
+        llm = FinalLLM(
+            pool=judge(pick="Bravo"),
+            check=judge(verdict="not_enough_evidence", relation="neutral"),
+            revise=lambda prompt: LLMResponseInvalid(),
+        )
+        run(configured, "--execute", factory=fake_pipeline(llm, order=bravo_first))
+        _, transcript = artifact(configured, "model_calls.json")
+        failed = [c for c in transcript["calls"] if "error" in c]
+        assert [c["schema"] for c in failed] == ["StructuredReport", "StructuredReport"]
+        assert all(c["error"]["stage"] == "model_call" for c in failed)
+        assert all("response_text" not in c for c in failed)
 
 
 class TestAccounting:

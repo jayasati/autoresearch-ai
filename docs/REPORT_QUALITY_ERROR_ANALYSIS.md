@@ -137,12 +137,12 @@ directory is inside the workspace, retry briefly, delete the marker last. A regr
 test with an open ChromaDB store reproduces the original `WinError 32` against the old
 code and passes with the fix.
 
-### Recommendations (not implemented; each needs approval)
+### Recommendations (R1 done at stage 36; the rest need approval)
 
 Ordered by value per cost. R1 needs no paid call and should precede any further paid
 run, so the next run can be analysed properly.
 
-1. **R1 — Save diagnostics in the artifact (runner):** selected passage texts by alias,
+1. **R1 — Save diagnostics in the artifact (runner) — done (stage 36):** selected passage texts by alias,
    the verifier's quotes/relations/rationales per claim, and the citation-check and
    final-check rationales.
 2. **R2 — Section integrity after revision (F1):** in code, re-insert every planned
@@ -165,3 +165,9 @@ run, so the next run can be analysed properly.
 
 Any change above is a new configuration version; development questions only, no
 tuning against validation or test data.
+
+R1 (stage 36): the runner now writes `diagnostics.json` (passage texts and sources,
+verification results and evidence rows, citation and final checks with rationales) and
+`model_calls.json` (every sent model attempt with its prompt and raw answer, so a quote
+rejected by the verbatim check stays visible). Run 1's artifact predates it; F3 and F5
+can be confirmed only on a later run.
