@@ -82,6 +82,48 @@ class StructuredReport(BaseModel):
         return " ".join(value.replace("#", " ").split()) or "Research report"
 
 
+# --- the coverage plan (stages 1–2; model-filled, validated by code) -------------
+
+
+class QuestionAnalysis(BaseModel):
+    question_type: Literal[
+        "descriptive", "causal", "comparative", "quantitative", "historical", "contested"
+    ]
+    key_entities: list[str] = Field(description="At most 8 named entities the question is about.")
+    time_scope: str | None = Field(description="The period the question concerns, or null.")
+    population_or_scope: str | None = Field(
+        description="The population, place or setting the question concerns, or null."
+    )
+    needs_quantitative_evidence: bool
+    premise_to_check: str | None = Field(
+        description="A presupposition of the question the report must test, not assume; or null."
+    )
+
+    @field_validator("key_entities")
+    @classmethod
+    def clean_entities(cls, values: list[str]) -> list[str]:
+        cleaned = [" ".join(value.split()) for value in values]
+        return list(dict.fromkeys(value for value in cleaned if value))[:8]
+
+
+class PlannedSubquestion(BaseModel):
+    text: str = Field(min_length=10, description="One research subquestion, as a full question.")
+    rationale: str = Field(description="Why answering the topic needs this subquestion.")
+    web_query: str = Field(description="A web search query for this subquestion.")
+    academic_query: str = Field(description="A keyword query for a scholarly paper search.")
+    priority: Literal["core", "supporting"]
+
+    @field_validator("text", "rationale", "web_query", "academic_query")
+    @classmethod
+    def single_line(cls, value: str) -> str:
+        return " ".join(value.split())
+
+
+class CoveragePlan(BaseModel):
+    analysis: QuestionAnalysis
+    subquestions: list[PlannedSubquestion]
+
+
 # --- the code-owned alias table ------------------------------------------------
 
 

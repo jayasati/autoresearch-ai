@@ -205,6 +205,16 @@ class Settings(BaseSettings):
     # sentences are flagged (never removed) as near-duplicates.
     REPORT_QUALITY_QUANT_GROUP_MIN_COSINE: float = Field(default=0.85, ge=0.0, le=1.0)
     REPORT_QUALITY_DUPLICATE_MIN_COSINE: float = Field(default=0.92, ge=0.0, le=1.0)
+    # Added in stage 30 (S3), approved as provisional defaults: planned subquestions
+    # and selected evidence passages per depth (passages are split across the
+    # subquestions), and the cosine at which two planned subquestions are merged.
+    REPORT_QUALITY_SUBQUESTIONS_QUICK: int = Field(default=3, gt=0)
+    REPORT_QUALITY_SUBQUESTIONS_MEDIUM: int = Field(default=4, gt=0)
+    REPORT_QUALITY_SUBQUESTIONS_DEEP: int = Field(default=6, gt=0)
+    REPORT_QUALITY_EVIDENCE_PASSAGES_QUICK: int = Field(default=8, gt=0)
+    REPORT_QUALITY_EVIDENCE_PASSAGES_MEDIUM: int = Field(default=12, gt=0)
+    REPORT_QUALITY_EVIDENCE_PASSAGES_DEEP: int = Field(default=18, gt=0)
+    REPORT_QUALITY_PLAN_DUPLICATE_MIN_COSINE: float = Field(default=0.90, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
     def report_quality_thresholds_are_ordered(self) -> "Settings":
@@ -214,6 +224,14 @@ class Settings(BaseSettings):
                 "REPORT_QUALITY_DEGRADED_BODY_LOSS_RATIO must not exceed "
                 "REPORT_QUALITY_FAIL_BODY_LOSS_RATIO"
             )
+        for depth in ("QUICK", "MEDIUM", "DEEP"):
+            subquestions = getattr(self, f"REPORT_QUALITY_SUBQUESTIONS_{depth}")
+            passages = getattr(self, f"REPORT_QUALITY_EVIDENCE_PASSAGES_{depth}")
+            if passages < subquestions:
+                raise ValueError(
+                    f"REPORT_QUALITY_EVIDENCE_PASSAGES_{depth} must be at least "
+                    f"REPORT_QUALITY_SUBQUESTIONS_{depth}: every subquestion needs a passage slot"
+                )
         return self
 
     @property

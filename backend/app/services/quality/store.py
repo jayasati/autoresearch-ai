@@ -1,5 +1,6 @@
 """
-Persistence for report-quality-v1 (stage 29, S2; design §8).
+Persistence for report-quality-v1 (stage 29, S2; design §8; run, plan and source
+links added in stage 30, S3).
 
 The one transaction boundary for the four new tables and the configuration's
 pipeline fields. Every write checks, before anything is stored, the invariants a
@@ -47,6 +48,7 @@ from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.db.base import utcnow
 from app.db.session import unit_of_work
 from app.models import (
+    BenchmarkRun,
     Citation,
     CitationCheck,
     Claim,
@@ -57,7 +59,13 @@ from app.models import (
     Report,
     ReportQualityAudit,
     ResearchRun,
+    SubQuestion,
     VerificationResult,
+)
+from app.repositories import (
+    ResearchRunRepository,
+    RunConfigurationRepository,
+    SourceRepository,
 )
 from app.repositories.quality import (
     CitationCheckRepository,
@@ -154,6 +162,93 @@ class QualityStore:
 
     def __init__(self, session: Session | None = None) -> None:
         self._session = session
+
+    # --- the run and its plan (stage 30, S3) -----------------------------------
+
+    def create_run(
+        self,
+        topic: str,
+        configuration_values: Mapping,
+        *,
+        benchmark_run_id: uuid.UUID | None = None,
+    ) -> uuid.UUID:
+        """A pending run under a report-quality-v1 configuration (never a legacy one)."""
+        if configuration_values.get("pipeline_version") is not PipelineVersion.REPORT_QUALITY_V1:
+            raise _invalid("A report-quality run needs a report-quality configuration.")
+        with unit_of_work(self._session) as session:
+            configuration, _ = RunConfigurationRepository(session).get_or_create(
+                **configuration_values
+            )
+            benchmark = None
+            if benchmark_run_id is not None:
+                benchmark = session.get(BenchmarkRun, benchmark_run_id)
+                if benchmark is None:
+                    raise NotFoundError(f"No benchmark_run with id {benchmark_run_id}.")
+            run = ResearchRunRepository(session).create(
+                topic=topic, configuration=configuration, benchmark_run=benchmark
+            )
+            session.flush()
+            return run.id
+
+    def record_plan(
+        self, run_id: uuid.UUID, subquestions: Sequence[tuple[str, str]]
+    ) -> list[uuid.UUID]:
+        """Persist the plan, all of it or none: `(text, search query)` per subquestion,
+        in order. Returns the sub_question ids in the same order."""
+        with unit_of_work(self._session) as session:
+            run = ResearchRunRepository(session).get_or_raise(run_id)
+            if run.subquestions:
+                raise ConflictError(f"Run {run_id} already has a plan.")
+            rows = [
+                SubQuestion(
+                    research_run=run,
+                    position=index,
+                    text=text,
+                    search_query=query,
+                    created_at=utcnow(),
+                )
+                for index, (text, query) in enumerate(subquestions)
+            ]
+            session.add_all(rows)
+            session.flush()
+            return [row.id for row in rows]
+
+    def attach_sources(
+        self, run_id: uuid.UUID, sources: Sequence[tuple[dict, uuid.UUID | None]]
+    ) -> dict[str, uuid.UUID]:
+        """Deduplicate and link each source to the run, recording the subquestion that
+        first found it. `sources` holds `(attach values, subquestion id)`, where the
+        values are what `SourceMetadata.to_source_create()` plus the link facts give.
+        Returns fingerprint → source id. One transaction for all of them."""
+        with unit_of_work(self._session) as session:
+            run = ResearchRunRepository(session).get_or_raise(run_id)
+            repository = SourceRepository(session)
+            ids: dict[str, uuid.UUID] = {}
+            for values, subquestion_id in sources:
+                values = dict(values)
+                link = {
+                    key: values.pop(key)
+                    for key in ("evidence_depth", "retriever", "retrieval_query", "rank")
+                }
+                fingerprint = values.pop("fingerprint")
+                source, _ = repository.get_or_create(fingerprint, **values)
+                repository.link_to_run(run, source, subquestion_id=subquestion_id, **link)
+                ids[fingerprint] = source.id
+            session.flush()
+            return ids
+
+    def mark_gaps(self, run_id: uuid.UUID, subquestion_ids: Sequence[uuid.UUID]) -> None:
+        """Subquestions with no selected evidence are not addressed — recorded now, so
+        coverage can never count them as answered."""
+        with unit_of_work(self._session) as session:
+            for subquestion_id in subquestion_ids:
+                row = session.get(SubQuestion, subquestion_id)
+                if row is None or row.research_run_id != run_id:
+                    raise _invalid(
+                        "The subquestion does not belong to this run.",
+                        subquestion_id=subquestion_id,
+                    )
+                row.addressed = False
 
     # --- the audit row ---------------------------------------------------------
 

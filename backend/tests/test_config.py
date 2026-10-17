@@ -293,6 +293,21 @@ class TestReportQualityKnobs:
         assert 0 < s.REPORT_QUALITY_QUANT_GROUP_MIN_COSINE <= 1
         assert 0 < s.REPORT_QUALITY_DUPLICATE_MIN_COSINE <= 1
 
+    def test_s3_plan_and_evidence_budgets_fit(self, clean_env, no_report_quality_env):
+        s = Settings(_env_file=None)
+        for depth in ("QUICK", "MEDIUM", "DEEP"):
+            subquestions = getattr(s, f"REPORT_QUALITY_SUBQUESTIONS_{depth}")
+            assert getattr(s, f"REPORT_QUALITY_EVIDENCE_PASSAGES_{depth}") >= subquestions
+        assert (s.REPORT_QUALITY_SUBQUESTIONS_QUICK <= s.REPORT_QUALITY_SUBQUESTIONS_MEDIUM
+                <= s.REPORT_QUALITY_SUBQUESTIONS_DEEP)
+
+    def test_fewer_passages_than_subquestions_is_rejected(
+        self, monkeypatch, clean_env, no_report_quality_env
+    ):
+        monkeypatch.setenv("REPORT_QUALITY_EVIDENCE_PASSAGES_QUICK", "2")
+        with pytest.raises(Exception, match="every subquestion needs a passage slot"):
+            Settings(_env_file=None)
+
     def test_pipeline_versions(self):
         assert PipelineVersion.LEGACY == "legacy"
         assert PipelineVersion.REPORT_QUALITY_V1 == "report-quality-v1"

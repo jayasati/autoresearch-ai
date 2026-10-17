@@ -5,6 +5,64 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 30 — Report-quality pipeline v1, S3: plan, retrieval and evidence selection — 2026-10-17
+
+S3 of `report-quality-v1` (design §2 stages 1–5, §9). Decisions at the start of the
+stage: end before drafting; compose the legacy services, do not refactor them;
+approved provisional knobs (3/4/6 subquestions, 8/12/18 passages, plan
+near-duplicate merge at 0.90, gap = zero selected passages). **Still unreachable:**
+`ReportQualityPipeline.prepare_evidence` is gated behind `REPORT_QUALITY_ENABLED`
+(off) and nothing calls it — no route, request field or benchmark arm.
+
+**What was implemented** (details in design doc §8 "Implemented at S3"):
+
+- `planner.py` + `prompts.py` — `planner-v1`: question analysis and coverage plan
+  in one structured call; one retry; fallback to the topic as one subquestion,
+  recorded; validation drops empties, merges near-duplicates, caps, keywordizes
+  academic queries, guarantees a core subquestion. Transport failures propagate.
+- `evidence.py` — per-subquestion retrieval on both existing providers; the legacy
+  merge rule mirrored (equivalence tested against `ResearchOrchestrator._retrieve`);
+  provider-only source profiles; per-subquestion MMR (legacy lambda) over that
+  subquestion's own sources; budget allocation; frozen `S#`/`E#` labels and the alias
+  table; passage quantity mentions; gaps with their reason.
+- `pipeline.py` + `exceptions.py` — the gated entry point: run under a
+  report-quality configuration (`pipeline_version`, `options`,
+  `planner_prompt_version`), PLANNING → RETRIEVING, plan rows, source links with
+  `subquestion_id`, documents via the existing `record_processed_documents`, labels via
+  the existing `set_citation_labels`, gaps marked `addressed=false`; any failure marks
+  the run failed with its code, as the legacy pipeline does.
+- `store.py` — `create_run`, `record_plan` (with search queries), `attach_sources`
+  (with subquestion), `mark_gaps`; through the repositories, so the legacy research
+  service is unmodified.
+- `config.py` — the seven approved knobs and a validator (passages ≥ subquestions
+  per depth).
+
+**Files changed:** new — `backend/app/services/quality/{planner,evidence,pipeline,
+prompts,exceptions}.py`, `backend/tests/unit/test_quality_{planner_evidence,
+pipeline}.py`; modified — `backend/app/core/config.py`,
+`backend/app/services/quality/{models,store}.py`, `backend/tests/test_config.py`,
+`docs/REPORT_QUALITY_PIPELINE.md`, this log.
+
+**Tests:** 24 new (15 planner/evidence, 7 pipeline end to end on throwaway SQLite with
+fake providers, LLM and embedder, 2 config). `pytest` 1066 passed; `ruff check .`
+clean; `mypy app` clean (109 files). Two test failures during development were wrong
+expectations; one exposed a real sentence-split bug ("U.S." ended a sentence), fixed.
+
+**Legacy compatibility:** orchestrator, research service, verifier, extractor,
+finalizer, benchmark code, routes, migrations and frontend unmodified; all their tests
+pass unchanged; the S1 isolation test (the app does not load the package) passes;
+legacy fingerprints still pinned; a legacy request's configuration is unaffected by a
+report-quality run of the same topic (tested). Quant-audit case file and frozen
+auditor unchanged (`f1a83873…`, `128d6a19…`).
+
+**Not done (deliberately):** drafting (S4), citation check, budget wrapper, revision
+and audit writes (S5), routes/UI (S6), benchmark arm and any paid run (S7); no
+provider calls, no migration applied anywhere but throwaway SQLite — **the
+Neon-branch migration round trip remains an outstanding gate.** The stage-26
+end-to-end run remains missing.
+
+---
+
 ## Stage 29 — Report-quality pipeline v1, S2: migration and persistence — 2026-10-17
 
 S2 of `report-quality-v1` (design §8–§9), with decisions made at the start of the

@@ -351,6 +351,45 @@ round trip) and as offline PostgreSQL SQL; **not yet applied to any PostgreSQL
 database** — the Neon-branch round trip remains an open acceptance item that needs
 the user's approval.
 
+### Implemented at S3 (stage 30)
+
+Stages 1–5 in `app/services/quality/{planner,evidence,pipeline,prompts,exceptions}.py`,
+plus run, plan and source-link persistence in the store. Decisions taken at the
+start of S3: the boundary ends before drafting; legacy code is **composed, not
+refactored** (the orchestrator and research service are unmodified); provisional
+knobs — 3/4/6 subquestions and 8/12/18 passages per depth, planner near-duplicate
+merge at cosine 0.90, an evidence gap = zero selected passages.
+
+- **Gate.** `ReportQualityPipeline.prepare_evidence` refuses (`report_quality_disabled`,
+  `report_quality_mode_unsupported`, or the legacy no-key error) before any row is
+  written or any call made. Nothing calls it yet: no route, request field or
+  benchmark arm (S6/S7).
+- **Planner (`planner-v1`).** One structured call, one retry on invalid output, then
+  a recorded fallback to the topic as one subquestion; a plan with fewer than two
+  usable subquestions after validation also falls back. Transport failures propagate.
+  The call is **not yet budgeted** (budget wrapper: S5).
+- **Retrieval.** Each subquestion's web query to Tavily and keyword query to Semantic
+  Scholar, concurrently; per-subquestion result counts are the legacy depth's counts
+  shared across subquestions (at least two). Merging mirrors the legacy identity-key
+  rule exactly (a test feeds both the same outcomes). Run fails only if every call
+  failed.
+- **Selection.** A subquestion selects only from sources its own retrieval found —
+  that is what makes a gap meaningful; MMR with the legacy lambda 0.7 over its chunks
+  with the local embedder; the budget split evenly, remainder to core first. A source
+  found by several subquestions serves each; `research_source.subquestion_id` is the
+  first finder and `found_by` keeps all.
+- **Labels and gaps.** `S#` per source and `E#` per passage in first-selection order,
+  persisted with the existing `set_citation_labels`; gaps marked `addressed=false`
+  (others left undecided until drafting). Source profiles are provider metadata only.
+  Passage quantities are extracted per sentence (audit input), with a sentence split
+  that keeps initialisms, "e.g.", "i.e.", "vs." and "et al." intact.
+- **Not indexed into ChromaDB here:** the verifier rebuilds a run's collection from
+  its stored chunks when it needs it.
+
+**Outstanding gate (unchanged since S2):** the migration has not been applied to
+Neon or any PostgreSQL database; the Neon-branch round trip needs the user's
+approval before any run of this pipeline can be persisted there.
+
 ## 9. Staged sequence
 
 | Stage | Scope | Paid calls |
@@ -358,7 +397,7 @@ the user's approval.
 | **S0** | this document, `PipelineVersion`, inert knobs, documentation corrections | none — **done (stage 27)** |
 | S1 | deterministic modules (quantities, assessment, validation, rendering, alignment) + local quantitative case-set evaluation | none — **done (stage 28)** |
 | S2 | migration + persistence | none — **done (stage 29)**; Neon-branch round trip pending approval |
-| S3 | planner + per-subquestion retrieval/selection behind the gate, fake providers | none |
+| S3 | planner + per-subquestion retrieval/selection behind the gate, fake providers | none — **done (stage 30)**: stages 1–5, ending at an in-memory evidence set |
 | S4 | structured draft + rendering + alignment wiring | none |
 | S5 | citation check, budget wrapper, revision, validation, audit (fakes) | none |
 | S6 | additive API (jobs, progress, quality) + frontend | none |
