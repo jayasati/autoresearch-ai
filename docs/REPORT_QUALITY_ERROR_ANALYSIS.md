@@ -137,7 +137,7 @@ directory is inside the workspace, retry briefly, delete the marker last. A regr
 test with an open ChromaDB store reproduces the original `WinError 32` against the old
 code and passes with the fix.
 
-### Recommendations (R1 done at stage 36; the rest need approval)
+### Recommendations (R1 at stage 36; R2, R3 and the partial policy at stage 37)
 
 Ordered by value per cost. R1 needs no paid call and should precede any further paid
 run, so the next run can be analysed properly.
@@ -171,3 +171,33 @@ verification results and evidence rows, citation and final checks with rationale
 `model_calls.json` (every sent model attempt with its prompt and raw answer, so a quote
 rejected by the verbatim check stays visible). Run 1's artifact predates it; F3 and F5
 can be confirmed only on a later run.
+
+Stage 37 — the minimum integrity fixes before the controlled comparison (user
+directive: no further infrastructure):
+
+- **F1 → fixed.** The finalizer re-inserts, from the draft, every planned section the
+  revision dropped, keeping only draft sentences whose claims the revision does not
+  state anywhere (no outdated version comes back); a V7 restoration goes under the
+  claim's own subquestion (a new section headed by its planned text if needed), never
+  the last section; V8 records every claim that ends in neither the body nor a labelled
+  section as `omission_recorded`, with why (`metrics.claims_omitted`).
+- **F2 → fixed.** V9: every core subquestion with no supported body sentence is
+  `unanswered_core`, makes the outcome degraded at least, and is listed under Evidence
+  gaps — the coverage threshold no longer hides it.
+- **F3 → policy implemented.** A partly supported claim (pool verdict partial, or no
+  cited passage fully supporting it) reaches the body only when the revision narrowed
+  its wording (a content word removed or replaced, or a scope or number changed) AND
+  re-verification on its cited passages found it fully supported. Unchanged wording,
+  or a hedge that keeps every content word, goes to "Unresolved findings" prefixed
+  "Only partly supported by the cited evidence:" and is never sent to re-verification.
+  Partial claims now trigger a revision; the revision prompt (`final-report-structured-v2`)
+  shows the quote each partial claim rests on and asks for narrowing, not hedging.
+  The narrowing test is a heuristic: a rewrite that passes it still has to pass
+  re-verification.
+- **B1 (records).** Each recorded model call carries its prompt version; each claim and
+  final check in `diagnostics.json` lists the indexes of the exact verifier calls that
+  judged it; passages carry source ids and evidence rows their ids.
+
+Still open: F4 (`body_loss_ratio` counts the revision's own findings, not the draft's
+supported claims — omissions are now recorded but not scored), F5 (quote matching;
+needs a run with the new records), F7 (labelling, source quality).

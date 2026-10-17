@@ -425,3 +425,121 @@ class TestPolicyAndFailures:
         service_session.refresh(run)
         assert run.status is RunStatus.FAILED and run.error_code == "internal_error"
         assert ALPHA  # fixtures stay distinctive
+
+
+def partial_pool(prompt):
+    """Pool: each claim only PARTLY supported by the passage it cites."""
+    claim = prompt.split("Claim to verify:\n", 1)[1].split("\n", 1)[0]
+    pick = "Alpha" if "diabetes" in claim else "Bravo"
+    return judge(verdict="partially_supported", pick=pick)(prompt)
+
+
+class TestRun1IntegrityEndToEnd:
+    """Stage 37: run 1's report-integrity failures, end to end on fakes."""
+
+    async def test_a_planned_section_the_revision_drops_is_reinserted_with_its_claims(
+        self, service_session
+    ):
+        def drop_blood_pressure(prompt):
+            report = reviser()(prompt)
+            kept = [
+                s
+                for s in report.sections
+                if not any("blood pressure" in p.text for p in s.sentences)
+            ]
+            return report.model_copy(update={"sections": kept})
+
+        llm = FinalLLM(
+            pool=judge(pick="Bravo"),
+            check=judge(verdict="not_enough_evidence", relation="neutral"),
+            revise=drop_blood_pressure,
+        )
+        _, drafted, verified, final = await full_run(service_session, llm)
+        bp = next(r for r in verified.claims if "blood pressure" in r.text)
+        assert bp.claim_status is ClaimStatus.SUPPORTED_BY_CITED_SOURCE
+        _, _, audit = stored(service_session)
+        finalization = audit.payload["finalization"]
+        [restored] = [a for a in finalization["actions"] if a["action"] == "section_restored"]
+        assert bp.subquestion in restored["detail"]
+        # the supported claim is back in the body, under its OWN question's heading
+        assert finalization["placements"][bp.alias] == "body"
+        heading = next(
+            s.heading for s in drafted.draft.report.sections if s.subquestion == bp.subquestion
+        )
+        body = (final.final_markdown or "").split("---")[0]
+        section = body.split(f"## {heading}", 1)[1].split("\n## ", 1)[0]
+        assert bp.text.rstrip(".") in section
+        assert final.metrics["claims_omitted"] == []
+        assert any("re-inserted" in w for w in final.warnings)
+
+    async def test_a_revision_that_rewrote_a_claim_elsewhere_does_not_bring_back_its_old_form(
+        self, service_session
+    ):
+        def move_and_drop(prompt):
+            report = reviser(
+                change=lambda t: t.replace("is reported here", "is reported here at 2 mmHg")
+            )(prompt)
+            bp = [
+                s for s in report.sections if any("blood pressure" in p.text for p in s.sentences)
+            ]
+            others = [s for s in report.sections if s not in bp]
+            moved = [p for s in bp for p in s.sentences]
+            first = others[0].model_copy(update={"sentences": [*others[0].sentences, *moved]})
+            return report.model_copy(update={"sections": [first, *others[1:]]})
+
+        llm = FinalLLM(
+            pool=judge(pick="Bravo"),
+            check=judge(pick="Bravo"),
+            revise=move_and_drop,
+        )
+        _, _, verified, final = await full_run(service_session, llm)
+        bp = next(r for r in verified.claims if "blood pressure" in r.text)
+        md = final.final_markdown or ""
+        # the rewritten version stands; the draft's outdated version is not re-inserted
+        assert "at 2 mmHg" in md
+        assert md.count(bp.text) == 0
+        _, _, audit = stored(service_session)
+        assert not any(
+            a["action"] == "section_restored" for a in audit.payload["finalization"]["actions"]
+        )
+
+    async def test_run1_hedge_on_partly_supported_claims_is_not_upgraded(self, service_session):
+        hedge = lambda t: t.rstrip(".") + ", albeit with some qualification."  # noqa: E731
+        llm = FinalLLM(pool=partial_pool, check=judge(pick="Bravo"), revise=reviser(change=hedge))
+        _, _, verified, final = await full_run(service_session, llm)
+        assert all(r.claim_status is ClaimStatus.SUPPORTED_BY_CITED_SOURCE for r in verified.claims)
+        assert final.revised  # partial claims trigger a revision
+        [prompt] = [p for k, p in llm.calls if k == "revise"]
+        assert "| PARTIAL |" in prompt and "    evidence E" in prompt  # the quote to narrow to
+        # the hedged sentences were never re-verified ...
+        assert final.reverified == {}
+        _, _, audit = stored(service_session)
+        assert "reverification" not in audit.payload["budget"]["stages"]
+        actions = audit.payload["finalization"]["actions"]
+        assert sum(a["action"] == "superficial_hedge" for a in actions) == len(verified.claims)
+        # ... and none reached the body: nothing narrowed means no honest finding
+        assert final.status == "finalization_failed"
+        assert any("no body sentence" in r for r in final.reasons)
+
+    async def test_a_narrowed_partly_supported_claim_reaches_the_body_when_fully_supported(
+        self, service_session
+    ):
+        def pool(prompt):  # diabetes fully supported; blood pressure only partly
+            claim = prompt.split("Claim to verify:\n", 1)[1].split("\n", 1)[0]
+            if "diabetes" in claim:
+                return judge(pick="Alpha")(prompt)
+            return judge(verdict="partially_supported", pick="Bravo")(prompt)
+
+        def narrow(text):  # the partial claim gains the passage's exact figure
+            if "blood pressure" not in text:
+                return text
+            return text.replace("is reported here", "is reported here at 2 mmHg")
+
+        llm = FinalLLM(pool=pool, check=judge(pick="Bravo"), revise=reviser(change=narrow))
+        _, _, verified, final = await full_run(service_session, llm, order=alpha_first)
+        bp = next(r for r in verified.claims if "blood pressure" in r.text)
+        assert bp.pool_status is PoolStatus.PARTIALLY_SUPPORTED
+        assert list(final.reverified.values())[0]["status"] == "supported_by_cited_source"
+        assert final.status == "complete"
+        body = (final.final_markdown or "").split("---")[0]
+        assert "at 2 mmHg" in body

@@ -146,23 +146,30 @@ def render_final(
                 f"- ({conflict.conflict_type.replace('_', ' ')}) {conflict.description}{suffix}"
             )
 
-    gaps = [a for a in assessments if a.status == "evidence_gap"]
-    if gaps:
+    # Retrieval gaps, then every core subquestion the report leaves unanswered (V9)
+    # whatever the reason — a coverage threshold never hides one.
+    reasons: dict[str, str] = {}
+    for gap in assessments:
+        if gap.status == "evidence_gap":
+            reasons[gap.alias] = (
+                "the search providers failed"
+                if gap.gap_reason == "provider_failure"
+                else "no relevant evidence was found"
+            )
+    for alias in validated.unanswered_core:
+        reasons.setdefault(
+            alias, "a core part of the question: the report states no supported finding on it"
+        )
+    if reasons:
         lines += [
             "",
             "---",
             "",
             "## Evidence gaps",
             "",
-            "No usable evidence was retrieved for these parts of the question, so the "
-            "report does not answer them.",
+            "The report does not answer these parts of the question.",
             "",
         ]
-        for gap in gaps:
-            why = (
-                "the search providers failed"
-                if gap.gap_reason == "provider_failure"
-                else "no relevant evidence was found"
-            )
-            lines.append(f"- {subquestion_texts.get(gap.alias, gap.alias)} — {why}.")
+        for alias, why in reasons.items():
+            lines.append(f"- {subquestion_texts.get(alias, alias)} — {why}.")
     return "\n".join(lines).rstrip() + "\n"

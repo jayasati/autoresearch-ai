@@ -17,7 +17,19 @@ repair, move and flag with the original text:
     V6 repetition                     → flagged only
     V7 important verified omissions   → restored as a templated sentence (only claims
                                         no revised sentence states — never an
-                                        outdated version of a rewritten claim)
+                                        outdated version of a rewritten claim), under
+                                        the claim's OWN subquestion
+    V8 accounting                     → every claim ends in the body, a labelled
+                                        section, or an explicit omission record
+    V9 core coverage                  → every core subquestion without a supported
+                                        body sentence is reported unanswered
+
+Partial support (stage 37 policy): a partially supported claim may stand in the body
+only when the revision NARROWED its wording and re-verification against its cited
+passages then found it fully supported. Unchanged wording, or wording that only adds
+a hedge (every content word of the claim still present, no scope or number change),
+is not narrowing: the sentence goes to the unresolved section and is never sent to
+re-verification, so a hedge cannot upgrade a verdict.
 
 Approved rules applied here: an unconfirmed citation is never replaced with a
 different source — the sentence moves to a labelled section instead; contested
@@ -97,6 +109,15 @@ class ClaimInfo:
     status: ClaimStatus
     pool: PoolStatus
     supported_chunks: frozenset[uuid.UUID]  # chunks with an established supports/partial relation
+    #: Only partly supported (pool verdict partial, or no cited passage fully supports).
+    #: None: derive from the pool verdict alone.
+    partial: bool | None = None
+
+    @property
+    def is_partial(self) -> bool:
+        if self.partial is not None:
+            return self.partial
+        return self.pool is PoolStatus.PARTIALLY_SUPPORTED
 
 
 @dataclass(frozen=True)
@@ -161,6 +182,7 @@ class ValidatedReport:
     status: OutcomeStatus
     reasons: list[str]
     metrics: dict = field(default_factory=dict)
+    unanswered_core: list[str] = field(default_factory=list)  # V9, in plan order
 
 
 # --- V2: meaning change ------------------------------------------------------------
@@ -249,6 +271,31 @@ def place(status: ClaimStatus, *, partial: bool, important: bool) -> Placement:
 
 QUALIFIER_PREFIX = "The evidence partially supports the following: "
 RESTORED_PREFIX = "The evidence indicates: "
+PARTIAL_PREFIX = "Only partly supported by the cited evidence: "
+
+#: Function words ignored when deciding whether a rewrite narrowed a claim.
+_FUNCTION_WORDS = {
+    "a", "an", "the", "of", "for", "in", "on", "at", "to", "and", "or", "is", "are",
+    "was", "were", "be", "been", "with", "by", "as", "that", "this", "these", "those",
+    "its", "their", "it", "from", "than", "per",
+}  # fmt: skip
+
+
+def narrowed(sentence: str, claim_texts: Sequence[str], entities: Sequence[str] = ()) -> bool:
+    """Whether a rewrite narrowed what the claims assert, rather than only hedging them.
+
+    Narrowing removes or replaces at least one content word of the claims, or changes a
+    stated scope (population, period, place, setting) or number. A rewrite that keeps
+    every content word and adds only qualifying words ("albeit with some
+    qualification") is NOT narrowing. Heuristic, like `detect_meaning_change`: a
+    narrowed rewrite still has to pass re-verification on its cited passages."""
+    joined = " ".join(claim_texts)
+    claim_content = _words(joined) - _FUNCTION_WORDS
+    if not claim_content <= _words(sentence):
+        return True
+    if context_tokens(sentence, entities) != context_tokens(joined, entities):
+        return True
+    return _numbers(sentence, entities) != _numbers(joined, entities)
 
 
 # --- the whole pass ------------------------------------------------------------------
@@ -265,8 +312,14 @@ def validate_final(
     entities: Sequence[str] = (),
     embed: Embed | None = None,
     reverified: Mapping[SentenceKey, Reverification] | None = None,
+    subquestion_headings: Mapping[str, str] | None = None,
+    restored_sections: Sequence[tuple[str, str]] = (),
 ) -> ValidatedReport:
+    """`subquestion_headings` (alias → text) heads a section created for a restored
+    claim whose subquestion has none; `restored_sections` ((alias, heading) pairs)
+    are the planned sections the caller re-inserted from the draft, recorded here."""
     reverified = reverified or {}
+    subquestion_headings = subquestion_headings or {}
     actions: list[ValidationAction] = []
     needs: list[SentenceKey] = []
     labelled: dict[Placement, list[PlacedSentence]] = {}
@@ -276,6 +329,15 @@ def validate_final(
 
     def record(action, section, index, text, detail) -> None:
         actions.append(ValidationAction(action, section, index, text, detail))
+
+    for alias, heading in restored_sections:
+        record(
+            "section_restored",
+            heading,
+            None,
+            heading,
+            f"planned section {alias} was dropped by the revision; re-inserted from the draft",
+        )
 
     for s_index, section in enumerate(report.sections):
         body: list[PlacedSentence] = []
@@ -333,22 +395,45 @@ def validate_final(
             markers = _markers_for(info.supported_chunks, aliases)
             if not markers:
                 continue
+            if info.is_partial:
+                # Not narrowed by anyone: listed as unresolved, never restored to the body.
+                labelled.setdefault(Placement.UNRESOLVED, []).append(
+                    PlacedSentence(
+                        text=PARTIAL_PREFIX + info.text,
+                        kind="finding",
+                        placement=Placement.UNRESOLVED,
+                        markers=(),
+                        claim_aliases=(alias,),
+                        status=info.status,
+                        origin="restored",
+                    )
+                )
+                record(
+                    "omission_listed",
+                    Placement.UNRESOLVED.value,
+                    None,
+                    info.text,
+                    f"high-importance claim {alias} is only partly supported and was left "
+                    "out by the revision; listed",
+                )
+                continue
             restored = PlacedSentence(
                 text=RESTORED_PREFIX + info.text,
                 kind="finding",
-                placement=Placement.QUALIFIED
-                if info.pool is PoolStatus.PARTIALLY_SUPPORTED
-                else Placement.BODY,
+                placement=Placement.BODY,
                 markers=markers,
                 claim_aliases=(alias,),
                 status=info.status,
                 origin="restored",
             )
-            target = next((s for s in sections if s.subquestion == info.subquestion), None)
+            # Under the claim's OWN subquestion — never another question's section.
+            subquestion = info.subquestion or "SYNTHESIS"
+            target = next((s for s in sections if s.subquestion == subquestion), None)
             if target is None:
-                if not sections:
-                    sections.append(PlacedSection(info.subquestion or "SYNTHESIS", "Findings", []))
-                target = sections[-1]
+                target = PlacedSection(
+                    subquestion, subquestion_headings.get(subquestion, "Findings"), []
+                )
+                sections.append(target)
             target.sentences.append(restored)
             record(
                 "omission_restored",
@@ -374,6 +459,31 @@ def validate_final(
         record("omission_listed", where.value, None, info.text,
                f"claim {alias} ({info.status.value}) was left out by the revision; listed")
 
+    # V8 — accounting. Every claim is in the body, in a labelled section, or recorded
+    # here as omitted, with why. Nothing is restored to make up the numbers.
+    shown = {
+        alias
+        for placed in (
+            *(p for s in sections for p in s.sentences),
+            *(p for items in labelled.values() for p in items),
+        )
+        for alias in placed.claim_aliases
+    }
+    omitted = []
+    for alias, info in claims.items():
+        if alias in shown:
+            continue
+        omitted.append(alias)
+        if info.status is not ClaimStatus.SUPPORTED_BY_CITED_SOURCE:
+            why = f"{info.status.value}; no supporting citation to show it with"
+        elif info.is_partial:
+            why = "only partly supported, not high-importance, and left out by the revision"
+        else:
+            why = "supported by its cited source, not high-importance, left out by the revision"
+        record(
+            "omission_recorded", "", None, info.text, f"claim {alias} is not in the report: {why}"
+        )
+
     return _outcome(
         report.title,
         sections,
@@ -387,6 +497,7 @@ def validate_final(
         verification_coverage,
         proposed,
         lost,
+        omitted,
     )
 
 
@@ -448,8 +559,22 @@ def _place_sentence(
         embed=embed,
         min_cosine=config.meaning_change_min_cosine,
     )
+    was_partial = any(
+        i.is_partial and i.status is ClaimStatus.SUPPORTED_BY_CITED_SOURCE for i in infos
+    )
     if changes:
         record("meaning_changed", heading, t_index, sentence.text, ",".join(sorted(changes)))
+        if was_partial and not narrowed(sentence.text, [i.text for i in infos], entities):
+            # A hedge on a partly supported claim is not narrowing, and is never sent to
+            # re-verification: a hedge must not be able to upgrade the verdict.
+            record(
+                "superficial_hedge",
+                heading,
+                t_index,
+                sentence.text,
+                "partly supported claim hedged but not narrowed; listed as unresolved",
+            )
+            return _partial_unresolved(sentence, kind, claim_aliases, infos, key)
         result = reverified.get(key)
         if result is None:
             needs.append(key)
@@ -469,8 +594,20 @@ def _place_sentence(
         )
     else:
         status = _most_cautious([i.status for i in infos])
-        partial = any(i.pool is PoolStatus.PARTIALLY_SUPPORTED for i in infos)
+        partial = was_partial
         supported = frozenset().union(*(i.supported_chunks for i in infos))
+
+    if status is ClaimStatus.SUPPORTED_BY_CITED_SOURCE and partial:
+        # Partly supported as worded (unchanged, or a narrowed rewrite re-verified as
+        # still partial): not a body finding.
+        record(
+            "partial_not_narrowed",
+            heading,
+            t_index,
+            sentence.text,
+            "only partly supported by its cited evidence as worded; listed as unresolved",
+        )
+        return _partial_unresolved(sentence, kind, claim_aliases, infos, key)
 
     placement = place(status, partial=partial, important=important)
     if placement not in IN_BODY:
@@ -513,6 +650,18 @@ def _place_sentence(
     )
 
 
+def _partial_unresolved(sentence, kind, claim_aliases, infos, key) -> PlacedSentence:
+    return PlacedSentence(
+        PARTIAL_PREFIX + sentence.text,
+        kind,
+        Placement.UNRESOLVED,
+        (),
+        tuple(claim_aliases),
+        _most_cautious([i.status for i in infos]),
+        key=key,
+    )
+
+
 def _markers_for(chunks: frozenset[uuid.UUID], aliases: AliasTable) -> tuple[str, ...]:
     labels: list[str] = []
     for ref in aliases.passages.values():
@@ -523,6 +672,10 @@ def _markers_for(chunks: frozenset[uuid.UUID], aliases: AliasTable) -> tuple[str
         ):
             labels.append(ref.source_label)
     return tuple(sorted(labels, key=lambda label: int(label[1:]) if label[1:].isdigit() else 0))
+
+
+def _alias_order(alias: str) -> tuple[int, str]:
+    return (int(alias[1:]) if alias[1:].isdigit() else 10**6, alias)
 
 
 def _flag_duplicates(sections, config, embed, record) -> None:
@@ -571,12 +724,16 @@ def _outcome(
     verification_coverage,
     proposed,
     lost,
+    omitted,
 ) -> ValidatedReport:
     body = [p for s in sections for p in s.sentences]
     body_loss_ratio = round(lost / proposed, 6) if proposed else 0.0
     covered = {
         s.subquestion for s in sections if any(p.markers and p.claim_aliases for p in s.sentences)
     }
+    # V9 — a core subquestion with no supported body sentence is unanswered, whatever
+    # the coverage threshold says; it is degraded at least and listed as a gap.
+    unanswered_core = sorted(core_subquestions - covered, key=_alias_order)
     core_coverage = (
         round(len(covered & core_subquestions) / len(core_subquestions), 6)
         if core_subquestions
@@ -614,6 +771,8 @@ def _outcome(
         degraded.append(f"verification coverage {verification_coverage} < 1.0")
     if needs:
         degraded.append(f"{len(needs)} sentence(s) await re-verification")
+    if unanswered_core:
+        degraded.append(f"core subquestion(s) not answered by the report: {unanswered_core}")
 
     status: OutcomeStatus = (
         "finalization_failed" if failed else "degraded" if degraded else "complete"
@@ -626,6 +785,7 @@ def _outcome(
         needs_reverification=needs,
         status=status,
         reasons=failed + degraded,
+        unanswered_core=unanswered_core,
         metrics={
             "proposed_findings": proposed,
             "findings_not_in_body": lost,
@@ -633,6 +793,8 @@ def _outcome(
             "core_coverage": core_coverage,
             "body_sentences": len(body),
             "restored": sum(1 for p in body if p.origin == "restored"),
+            "unanswered_core": unanswered_core,
+            "claims_omitted": omitted,
             "actions": {
                 name: sum(1 for a in actions if a.action == name)
                 for name in sorted({a.action for a in actions})

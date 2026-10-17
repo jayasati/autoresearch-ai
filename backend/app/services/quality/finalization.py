@@ -114,6 +114,15 @@ def supported_chunks(record: ClaimRecord, aliases) -> frozenset[uuid.UUID]:
     )
 
 
+def is_partial(record: ClaimRecord) -> bool:
+    """Supported by its cited source, but only partly: the pool verdict is partial, or
+    no cited passage FULLY supports it. Such a claim needs narrowing (stage 37)."""
+    return record.claim_status is ClaimStatus.SUPPORTED_BY_CITED_SOURCE and (
+        record.pool_status is PoolStatus.PARTIALLY_SUPPORTED
+        or CitationOutcome.SUPPORTS not in record.outcomes.values()
+    )
+
+
 def claim_infos(records: list[ClaimRecord], aliases) -> dict[str, ClaimInfo]:
     return {
         r.alias: ClaimInfo(
@@ -125,14 +134,19 @@ def claim_infos(records: list[ClaimRecord], aliases) -> dict[str, ClaimInfo]:
             status=r.claim_status,
             pool=r.pool_status,
             supported_chunks=supported_chunks(r, aliases),
+            partial=is_partial(r),
         )
         for r in records
     }
 
 
 def revision_needed(records: list[ClaimRecord]) -> bool:
-    """Revise only when some claim cannot stand as a cited finding as drafted."""
-    return any(r.claim_status is not ClaimStatus.SUPPORTED_BY_CITED_SOURCE for r in records)
+    """Revise only when some claim cannot stand as a cited finding as drafted — which
+    includes a partly supported claim, since only a narrowing rewrite can keep it."""
+    return any(
+        r.claim_status is not ClaimStatus.SUPPORTED_BY_CITED_SOURCE or is_partial(r)
+        for r in records
+    )
 
 
 def draft_as_final(draft: StructuredReport, records: list[ClaimRecord]) -> StructuredReport:
@@ -166,15 +180,47 @@ def revision_prompt(topic, plan, draft: StructuredReport, records: list[ClaimRec
     ]
     claim_lines = []
     for r in records:
-        status = _STATUS_WORD[r.claim_status]
-        if (
-            r.claim_status is ClaimStatus.SUPPORTED_BY_CITED_SOURCE
-            and r.pool_status is PoolStatus.PARTIALLY_SUPPORTED
-        ):
-            status = "PARTIAL"
+        status = "PARTIAL" if is_partial(r) else _STATUS_WORD[r.claim_status]
         passages = [a for a, o in r.outcomes.items() if o in _SUPPORTING]
         claim_lines.append(f"{r.alias} | {status} | {', '.join(passages) or '-'} | {r.text}")
+        if status == "PARTIAL":
+            for alias in passages:
+                if alias in r.quotes:
+                    claim_lines.append(f'    evidence {alias}: "{r.quotes[alias]}"')
     return build_final_report_prompt(topic, draft_lines, claim_lines, subquestions)
+
+
+def restore_dropped_sections(
+    final: StructuredReport, draft: StructuredReport, records: list[ClaimRecord], plan
+) -> tuple[StructuredReport, list[tuple[str, str]]]:
+    """Re-insert, from the draft, every planned section the revision dropped (stage
+    37). Only draft sentences whose claims the revision does not state anywhere come
+    back — a claim the revision rewrote elsewhere is never put back in its outdated
+    form. Sections keep plan order. Returns the report and the (alias, heading) pairs
+    re-inserted, for the audit."""
+    present = {section.subquestion for section in final.sections}
+    stated = {alias for s in final.sections for p in s.sentences for alias in p.claim_ids}
+    tagged = {section.subquestion: section for section in draft_as_final(draft, records).sections}
+    order = [s.alias for s in plan.subquestions]
+    restored: list[tuple[str, str]] = []
+    sections = list(final.sections)
+    for alias in order:
+        if alias in present or alias not in tagged:
+            continue
+        kept = [p for p in tagged[alias].sentences if not set(p.claim_ids) & stated]
+        if not kept:
+            continue
+        section = ReportSectionDraft(
+            subquestion=alias, heading=tagged[alias].heading, sentences=kept
+        )
+        # after the last section of an earlier planned subquestion, else first
+        position = 0
+        for index, existing in enumerate(sections):
+            if existing.subquestion in order[: order.index(alias)]:
+                position = index + 1
+        sections.insert(position, section)
+        restored.append((alias, section.heading))
+    return StructuredReport(title=final.title, sections=sections), restored
 
 
 class Finalizer:
@@ -184,6 +230,7 @@ class Finalizer:
         self.store = store
         self.llm = llm
         self.embedder = embedder
+        self.restored_sections: list[tuple[str, str]] = []
 
     # --- 10b: revision ------------------------------------------------------------
 
@@ -209,6 +256,11 @@ class Finalizer:
             except ExternalServiceError as exc:
                 return None, True, f"revision not produced: provider failure ({exc.message})"
             report = _validated(response.data, plan, warnings, allow_claims=True)
+            report, self.restored_sections = restore_dropped_sections(
+                report, draft, records, plan
+            )
+            for alias, _ in self.restored_sections:
+                warnings.append(f"The revision dropped planned section {alias}; re-inserted.")
             return report, True, None
         return None, True, "revision not produced: invalid output twice"
 
@@ -389,6 +441,8 @@ class Finalizer:
             entities=plan.analysis.key_entities if plan.analysis else (),
             embed=self.embedder.embed_documents,
             reverified=reverified,
+            subquestion_headings={s.alias: s.text for s in plan.subquestions},
+            restored_sections=self.restored_sections,
         )
 
     def render(self, validated, evidence, plan, assessments, conflicts) -> str:

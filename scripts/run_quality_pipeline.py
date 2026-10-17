@@ -398,6 +398,32 @@ def error_record(stage: str, exc: BaseException) -> dict:
 # --- diagnostics (error analysis R1) --------------------------------------------------
 
 
+_SCHEMA_PROMPTS = {
+    "CoveragePlan": PLANNER_PROMPT_VERSION,
+    "ClaimExtractionModel": CLAIM_EXTRACTION_PROMPT_VERSION,
+    "ClaimVerificationModel": VERIFICATION_PROMPT_VERSION,  # pool, citation and final checks
+}
+
+
+def prompt_version(schema: str | None, prompt: str) -> str | None:
+    """The versioned prompt a call used, from its schema (the structured report is the
+    draft or, when it carries the verified-claim table, the revision)."""
+    if schema == "StructuredReport":
+        revision = "Verified claims (alias" in prompt
+        return FINAL_REPORT_PROMPT_VERSION if revision else DRAFT_PROMPT_VERSION
+    return _SCHEMA_PROMPTS.get(schema or "")
+
+
+def verifier_calls(calls: list[dict], text: str) -> list[int]:
+    """Indexes of the verifier calls that judged exactly this claim or sentence text."""
+    needle = f"Claim to verify:\n{text}\n"
+    return [
+        c["index"]
+        for c in calls
+        if c["schema"] == "ClaimVerificationModel" and needle in c["prompt"]
+    ]
+
+
 class RecordingLLM:
     """The run's model client, keeping every attempt it sends: prompt, raw response (or
     error), model, usage and latency. It sits INSIDE the pipeline's `BudgetedLLM`, so it
@@ -427,6 +453,7 @@ class RecordingLLM:
             "schema": getattr(schema, "__name__", None),
             "system": key,
             "max_tokens": kwargs.get("max_tokens"),
+            "prompt_version": prompt_version(getattr(schema, "__name__", None), prompt),
             "prompt": prompt,
         }
         self.calls.append(call)
@@ -490,6 +517,7 @@ def read_diagnostics(payload: dict | None) -> dict:
                     "source_label": ref["source_label"],
                     "subquestion": subquestion_of.get(alias),
                     "chunk_id": ref["chunk_id"],
+                    "source_id": source.id if source is not None else None,
                     "text": chunk.text if chunk is not None else None,
                     "source": None
                     if source is None
@@ -518,6 +546,7 @@ def read_diagnostics(payload: dict | None) -> dict:
                     "verification": None if result is None else _columns(result),
                     "evidence": [
                         {
+                            "evidence_id": row.id,
                             "passage": alias_of_chunk.get(str(row.document_chunk_id)),
                             "chunk_id": row.document_chunk_id,
                             "relation": row.relation,
@@ -608,6 +637,9 @@ async def run_pipeline(
         result["diagnostics"] = read_diagnostics(audit.get("payload"))
     except Exception as exc:  # noqa: BLE001 - diagnostics only
         result["errors"].append(error_record("diagnostics", exc))
+    diagnostics = result.get("diagnostics") or {}
+    for entry in (*diagnostics.get("claims", []), *diagnostics.get("final_claim_checks", [])):
+        entry["verifier_calls"] = verifier_calls(recorder.calls, entry["text"])
     result["model_calls"] = recorder.calls
     result["system_prompts"] = recorder.systems
     return result

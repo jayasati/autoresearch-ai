@@ -22,7 +22,7 @@ from app.services.quality.models import (
 )
 from app.services.quality.rendering import render_draft, render_final, with_markers
 from app.services.quality.validation import (
-    QUALIFIER_PREFIX,
+    PARTIAL_PREFIX,
     RESTORED_PREFIX,
     ClaimInfo,
     Reverification,
@@ -168,9 +168,11 @@ class TestPlacementAndRepairs:
     def test_every_sentence_lands_where_its_status_says(self):
         found = placements(run(self.rep, self.claims))
         assert found[with_markers(VERIFIED, [])] is Placement.BODY
+        # Partly supported and not narrowed: unresolved, never qualified into the body
+        # (stage 37 policy; previously Placement.QUALIFIED).
         assert (
-            found[QUALIFIER_PREFIX + "Green tea was associated with lower stroke risk."]
-            is Placement.QUALIFIED
+            found[PARTIAL_PREFIX + "Green tea was associated with lower stroke risk."]
+            is Placement.UNRESOLVED
         )
         assert found["Caffeine improves marathon times."] is Placement.UNRESOLVED  # important
         assert found["Coffee raises blood pressure."] is Placement.UNVERIFIED_LIST  # minor
@@ -264,8 +266,11 @@ class TestRegressionMeaningChangedDuringRevision:
         changed = "Moderate coffee intake may reduce type 2 diabetes risk by 25% in adults."
         elsewhere = self.revise(
             changed,
-            {(0, 0): Reverification(S.SUPPORTED_BY_CITED_SOURCE, P.SUPPORTED,
-                                    frozenset({CHUNK[2]}))},
+            {
+                (0, 0): Reverification(
+                    S.SUPPORTED_BY_CITED_SOURCE, P.SUPPORTED, frozenset({CHUNK[2]})
+                )
+            },
         )
         body_texts = [p.text for s in elsewhere.sections for p in s.sentences]
         assert changed not in body_texts
@@ -294,10 +299,16 @@ class TestRegressionMeaningChangedDuringRevision:
 
     def test_an_important_verified_claim_the_revision_omitted_is_restored(self):
         """V7 still restores a pure omission: no revised sentence states the claim."""
-        other = claim("C2", "Tea intake was not linked to stroke.", S.SUPPORTED_BY_CITED_SOURCE,
-                      chunks=[3])
-        rep = report(("Q1", "Diabetes", [said("Tea intake was not linked to stroke.",
-                                              claims=["C2"], evidence=["E3"])]))
+        other = claim(
+            "C2", "Tea intake was not linked to stroke.", S.SUPPORTED_BY_CITED_SOURCE, chunks=[3]
+        )
+        rep = report(
+            (
+                "Q1",
+                "Diabetes",
+                [said("Tea intake was not linked to stroke.", claims=["C2"], evidence=["E3"])],
+            )
+        )
         validated = run(rep, [self.verified, other])
         restored = [p for s in validated.sections for p in s.sentences if p.origin == "restored"]
         assert [(p.text, p.markers) for p in restored] == [(RESTORED_PREFIX + VERIFIED, ("S1",))]
@@ -452,3 +463,178 @@ class TestRendering:
         assert "## Unresolved findings" in text and "- Point two is open." in text
         assert not re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-", text)  # no ids from the audit
         assert "C1" not in text and "E1" not in text
+
+
+class TestRun1IntegrityRegressions:
+    """Stage 37: the report-integrity failures seen in the first paid development run
+    (docs/REPORT_QUALITY_ERROR_ANALYSIS.md, run 1, F1-F3), reproduced in miniature."""
+
+    OVERSTATED = (
+        "Moderate coffee consumption (3 to 5 cups daily) is highly beneficial for "
+        "cardiovascular health in all adults."
+    )
+    HEDGED = (
+        "However, moderate coffee consumption (3 to 5 cups daily) is highly beneficial for "
+        "cardiovascular health in all adults, albeit with some qualification regarding its "
+        "benefits."
+    )
+    NARROWED = (
+        "Moderate coffee consumption (3 to 5 cups daily) was associated with better "
+        "cardiovascular health in adults aged 45 to 65."
+    )
+    MORTALITY = "One to three cups a day was linked to about 15% lower mortality."
+    SWEETENED = "Even sweetened coffee was associated with health benefits."
+    CARDIO = "Coffee was linked to lower heart disease risk."
+
+    def partial(self):
+        return claim(
+            "C1",
+            self.OVERSTATED,
+            S.SUPPORTED_BY_CITED_SOURCE,
+            pool=P.PARTIALLY_SUPPORTED,
+            importance="high",
+            chunks=[1],
+        )
+
+    def supported(self):
+        return claim("C2", self.CARDIO, S.SUPPORTED_BY_CITED_SOURCE, chunks=[3])
+
+    def validate(self, rep, claims, *, core=frozenset({"Q1"}), reverified=None, **kwargs):
+        return validate_final(
+            rep,
+            aliases(),
+            {c.alias: c for c in claims},
+            config=CONFIG,
+            core_subquestions=core,
+            verification_coverage=1.0,
+            reverified=reverified,
+            subquestion_headings={
+                "Q1": "Cardiovascular benefits?",
+                "Q2": "Mental-health risks?",
+                "Q3": "Variation by age?",
+            },
+            **kwargs,
+        )
+
+    def cardio(self, *sentences):
+        return report(("Q1", "Cardiovascular benefits", list(sentences)))
+
+    def cardio_only(self):
+        return self.cardio(said(self.CARDIO, claims=["C2"], evidence=["E3"]))
+
+    @staticmethod
+    def body(validated):
+        return [p for s in validated.sections for p in s.sentences]
+
+    # --- F3: partial support -------------------------------------------------------
+
+    def test_a_hedge_on_a_partly_supported_claim_is_not_reverified_and_not_in_the_body(self):
+        rep = self.cardio(said(self.HEDGED, kind="qualification", claims=["C1"], evidence=["E1"]))
+        # Even a "supported" re-verification result for this sentence cannot rescue it:
+        # a hedge is never sent for re-verification, so no result is consulted.
+        upgrade = {
+            (0, 0): Reverification(S.SUPPORTED_BY_CITED_SOURCE, P.SUPPORTED, frozenset({CHUNK[1]}))
+        }
+        for reverified in (None, upgrade):
+            validated = self.validate(rep, [self.partial()], reverified=reverified)
+            assert validated.needs_reverification == []
+            assert all(p.text != self.HEDGED for p in self.body(validated))
+            [listed] = validated.labelled[Placement.UNRESOLVED]
+            assert listed.text == PARTIAL_PREFIX + self.HEDGED and listed.markers == ()
+            hedges = [a for a in validated.actions if a.action == "superficial_hedge"]
+            assert len(hedges) == 1
+
+    def test_an_unchanged_partly_supported_claim_is_unresolved(self):
+        rep = self.cardio(said(self.OVERSTATED, claims=["C1"], evidence=["E1"]))
+        validated = self.validate(rep, [self.partial()])
+        assert self.body(validated) == []
+        listed = validated.labelled[Placement.UNRESOLVED][0]
+        assert listed.text == PARTIAL_PREFIX + self.OVERSTATED
+        assert any(a.action == "partial_not_narrowed" for a in validated.actions)
+
+    def test_a_narrowed_rewrite_reaches_the_body_only_if_reverified_as_fully_supported(self):
+        rep = self.cardio(said(self.NARROWED, kind="qualification", claims=["C1"], evidence=["E1"]))
+        first = self.validate(rep, [self.partial()])
+        assert first.needs_reverification == [(0, 0)]  # narrowed: sent to re-verification
+
+        def with_result(pool):
+            result = Reverification(S.SUPPORTED_BY_CITED_SOURCE, pool, frozenset({CHUNK[1]}))
+            return self.validate(rep, [self.partial()], reverified={(0, 0): result})
+
+        still_partial = with_result(P.PARTIALLY_SUPPORTED)
+        listed = still_partial.labelled[Placement.UNRESOLVED][0]
+        assert listed.text == PARTIAL_PREFIX + self.NARROWED
+        assert self.body(still_partial) == []
+
+        upheld = with_result(P.SUPPORTED)
+        assert [(p.text, p.markers, p.placement) for p in self.body(upheld)] == [
+            (self.NARROWED, ("S1",), Placement.BODY)
+        ]
+
+    def test_narrowing_heuristic(self):
+        from app.services.quality.validation import narrowed
+
+        assert not narrowed(self.HEDGED, [self.OVERSTATED])  # run 1's exact rewrite
+        assert narrowed(self.NARROWED, [self.OVERSTATED])  # strength and scope replaced
+        assert narrowed("Coffee lowers risk in women.", ["Coffee lowers risk."])  # scope added
+
+    def test_an_omitted_important_partial_claim_is_listed_not_restored_to_the_body(self):
+        validated = self.validate(self.cardio_only(), [self.partial(), self.supported()])
+        assert all(self.OVERSTATED not in p.text for p in self.body(validated))
+        listed = validated.labelled[Placement.UNRESOLVED][0]
+        assert listed.text == PARTIAL_PREFIX + self.OVERSTATED
+
+    # --- F1: claims stay with their question; nothing silently lost ---------------------
+
+    def test_a_restored_finding_goes_under_its_own_question_not_the_last_section(self):
+        mortality = claim(
+            "C6",
+            self.MORTALITY,
+            S.SUPPORTED_BY_CITED_SOURCE,
+            importance="high",
+            sub="Q3",
+            core=False,
+            chunks=[4],
+        )
+        validated = self.validate(self.cardio_only(), [self.supported(), mortality])
+        q1, q3 = validated.sections
+        assert [p.text for p in q1.sentences] == [self.CARDIO]  # untouched
+        assert (q3.subquestion, q3.heading) == ("Q3", "Variation by age?")
+        assert [(p.text, p.markers) for p in q3.sentences] == [
+            (RESTORED_PREFIX + self.MORTALITY, ("S3",))
+        ]
+
+    def test_every_claim_is_shown_or_explicitly_recorded_as_omitted(self):
+        sweetened = claim(
+            "C9", self.SWEETENED, S.SUPPORTED_BY_CITED_SOURCE, sub="Q3", core=False, chunks=[4]
+        )  # supported, not high-importance
+        validated = self.validate(self.cardio_only(), [self.supported(), sweetened])
+        [recorded] = [a for a in validated.actions if a.action == "omission_recorded"]
+        assert recorded.original_text == self.SWEETENED and "C9" in recorded.detail
+        assert validated.metrics["claims_omitted"] == ["C9"]
+        # not restored merely to look complete
+        assert all(self.SWEETENED not in p.text for p in self.body(validated))
+
+    def test_restored_sections_are_recorded(self):
+        validated = self.validate(
+            self.cardio_only(), [self.supported()], restored_sections=[("Q3", "Age")]
+        )
+        [action] = [a for a in validated.actions if a.action == "section_restored"]
+        assert action.section == "Age" and "Q3" in action.detail
+
+    # --- F2: an unanswered core question is disclosed -------------------------------
+
+    def test_an_unanswered_core_question_is_a_gap_even_at_the_coverage_threshold(self):
+        validated = self.validate(
+            self.cardio_only(), [self.supported()], core=frozenset({"Q1", "Q2"})
+        )
+        # coverage 0.5 equals the provisional minimum: not a failure, but never complete
+        assert validated.metrics["core_coverage"] == 0.5
+        assert validated.unanswered_core == ["Q2"]
+        assert validated.status == "degraded"
+        assert any("not answered" in r and "Q2" in r for r in validated.reasons)
+        markdown = render_final(
+            validated, subquestion_texts={"Q2": "What are the mental-health risks?"}
+        )
+        gaps = markdown.split("## Evidence gaps", 1)[1]
+        assert "What are the mental-health risks?" in gaps

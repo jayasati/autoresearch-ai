@@ -5,6 +5,44 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 37 — Minimum report-integrity fixes before the controlled comparison — 2026-10-17
+
+Directive: stop feature work; fix only what makes the next experiment auditable and
+prevents run 1's integrity failures, then freeze for a verification-on vs -off
+comparison. No paid call, no verifier change, no new stage or infrastructure.
+
+**Implemented** (details: error analysis, "Stage 37"):
+
+- Revision integrity — `finalization.restore_dropped_sections` re-inserts dropped
+  planned sections from the draft without any claim the revision states elsewhere;
+  V7 restores under the claim's own subquestion; V8 `omission_recorded` for every
+  claim in neither the body nor a labelled section (`metrics.claims_omitted`).
+- Core coverage — V9 `unanswered_core`: degraded at least, listed under Evidence gaps.
+- Partial support — `is_partial` (pool partial or no fully supporting cited passage);
+  body only if narrowed (`validation.narrowed`) and re-verified fully supported;
+  otherwise "Unresolved findings" with a templated prefix; hedges never re-verified.
+  Partial claims trigger revision; prompt `final-report-structured-v2` shows each
+  partial claim's supporting quote (`ClaimRecord.quotes`).
+- Evidence records — runner: per-call `prompt_version`; per-claim and per-final-check
+  `verifier_calls` indexes into `model_calls.json`; `source_id`, `evidence_id`.
+
+**Files:** `backend/app/services/quality/{validation,finalization,rendering,verification,prompts,models}.py`,
+`scripts/run_quality_pipeline.py`, tests `test_quality_{validation_rendering,finalization,runner}.py`,
+`docs/REPORT_QUALITY_{ERROR_ANALYSIS,PIPELINE}.md`, this log.
+
+**Tests:** 9 validator regressions and 4 end-to-end regressions reproducing F1-F3, 1
+runner test for the B1 links; one existing expectation changed to the new policy
+(an unchanged partial claim: `QUALIFIED` -> `UNRESOLVED`). Six scratch mutation probes,
+each reintroducing one run-1 failure (restore under the last section, no section
+re-insertion, no omission records, unanswered core hidden, hedge counted as narrowing,
+partial claims qualified into the body), each made 1-3 tests fail; files restored and
+hashes checked. Focused tests 84 passed; `pytest` 1159 passed (exit 0); ruff and mypy
+clean.
+
+**Not done:** F4 scoring, F5, F7; no paid run; nothing committed.
+
+---
+
 ## Stage 36 — Runner diagnostics for error analysis (R1) — 2026-10-17
 
 Recommendation R1 of the run-1 error analysis: the artifact could not confirm F3

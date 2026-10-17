@@ -397,6 +397,28 @@ class TestDiagnostics:
         assert diagnostics["citation_checks"]
         assert all("rationale" in row for row in diagnostics["citation_checks"])
 
+    def test_each_verdict_links_to_its_exact_verifier_calls_and_versions(self, configured):
+        """Stage 37 (B1): from the artifact alone, each claim's result can be traced to
+        the passages, the verifier calls that judged it and the prompt versions."""
+        run(configured, "--execute", factory=fake_pipeline(FinalLLM(pool=exact_support)))
+        _, diagnostics = artifact(configured, "diagnostics.json")
+        _, transcript = artifact(configured, "model_calls.json")
+        calls = transcript["calls"]
+        assert all(c["prompt_version"] for c in calls)
+        assert {"planner-v1", "synthesis-structured-v1", "claim-extraction-v1"} <= {
+            c["prompt_version"] for c in calls
+        }
+        assert all(p["source_id"] for p in diagnostics["passages"])
+        for claim in diagnostics["claims"]:
+            assert claim["verifier_calls"], claim["text"]
+            for index in claim["verifier_calls"]:
+                call = calls[index]
+                assert call["prompt_version"] == "verification-v2"
+                assert f"Claim to verify:\n{claim['text']}\n" in call["prompt"]
+                assert call["response_text"]
+            assert all(row["evidence_id"] for row in claim["evidence"])
+            assert claim["verification"]["prompt_version"] == "verification-v2"
+
     def test_a_rejected_quote_stays_visible_in_the_transcript(self, configured):
         invented = "coffee cures everything, says this passage"
         llm = FinalLLM(pool=judge(pick="Alpha", quote=invented))

@@ -500,6 +500,17 @@ S5b brief were resolved conservatively:
 Neon or any PostgreSQL database; the Neon-branch round trip needs the user's
 approval before any run of this pipeline can be persisted there.
 
+### Report-integrity fixes (stage 37)
+
+After the first paid development run (docs/REPORT_QUALITY_ERROR_ANALYSIS.md):
+dropped planned sections are re-inserted from the draft (never a claim the revision
+rewrote elsewhere); restorations stay under their own subquestion; V8 records every
+claim absent from body and labelled sections as an omission; V9 reports unanswered
+core subquestions as gaps and as degraded; a partly supported claim reaches the body
+only when narrowed and then re-verified as fully supported — a hedge is never
+re-verified and never upgrades a verdict. Revision prompt `final-report-structured-v2`.
+The legacy verifier is unchanged.
+
 ### Local runner (stage 34)
 
 `scripts/run_quality_pipeline.py` runs the four pipeline methods in order for one

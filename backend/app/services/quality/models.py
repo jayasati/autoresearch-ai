@@ -273,6 +273,10 @@ ActionName = Literal[
     "duplicate_flagged",
     "omission_restored",
     "omission_listed",
+    "omission_recorded",
+    "partial_not_narrowed",
+    "superficial_hedge",
+    "section_restored",
 ]
 
 

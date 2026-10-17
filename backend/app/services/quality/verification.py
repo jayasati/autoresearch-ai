@@ -87,6 +87,7 @@ class ClaimRecord:
     outcomes: dict[str, CitationOutcome] = field(default_factory=dict)
     citation_reason: NotEvaluatedReason | None = None
     claim_status: ClaimStatus = ClaimStatus.NOT_EVALUATED
+    quotes: dict[str, str] = field(default_factory=dict)  # E# -> verbatim quote it rests on
 
     def as_record(self) -> dict:
         return {
@@ -100,6 +101,7 @@ class ClaimRecord:
             "alignment": self.alignment_status,
             "cited": self.cited,
             "citation_outcomes": {k: v.value for k, v in self.outcomes.items()},
+            "citation_quotes": dict(self.quotes),
             "citation_not_evaluated_reason": self.citation_reason.value
             if self.citation_reason
             else None,
@@ -360,6 +362,8 @@ class Verifier:
             )
         )
         record.outcomes[alias] = outcome
+        if quote and outcome is not CitationOutcome.DOES_NOT_ESTABLISH:
+            record.quotes[alias] = quote
 
     def _record_not_evaluated(self, record, reason, aliases, *, only=None):
         record.citation_reason = reason
