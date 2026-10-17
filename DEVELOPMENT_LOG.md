@@ -5,6 +5,88 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 28 — Report-quality pipeline v1, S1: deterministic foundations — 2026-10-17
+
+S1 of `report-quality-v1` (design §9): the deterministic, independently testable
+modules and a local evaluation of the quantitative auditor. **Still unreachable:**
+nothing outside `app/services/quality/` imports it (an AST test enforces this), the
+app does not load it, the API surface is the stage-26 baseline (routes pinned), and
+`REPORT_QUALITY_ENABLED` stays off. No model, provider or database call anywhere in
+the package.
+
+**What was implemented** (`backend/app/services/quality/`):
+
+- `models.py` — model-filled report shapes with no field that can carry source
+  metadata; the code-owned `AliasTable`; pool / citation / claim statuses;
+  `QuantityMention` and findings; placements and validation actions.
+- `quantities.py` — `quant-audit-v1`: masking (citations, entities, ages, CIs,
+  baselines, denominators), extraction with unit conversion, ranges, ± and CIs,
+  context attribution, and the six ordered rules. **Audit-only.** The readings of
+  rules 1, 2 and 5 that the design left open are recorded in the design doc §4 for
+  review — most importantly rule 5 (unit, period and scope required; baseline and
+  method equal-or-both-absent).
+- `alignment.py` — deterministic claim → sentence alignment (D2); refuses to guess.
+- `assessment.py` — claim-status table (design §3), subquestion assessment,
+  conflict context framed as a possible scientific disagreement.
+- `validation.py` — V1–V7 and the complete / degraded / finalization-failed outcome;
+  re-verification is requested, not performed (S5). Nothing is deleted outright; an
+  unconfirmed citation is moved to a labelled section, never re-attributed.
+- `rendering.py` — draft and final markdown; markers only from the alias table.
+- Two more provisional knobs: `REPORT_QUALITY_QUANT_GROUP_MIN_COSINE` (0.85),
+  `REPORT_QUALITY_DUPLICATE_MIN_COSINE` (0.92).
+
+**The case set.** At the user's request Claude labelled it. Order of work, to keep
+the labels from being fitted to the code: label guide and 82 cases written and
+hashed (`quantitative_audit_cases.json`, sha256 `f1a83873…`) before any auditor
+code existed; the seeded label-stratified split assigned at the same time (39
+tuning / 43 held-out — `floor(n/2)` per label). 35 cases quote development pools
+verbatim (read-only; checked by a test); 47 are constructed. Rule changes were made
+on the tuning split only (care-setting scope; duration vs calendar periods not
+compared); two extractor bugs found by unit tests were fixed (a number before a unit
+read as a year; tie attribution). The held-out split was then run **once** on the
+frozen auditor (`quantities.py` sha256 `128d6a19…`).
+
+| split | all | constructed | dev-pool | predicted disagreements correct |
+|---|---|---|---|---|
+| tuning | 35/39 | 24/24 | 11/15 | 5/5 |
+| held-out | 38/43 | 23/23 | 15/20 | 5/5 |
+
+**Read no larger than it is:** author-labelled, so not independent and not the M3
+measurement; the author saw every case while writing rules; constructed cases are
+uninformative; on real text 26/35. Every miss is on development-pool text, all
+conservative but one (a narrower outcome definition read as consistent). Held-out
+disagreement precision 5/5 has a Wilson interval of [0.566, 1.0]. Artifacts:
+`data/benchmarks/results/quant-audit/20261017T033433Z-tuning/`,
+`…/20261017T033434Z-held_out/`.
+
+**Files changed:** new — `backend/app/services/quality/{__init__,models,quantities,
+alignment,assessment,validation,rendering}.py`, `backend/tests/unit/test_quality_
+{quantities,alignment_assessment,validation_rendering,legacy_isolation}.py`,
+`scripts/evaluate_quant_audit.py`, `data/benchmarks/quantitative_audit_cases.json`,
+the two result directories; modified — `backend/app/core/config.py` (two knobs),
+`backend/tests/test_config.py`, `data/benchmarks/README.md` (one table row),
+`docs/REPORT_QUALITY_PIPELINE.md` (§4 readings and results, §5 note, §9, §10), this
+log.
+
+**Tests:** 87 new; `pytest` 1013 passed (exit 0); `ruff check .` clean; `mypy app`
+clean (101 files). The design's regression scenario is a test: a verified claim's
+number, hedge or scope changed in revision is flagged, kept out of the body pending
+re-verification, and the verified original restored; a pure paraphrase is not
+re-verified. Commands: `pytest`, `ruff check . ../scripts/evaluate_quant_audit.py`,
+`mypy app`, `python scripts/evaluate_quant_audit.py --split tuning|held_out --write`.
+
+**Decisions:** a first validation pass is provisional while sentences await
+re-verification (they count as not in the body; `reasons` lists every condition).
+New files were formatted with `ruff format`; no existing file was reformatted.
+
+**Not done (deliberately):** S2+ — no migration, persistence, planner, retrieval,
+LLM prompts, citation check, budget wrapper, routes or UI; no provider calls, paid
+runs or database writes; verifier, extractor, legacy finalizer and benchmark code
+untouched; thresholds untuned beyond the tuning split. The stage-26 end-to-end run
+remains missing.
+
+---
+
 ## Stage 27 — Report-quality pipeline v1, S0: design record and inert knobs — 2026-10-16
 
 S0 of the approved `report-quality-v1` design (revision 2, approved in stages

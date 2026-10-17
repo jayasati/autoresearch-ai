@@ -1,0 +1,508 @@
+{
+  "auditor_version": "quant-audit-v1",
+  "case_set": {
+    "version": "0.1.0",
+    "sha256": "f1a838739d7a75acd4d68797a00924134179008128f9fec6192b05fbb2d0cab2",
+    "labelling": {
+      "labeller": "Claude (the same agent that writes the auditor's rules)",
+      "independent": false,
+      "labelled_before_auditor_code": true,
+      "status": "author-labelled; NOT an independent measurement and not the M3 result. Precision/recall on this set are provisional until an independent labeller reviews or relabels it."
+    }
+  },
+  "split": "held_out",
+  "n": 43,
+  "accuracy": 0.884,
+  "approx_rel_tolerance": 0.1,
+  "per_category": {
+    "unit_or_denominator_difference": {
+      "tp": 7,
+      "predicted": 7,
+      "actual": 7,
+      "precision": 1.0,
+      "precision_wilson95": [
+        0.646,
+        1.0
+      ],
+      "recall": 1.0,
+      "recall_wilson95": [
+        0.646,
+        1.0
+      ]
+    },
+    "baseline_or_period_difference": {
+      "tp": 6,
+      "predicted": 6,
+      "actual": 7,
+      "precision": 1.0,
+      "precision_wilson95": [
+        0.61,
+        1.0
+      ],
+      "recall": 0.857,
+      "recall_wilson95": [
+        0.487,
+        0.974
+      ]
+    },
+    "method_or_scope_difference": {
+      "tp": 5,
+      "predicted": 5,
+      "actual": 7,
+      "precision": 1.0,
+      "precision_wilson95": [
+        0.566,
+        1.0
+      ],
+      "recall": 0.714,
+      "recall_wilson95": [
+        0.359,
+        0.918
+      ]
+    },
+    "consistent_within_rounding_or_uncertainty": {
+      "tp": 8,
+      "predicted": 9,
+      "actual": 8,
+      "precision": 0.889,
+      "precision_wilson95": [
+        0.565,
+        0.98
+      ],
+      "recall": 1.0,
+      "recall_wilson95": [
+        0.676,
+        1.0
+      ]
+    },
+    "same_metric_value_disagreement": {
+      "tp": 5,
+      "predicted": 5,
+      "actual": 7,
+      "precision": 1.0,
+      "precision_wilson95": [
+        0.566,
+        1.0
+      ],
+      "recall": 0.714,
+      "recall_wilson95": [
+        0.359,
+        0.918
+      ]
+    },
+    "unresolved_discrepancy": {
+      "tp": 7,
+      "predicted": 11,
+      "actual": 7,
+      "precision": 0.636,
+      "precision_wilson95": [
+        0.354,
+        0.848
+      ],
+      "recall": 1.0,
+      "recall_wilson95": [
+        0.646,
+        1.0
+      ]
+    }
+  },
+  "confusion": [
+    {
+      "label": "baseline_or_period_difference",
+      "predicted": "baseline_or_period_difference",
+      "count": 6
+    },
+    {
+      "label": "baseline_or_period_difference",
+      "predicted": "unresolved_discrepancy",
+      "count": 1
+    },
+    {
+      "label": "consistent_within_rounding_or_uncertainty",
+      "predicted": "consistent_within_rounding_or_uncertainty",
+      "count": 8
+    },
+    {
+      "label": "method_or_scope_difference",
+      "predicted": "consistent_within_rounding_or_uncertainty",
+      "count": 1
+    },
+    {
+      "label": "method_or_scope_difference",
+      "predicted": "method_or_scope_difference",
+      "count": 5
+    },
+    {
+      "label": "method_or_scope_difference",
+      "predicted": "unresolved_discrepancy",
+      "count": 1
+    },
+    {
+      "label": "same_metric_value_disagreement",
+      "predicted": "same_metric_value_disagreement",
+      "count": 5
+    },
+    {
+      "label": "same_metric_value_disagreement",
+      "predicted": "unresolved_discrepancy",
+      "count": 2
+    },
+    {
+      "label": "unit_or_denominator_difference",
+      "predicted": "unit_or_denominator_difference",
+      "count": 7
+    },
+    {
+      "label": "unresolved_discrepancy",
+      "predicted": "unresolved_discrepancy",
+      "count": 7
+    }
+  ],
+  "rows": [
+    {
+      "case_id": "qa-001",
+      "origin": "dev-pool",
+      "label": "method_or_scope_difference",
+      "predicted": "method_or_scope_difference",
+      "reason": "population differs",
+      "correct": true
+    },
+    {
+      "case_id": "qa-002",
+      "origin": "dev-pool",
+      "label": "unresolved_discrepancy",
+      "predicted": "unresolved_discrepancy",
+      "reason": "a required dimension is unstated on at least one side",
+      "correct": true
+    },
+    {
+      "case_id": "qa-003",
+      "origin": "dev-pool",
+      "label": "consistent_within_rounding_or_uncertainty",
+      "predicted": "consistent_within_rounding_or_uncertainty",
+      "reason": "values overlap within rounding, approximation or interval",
+      "correct": true
+    },
+    {
+      "case_id": "qa-005",
+      "origin": "dev-pool",
+      "label": "consistent_within_rounding_or_uncertainty",
+      "predicted": "consistent_within_rounding_or_uncertainty",
+      "reason": "values overlap within rounding, approximation or interval",
+      "correct": true
+    },
+    {
+      "case_id": "qa-007",
+      "origin": "dev-pool",
+      "label": "unit_or_denominator_difference",
+      "predicted": "unit_or_denominator_difference",
+      "reason": "dimensions differ: pp vs percent",
+      "correct": true
+    },
+    {
+      "case_id": "qa-009",
+      "origin": "dev-pool",
+      "label": "unresolved_discrepancy",
+      "predicted": "unresolved_discrepancy",
+      "reason": "a required dimension is unstated on at least one side",
+      "correct": true
+    },
+    {
+      "case_id": "qa-010",
+      "origin": "dev-pool",
+      "label": "method_or_scope_difference",
+      "predicted": "unresolved_discrepancy",
+      "reason": "a required dimension is unstated on at least one side",
+      "correct": false
+    },
+    {
+      "case_id": "qa-011",
+      "origin": "dev-pool",
+      "label": "same_metric_value_disagreement",
+      "predicted": "unresolved_discrepancy",
+      "reason": "a required dimension is unstated on at least one side",
+      "correct": false
+    },
+    {
+      "case_id": "qa-013",
+      "origin": "dev-pool",
+      "label": "consistent_within_rounding_or_uncertainty",
+      "predicted": "consistent_within_rounding_or_uncertainty",
+      "reason": "values overlap within rounding, approximation or interval",
+      "correct": true
+    },
+    {
+      "case_id": "qa-014",
+      "origin": "dev-pool",
+      "label": "consistent_within_rounding_or_uncertainty",
+      "predicted": "consistent_within_rounding_or_uncertainty",
+      "reason": "values overlap within rounding, approximation or interval",
+      "correct": true
+    },
+    {
+      "case_id": "qa-015",
+      "origin": "dev-pool",
+      "label": "method_or_scope_difference",
+      "predicted": "method_or_scope_difference",
+      "reason": "entities differs",
+      "correct": true
+    },
+    {
+      "case_id": "qa-018",
+      "origin": "dev-pool",
+      "label": "same_metric_value_disagreement",
+      "predicted": "unresolved_discrepancy",
+      "reason": "a required dimension is unstated on at least one side",
+      "correct": false
+    },
+    {
+      "case_id": "qa-020",
+      "origin": "dev-pool",
+      "label": "consistent_within_rounding_or_uncertainty",
+      "predicted": "consistent_within_rounding_or_uncertainty",
+      "reason": "values overlap within rounding, approximation or interval",
+      "correct": true
+    },
+    {
+      "case_id": "qa-021",
+      "origin": "dev-pool",
+      "label": "unit_or_denominator_difference",
+      "predicted": "unit_or_denominator_difference",
+      "reason": "denominators differ or are stated on one side only",
+      "correct": true
+    },
+    {
+      "case_id": "qa-023",
+      "origin": "dev-pool",
+      "label": "baseline_or_period_difference",
+      "predicted": "unresolved_discrepancy",
+      "reason": "a required dimension is unstated on at least one side",
+      "correct": false
+    },
+    {
+      "case_id": "qa-025",
+      "origin": "dev-pool",
+      "label": "consistent_within_rounding_or_uncertainty",
+      "predicted": "consistent_within_rounding_or_uncertainty",
+      "reason": "values overlap within rounding, approximation or interval",
+      "correct": true
+    },
+    {
+      "case_id": "qa-028",
+      "origin": "dev-pool",
+      "label": "consistent_within_rounding_or_uncertainty",
+      "predicted": "consistent_within_rounding_or_uncertainty",
+      "reason": "values overlap within rounding, approximation or interval",
+      "correct": true
+    },
+    {
+      "case_id": "qa-029",
+      "origin": "dev-pool",
+      "label": "unit_or_denominator_difference",
+      "predicted": "unit_or_denominator_difference",
+      "reason": "denominators differ or are stated on one side only",
+      "correct": true
+    },
+    {
+      "case_id": "qa-030",
+      "origin": "dev-pool",
+      "label": "consistent_within_rounding_or_uncertainty",
+      "predicted": "consistent_within_rounding_or_uncertainty",
+      "reason": "values overlap within rounding, approximation or interval",
+      "correct": true
+    },
+    {
+      "case_id": "qa-032",
+      "origin": "dev-pool",
+      "label": "method_or_scope_difference",
+      "predicted": "consistent_within_rounding_or_uncertainty",
+      "reason": "values overlap within rounding, approximation or interval",
+      "correct": false
+    },
+    {
+      "case_id": "qa-038",
+      "origin": "constructed",
+      "label": "same_metric_value_disagreement",
+      "predicted": "same_metric_value_disagreement",
+      "reason": "unit, period and scope stated and equal on both sides; values do not overlap",
+      "correct": true
+    },
+    {
+      "case_id": "qa-041",
+      "origin": "constructed",
+      "label": "same_metric_value_disagreement",
+      "predicted": "same_metric_value_disagreement",
+      "reason": "unit, period and scope stated and equal on both sides; values do not overlap",
+      "correct": true
+    },
+    {
+      "case_id": "qa-042",
+      "origin": "constructed",
+      "label": "same_metric_value_disagreement",
+      "predicted": "same_metric_value_disagreement",
+      "reason": "unit, period and scope stated and equal on both sides; values do not overlap",
+      "correct": true
+    },
+    {
+      "case_id": "qa-043",
+      "origin": "constructed",
+      "label": "same_metric_value_disagreement",
+      "predicted": "same_metric_value_disagreement",
+      "reason": "unit, period and scope stated and equal on both sides; values do not overlap",
+      "correct": true
+    },
+    {
+      "case_id": "qa-045",
+      "origin": "constructed",
+      "label": "same_metric_value_disagreement",
+      "predicted": "same_metric_value_disagreement",
+      "reason": "unit, period and scope stated and equal on both sides; values do not overlap",
+      "correct": true
+    },
+    {
+      "case_id": "qa-047",
+      "origin": "constructed",
+      "label": "unit_or_denominator_difference",
+      "predicted": "unit_or_denominator_difference",
+      "reason": "dimensions differ: conc_mass vs conc_molar",
+      "correct": true
+    },
+    {
+      "case_id": "qa-049",
+      "origin": "constructed",
+      "label": "unit_or_denominator_difference",
+      "predicted": "unit_or_denominator_difference",
+      "reason": "denominators differ or are stated on one side only",
+      "correct": true
+    },
+    {
+      "case_id": "qa-052",
+      "origin": "constructed",
+      "label": "unit_or_denominator_difference",
+      "predicted": "unit_or_denominator_difference",
+      "reason": "denominators differ or are stated on one side only",
+      "correct": true
+    },
+    {
+      "case_id": "qa-053",
+      "origin": "constructed",
+      "label": "unit_or_denominator_difference",
+      "predicted": "unit_or_denominator_difference",
+      "reason": "dimensions differ: deaths vs percent",
+      "correct": true
+    },
+    {
+      "case_id": "qa-054",
+      "origin": "constructed",
+      "label": "baseline_or_period_difference",
+      "predicted": "baseline_or_period_difference",
+      "reason": "periods differ",
+      "correct": true
+    },
+    {
+      "case_id": "qa-056",
+      "origin": "constructed",
+      "label": "baseline_or_period_difference",
+      "predicted": "baseline_or_period_difference",
+      "reason": "baselines differ",
+      "correct": true
+    },
+    {
+      "case_id": "qa-057",
+      "origin": "constructed",
+      "label": "baseline_or_period_difference",
+      "predicted": "baseline_or_period_difference",
+      "reason": "baselines differ",
+      "correct": true
+    },
+    {
+      "case_id": "qa-058",
+      "origin": "constructed",
+      "label": "baseline_or_period_difference",
+      "predicted": "baseline_or_period_difference",
+      "reason": "periods differ",
+      "correct": true
+    },
+    {
+      "case_id": "qa-061",
+      "origin": "constructed",
+      "label": "baseline_or_period_difference",
+      "predicted": "baseline_or_period_difference",
+      "reason": "periods differ",
+      "correct": true
+    },
+    {
+      "case_id": "qa-062",
+      "origin": "constructed",
+      "label": "baseline_or_period_difference",
+      "predicted": "baseline_or_period_difference",
+      "reason": "baselines differ",
+      "correct": true
+    },
+    {
+      "case_id": "qa-066",
+      "origin": "constructed",
+      "label": "method_or_scope_difference",
+      "predicted": "method_or_scope_difference",
+      "reason": "method differs",
+      "correct": true
+    },
+    {
+      "case_id": "qa-067",
+      "origin": "constructed",
+      "label": "method_or_scope_difference",
+      "predicted": "method_or_scope_difference",
+      "reason": "geography differs",
+      "correct": true
+    },
+    {
+      "case_id": "qa-068",
+      "origin": "constructed",
+      "label": "method_or_scope_difference",
+      "predicted": "method_or_scope_difference",
+      "reason": "method differs",
+      "correct": true
+    },
+    {
+      "case_id": "qa-073",
+      "origin": "constructed",
+      "label": "unresolved_discrepancy",
+      "predicted": "unresolved_discrepancy",
+      "reason": "a required dimension is unstated on at least one side",
+      "correct": true
+    },
+    {
+      "case_id": "qa-074",
+      "origin": "constructed",
+      "label": "unresolved_discrepancy",
+      "predicted": "unresolved_discrepancy",
+      "reason": "a required dimension is unstated on at least one side",
+      "correct": true
+    },
+    {
+      "case_id": "qa-075",
+      "origin": "constructed",
+      "label": "unresolved_discrepancy",
+      "predicted": "unresolved_discrepancy",
+      "reason": "a required dimension is unstated on at least one side",
+      "correct": true
+    },
+    {
+      "case_id": "qa-080",
+      "origin": "constructed",
+      "label": "unresolved_discrepancy",
+      "predicted": "unresolved_discrepancy",
+      "reason": "a required dimension is unstated on at least one side",
+      "correct": true
+    },
+    {
+      "case_id": "qa-082",
+      "origin": "constructed",
+      "label": "unresolved_discrepancy",
+      "predicted": "unresolved_discrepancy",
+      "reason": "a required dimension is unstated on at least one side",
+      "correct": true
+    }
+  ],
+  "status": "author-labelled; provisional; not an independent measurement"
+}

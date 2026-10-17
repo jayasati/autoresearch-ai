@@ -12,6 +12,7 @@ load at all.
 | `validation.json` | tune scoring thresholds and prompts, once, after development | yes — version bump + log entry |
 | `test.json` | the final evaluation | **frozen** (see below) |
 | `test.freeze.json` | the freeze manifest | written only by `write_freeze_manifest` |
+| `quantitative_audit_cases.json` | author-labelled pairs for `quant-audit-v1` (report-quality-v1, stage 28) — not a question set; `text_b` of dev-pool cases is quoted from development pools only | new version + log entry; labels are never edited after an auditor result is reported against them |
 
 ## How ground truth is established
 

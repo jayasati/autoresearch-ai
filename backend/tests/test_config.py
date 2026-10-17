@@ -288,6 +288,11 @@ class TestReportQualityKnobs:
         with pytest.raises(Exception, match="REPORT_QUALITY_MAX_TOTAL_TOKENS_QUICK"):
             Settings(_env_file=None)
 
+    def test_s1_similarity_knobs_are_bounded(self, clean_env, no_report_quality_env):
+        s = Settings(_env_file=None)
+        assert 0 < s.REPORT_QUALITY_QUANT_GROUP_MIN_COSINE <= 1
+        assert 0 < s.REPORT_QUALITY_DUPLICATE_MIN_COSINE <= 1
+
     def test_pipeline_versions(self):
         assert PipelineVersion.LEGACY == "legacy"
         assert PipelineVersion.REPORT_QUALITY_V1 == "report-quality-v1"

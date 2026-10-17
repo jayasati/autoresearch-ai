@@ -200,6 +200,11 @@ class Settings(BaseSettings):
     REPORT_QUALITY_MEANING_CHANGE_MIN_COSINE: float = Field(default=0.90, ge=0.0, le=1.0)
     # Quantitative audit (audit-only in v1): relative tolerance for "about X".
     REPORT_QUALITY_QUANT_APPROX_REL_TOLERANCE: float = Field(default=0.10, ge=0.0, le=1.0)
+    # Added in stage 28 (S1), equally provisional: number-masked cosine at which two
+    # claims are compared as the same metric, and the cosine at which two body
+    # sentences are flagged (never removed) as near-duplicates.
+    REPORT_QUALITY_QUANT_GROUP_MIN_COSINE: float = Field(default=0.85, ge=0.0, le=1.0)
+    REPORT_QUALITY_DUPLICATE_MIN_COSINE: float = Field(default=0.92, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
     def report_quality_thresholds_are_ordered(self) -> "Settings":

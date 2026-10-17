@@ -163,6 +163,48 @@ held-out halves. Precision and recall per category on the held-out half, with
 counts and Wilson 95% intervals. Results are reported as "measured on N cases",
 never as general reliability.
 
+**S1 implementation readings (stage 28; recorded for review).** Where the rules
+above left room, the implementation (`app/services/quality/quantities.py`) reads
+them as follows:
+
+- *Rule 5, "every dimension explicitly known and equal"*: required dimensions are
+  the unit, the period and the scope (at least one of place / population / care
+  setting / entity stated on both sides, none stated on one side only); the
+  optional qualifiers — baseline and method — must be equal or absent on **both**
+  sides. A literal reading (method stated on both sides) would almost never fire.
+- *Rule 1*: a denominator stated on one side only counts as a denominator
+  difference (per capita vs total, annual vs cumulative); the same number written
+  with different units of one dimension (500 mg vs 500 g, 60 km/h vs 60 mph) is a
+  unit difference, not a value disagreement.
+- *Rule 2*: periods differ only when both are stated in a comparable form; a
+  duration ("over five seasons") and a calendar span are not compared.
+- *Scope* includes a care setting / endpoint vocabulary (outpatient,
+  hospitalisation, ...), added on the tuning split.
+- *Attribution*: context is attached to the nearest quantity in the sentence; a
+  context phrase before the first quantity frames all of them; ties go to the
+  preceding quantity; denominators attach to the quantity they follow.
+
+**Measured (stage 28, author-labelled — not independent, not the M3 result).** The
+labeller (Claude) also wrote the rules, saw every case — held-out included — while
+writing them, and labelled before any auditor code existed (case file sha256
+`f1a83873…`, recorded first). 82 cases, seeded label-stratified split 39 tuning /
+43 held-out (`floor(n/2)` per label sends the odd case to held-out). Rule changes
+were made against the tuning split only; the held-out split was run once, on the
+frozen auditor (`quantities.py` sha256 `128d6a19…`):
+
+| split | all | constructed | dev-pool text | predicted disagreements correct |
+|---|---|---|---|---|
+| tuning | 35/39 | 24/24 | 11/15 | 5/5 |
+| held-out | 38/43 | 23/23 | 15/20 | 5/5 |
+
+Constructed cases share an author with the rules and say little; the
+development-pool cases (real retrieved text) are the informative part, and they
+are where every miss is. All misses are conservative (a disagreement or difference
+filed as `unresolved`) except one consistent-for-scope error (heart disease vs
+heart disease *or* stroke). Held-out `same_metric_value_disagreement` precision
+5/5, Wilson 95% [0.566, 1.0]; with n this small that interval, not the point
+estimate, is the result. Artifacts: `data/benchmarks/results/quant-audit/`.
+
 Limitations: regex misses spelled-out numbers, multi-sentence quantities,
 tables and implicit denominators, and can mistake date or citation fragments for
 quantities; the geography and method lists are incomplete by construction;
@@ -201,6 +243,12 @@ by its cited source, core-subquestion substantive coverage is below
 `REPORT_QUALITY_MIN_CORE_COVERAGE` (0.5), or a rejected reference survives
 rendering. All thresholds are configurable, copied into the run configuration,
 tuned on development only and frozen before validation.
+
+Implementation note (stage 28): a sentence awaiting re-verification counts as
+*not in the body*, so the outcome computed on the first validation pass is
+provisional — final only once the caller has re-verified those sentences and
+validated again (`ValidatedReport.needs_reverification` empty). `reasons` lists
+every failing and degrading condition, not only the deciding one.
 
 ## 6. Cost and execution safeguards
 
@@ -268,7 +316,7 @@ overflow return, and a budget-aware LLM wrapper.
 | Stage | Scope | Paid calls |
 |---|---|---|
 | **S0** | this document, `PipelineVersion`, inert knobs, documentation corrections | none — **done (stage 27)** |
-| S1 | deterministic modules (quantities, assessment, validation, rendering, alignment) + local quantitative case-set evaluation | none |
+| S1 | deterministic modules (quantities, assessment, validation, rendering, alignment) + local quantitative case-set evaluation | none — **done (stage 28)** |
 | S2 | migration + persistence | none |
 | S3 | planner + per-subquestion retrieval/selection behind the gate, fake providers | none |
 | S4 | structured draft + rendering + alignment wiring | none |
@@ -284,9 +332,12 @@ analysis plan.
 
 ## 10. Decisions still open
 
-Migration scope (D1); alignment method (D2, deterministic recommended); citation
-check reusing the v2 prompt (D3, recommended); quantitative case-set size and
-split (D5); threshold values (D6); per-depth budget values and reserve (D7);
+Resolved at S1 (2026-10-17): D2 — deterministic alignment, implemented; D5 — ~80
+cases with a 40/40 target (realised 82, 39/43), labelled by Claude at the user's
+request and recorded as author-labelled, not independent.
+
+Still open: migration scope (D1); citation
+check reusing the v2 prompt (D3, recommended); threshold values (D6); per-depth budget values and reserve (D7);
 claim priority order (D8); in-process jobs vs a queue (D9); macro as the primary
 aggregation (D10); authorization and cost approval for E2 and E4 (D11). D4 was
 resolved by the approval: no substitution, labelled section.
