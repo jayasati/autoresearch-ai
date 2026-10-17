@@ -201,3 +201,144 @@ directive: no further infrastructure):
 Still open: F4 (`body_loss_ratio` counts the revision's own findings, not the draft's
 supported claims — omissions are now recorded but not scored), F5 (quote matching;
 needs a run with the new records), F7 (labelling, source quality).
+
+---
+
+## Pilot (protocol Phase B) — 2026-10-17
+
+The two-question pilot of `docs/VERIFICATION_COMPARISON_PROTOCOL.md`: one paired run
+per question, OFF = the run's draft, ON = the same run's final report. It estimates the
+**combined effect of verification plus revision**, and every support figure is support
+relative to the frozen evidence pool or the cited passage — **not factual accuracy**.
+n = 2, one stochastic run each: descriptive only, no significance or generalisation.
+
+| | |
+|---|---|
+| Code | `b66175b` (clean tree) — pipeline `gpt-4o-mini`, quick depth; evaluator `pair-eval-v1` |
+| Judge | `gpt-4o` (every answer from `gpt-4o-2024-08-06`), a different model from the pipeline's; budgeted by the dollar ledger at `--max-usd 1` per question |
+| Pools | frozen `pool-v1` dev pools, verified against `MANIFEST.sha256`, never rebuilt |
+| Q1 | `dev-normal_research-01` — artifact `data/exports/quality-runs/20261017T151541Z-a8a44720/` |
+| Q2 | `dev-conflicting_literature-01` — artifact `data/exports/quality-runs/20261017T173313Z-e7da20d5/` |
+| Human annotation | blinded sheets prepared (`annotation/annotations.csv`, 35 and 34 items); **no human labels yet** |
+
+Run 1 above predates the stage-36/38 records and is not part of the pilot.
+
+### Results
+
+| Metric (counts in brackets) | Q1 OFF | Q1 ON | Q2 OFF | Q2 ON |
+|---|---|---|---|---|
+| Finalization | — | degraded | — | complete |
+| Body sentences / assertions | 19 / 14 | 6 / 6 | 16 / 13 | 14 / 12 |
+| **Strict citation support (primary)** | **0.652** (15/23) | **0.833** (5/6) | **0.867** (13/15) | **0.923** (12/13) |
+| Lenient citation support (sensitivity) | 0.957 (22/23) | 0.833 (5/6) | 1.000 (15/15) | 1.000 (13/13) |
+| Pool: supported / partial / not enough evidence | 6 / 5 / 3 | 2 / 1 / 3 | 4 / 3 / 6 | 5 / 3 / 4 |
+| Pool support strict / lenient | 0.429 / 0.786 | 0.333 / 0.500 | 0.308 / 0.538 | 0.417 / 0.667 |
+| Unsupported or contradicted | 0/14 | 0/6 | 0/13 | 0/12 |
+| Core coverage strict / lenient | 0.5 / 0.5 | 0.5 / 0.5 | 0.5 / 1.0 | 0.5 / 1.0 |
+| Strict-supported draft findings → ON body / listed / untracked | 2 / 1 / 3 (of 6) | | 4 / 0 / 0 (of 4) | |
+| Missing judgments, refusals, retries | 0 | | 0 | |
+
+Paired macro means (both questions have both arms): strict citation support **OFF
+0.759 → ON 0.878**; lenient OFF 0.978 → ON 0.917; strict pool support OFF 0.368 → ON
+0.375; unsupported-or-contradicted 0 → 0; strict core coverage 0.5 → 0.5. No missing ON,
+so the missing-ON sensitivity view equals the primary.
+
+Cost and time:
+
+| | Q1 | Q2 |
+|---|---|---|
+| Pipeline (all tokens measured, none estimated) | 23 calls, 57,221 tokens, $0.0112 | 23 calls, 58,969 tokens, $0.0118 |
+| of which OFF (planning + drafting) | 2 calls, 4,441 tokens, $0.0013 | 2 calls, 4,181 tokens, $0.0012 |
+| Judging (gpt-4o, 0 refused / failed / retried) | 35 requests, $0.2510 | 34 requests, $0.2368 |
+| Latency OFF (approximate) / ON | ≈100 s / 164.6 s | ≈74 s / 148.6 s |
+
+Pilot total ≈ **$0.511** (Tavily and Semantic Scholar searches not included). Ledger
+bounds held with a wide margin: measured input was ≤ 15% of each reservation's input
+bound, and the largest answer was 371 tokens against the 800 limit.
+
+**Reading, cautiously:** on both questions the final report's citations were more often
+strictly supported by their own cited passages; on Q1 that came with stating far less
+(6 judged body sentences against 14), and under lenient scoring the draft was ahead on
+Q1. Against the pool, strict support barely moved and neither arm stated anything the
+judge found unsupported or contradicted. This is consistent with verification plus
+revision trading coverage for citation precision on these two questions — not evidence
+for or against the research hypothesis.
+
+### Findings from the pilot
+
+#### P1 — The narrowing heuristic counts a broadened claim as narrowed (high)
+
+Q1, claim C6, partly supported (pool `partially_supported`; its cited passage E6
+`partially_supports`): "High coffee consumption **(≥ 3 cups/day)** was inversely
+associated with mortality and disability." The revision wrote "High coffee consumption
+was inversely associated with mortality and disability **with some qualification**."
+
+- The revision *removed* the restriction "(≥ 3 cups/day)". `validation.narrowed` treats
+  any changed number or scope as narrowing, so a rewrite that **widens** the claim
+  passed the stage-37 policy and was sent to re-verification.
+- The pipeline's re-verification (gpt-4o-mini, verification-v2) judged the rewrite fully
+  `supported` on E6 — an upgrade from the original partial verdict — so it reached the
+  body with its citation.
+- The independent judge (gpt-4o) found E6 does **not** establish the sentence; it is the
+  one Q1 ON citation pair that is not supported.
+- The appended phrase "with some qualification" is the exact phrase the
+  `final-report-structured-v2` prompt gives as an example of what is *not* narrowing; the
+  prompt may be priming it.
+
+The stage-37 guarantee ("a hedge cannot upgrade a verdict") holds only for rewrites that
+keep every content word; a rewrite that drops a restriction and adds a hedge escapes it.
+
+#### P2 — Contradiction handling remains untested, including on the conflict item (high)
+
+`dev-conflicting_literature-01` is labelled `expect_conflicts: true`. The pipeline stored
+no conflicts and produced no contested section; the judge found no draft sentence
+contradicted by the pool on either question. The disagreement appears only in prose
+("Randomized controlled trials … have provided inconsistent results"; "no statistically
+significant overall effect"). The protocol's contradiction-handling metric therefore had
+nothing to measure on the one question designed to exercise it.
+
+#### P3 — Half of Q1's supported draft findings cannot be followed into ON (medium)
+
+3 of the 6 strict-supported draft sentences (6 of 11 lenient) are `untracked`: their
+draft sentences have no aligned claim, so the evaluator cannot say whether the revision
+kept, moved or dropped them. The "supported findings lost in revision" metric is
+incomplete exactly where Q1 lost the most content (19 → 6 body sentences).
+
+#### P4 — Pipeline and evaluator disagree on core coverage (medium)
+
+Q2: the pipeline judged core question Q2 answered (no gap disclosed), while against the
+pool Q2's sentences were only partially supported or not established, so the evaluator's
+strict coverage counts Q2 as uncovered (lenient: covered). The two use different evidence
+(cited passages vs the pool); the pipeline's "answered" is not pool-supported in the
+strict sense.
+
+#### P5 — Update to F5: the verbatim-quote failures are mostly real (informational)
+
+With the stage-36 transcripts (pipeline verifier, citation-check and re-verification
+calls), 62 non-neutral quotes across the two runs: **54 verbatim**, **2** match only after
+whitespace/punctuation normalisation, **6** are absent even normalised (paraphrases and
+"[...]" splices of passage text). Normalised matching would recover 2 of 8 failures; the
+rest are correctly downgraded by enforcement. F5's whitespace hypothesis is largely
+refuted; no change to quote matching is indicated.
+
+#### P6 — Stage-37 fixes worked as designed (informational)
+
+Q1's revision again dropped two planned sections; both were re-inserted, no claim was
+unaccounted (`claims_omitted` empty), one unchanged partial claim went to Unresolved
+(`partial_not_narrowed`), and the unanswered core question Q2 was disclosed as an
+evidence gap with the outcome degraded. Q2's revision dropped nothing.
+
+### Open questions for review (nothing implemented, protocol and metrics unchanged)
+
+1. **P1:** should narrowing require that no restriction (number, population, period,
+   setting) be removed — and should re-verification be forbidden from returning a
+   stronger verdict than the original partial one? Either changes the stage-37 policy.
+2. **P1:** remove the quoted example phrase from the revision prompt (a prompt change,
+   hence a new prompt version and a new configuration).
+3. **P2:** contradiction handling needs a question where the pipeline actually records a
+   conflict; whether to wait for the remaining six dev questions or treat it as a known
+   gap.
+4. **P3:** align draft sentences to claims more completely, or report untracked findings
+   as a limitation only.
+5. **Human annotation** of the 69 prepared items, so P1-style pipeline/judge
+   disagreements can be adjudicated.
