@@ -212,6 +212,11 @@ class TestSchemaShape:
             "conflict",
             "evaluation_result",
             "llm_call_log",
+            # report-quality-v1 (stage 29); empty unless that opt-in pipeline runs
+            "report_quality_audit",
+            "claim_audit",
+            "citation_check",
+            "final_claim_check",
         }
         assert set(Base.metadata.tables) == expected
 

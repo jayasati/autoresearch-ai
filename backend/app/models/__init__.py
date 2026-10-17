@@ -31,12 +31,18 @@ Entity map -- see DATA_MODEL.md for the reasoning behind each:
 
     EvaluationResult     one measured metric for one run
     LlmCallLog           one model call: tokens, cost, outcome
+
+    ReportQualityAudit   report-quality-v1: the internal audit of one final report
+    ClaimAudit           report-quality-v1: one claim, incl. "not evaluated, and why"
+    CitationCheck        report-quality-v1: one cited passage against its claim
+    FinalClaimCheck      report-quality-v1: re-verification of a rewritten sentence
 """
 
 from app.db.base import Base
 from app.models.evaluation import EvaluationResult
 from app.models.evidence import Citation, Claim, Conflict, Evidence, VerificationResult
 from app.models.observability import LlmCallLog
+from app.models.quality import CitationCheck, ClaimAudit, FinalClaimCheck, ReportQualityAudit
 from app.models.report import Report, ReportSection
 from app.models.research import BenchmarkRun, ResearchRun, RunConfiguration, SubQuestion
 from app.models.source import Document, DocumentChunk, ResearchSource, Source
@@ -45,14 +51,18 @@ __all__ = [
     "Base",
     "BenchmarkRun",
     "Citation",
+    "CitationCheck",
+    "ClaimAudit",
     "Claim",
     "Conflict",
     "Document",
     "DocumentChunk",
     "EvaluationResult",
+    "FinalClaimCheck",
     "Evidence",
     "LlmCallLog",
     "Report",
+    "ReportQualityAudit",
     "ReportSection",
     "ResearchRun",
     "ResearchSource",

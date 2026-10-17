@@ -184,9 +184,13 @@ them as follows:
   context phrase before the first quantity frames all of them; ties go to the
   preceding quantity; denominators attach to the quantity they follow.
 
-**Measured (stage 28, author-labelled — not independent, not the M3 result).** The
-labeller (Claude) also wrote the rules, saw every case — held-out included — while
-writing them, and labelled before any auditor code existed (case file sha256
+**Development diagnostics (stage 28) — NOT independent validation, and not the M3
+result.** The numbers below describe how the auditor behaves on cases its own
+author wrote; they do not establish its reliability on unseen text. The labeller
+(Claude) also wrote the rules and **saw every case, the held-out split included,
+during rule development** — the held-out split therefore guards only against
+tuning after its single run, not against the author's knowledge of its contents.
+Labels were written before any auditor code existed (case file sha256
 `f1a83873…`, recorded first). 82 cases, seeded label-stratified split 39 tuning /
 43 held-out (`floor(n/2)` per label sends the odd case to held-out). Rule changes
 were made against the tuning split only; the held-out split was run once, on the
@@ -244,6 +248,24 @@ by its cited source, core-subquestion substantive coverage is below
 rendering. All thresholds are configurable, copied into the run configuration,
 tuned on development only and frozen before validation.
 
+**Meaning-change detection (V2) is heuristic** (recorded at S2). It compares
+number multisets, fixed negation, hedge and quantifier word lists, stated context
+facets and, when an embedder is supplied, a cosine threshold. These catch common,
+surface-visible changes; they do not understand meaning. Passing every check means
+only "no change detected" — never that the rewritten sentence provably means what
+the verified claim meant. A reworded causal claim, a swapped subject or a qualifier
+outside the word lists can pass, and a high cosine is similarity, not equivalence.
+
+**Safety invariant (approved at S2).** A sentence flagged for re-verification is
+not treated as verified in the final report until a re-verification has actually
+run and succeeded against the exact evidence the sentence cites. Enforced in three
+places: validation keeps it out of the body (`not_evaluated` until a result is
+supplied, and a result's markers render only for supporting chunks the sentence
+itself cites, else it moves to the citation-not-confirmed section); the store
+refuses a `supported_by_cited_source` result whose supporting chunks are not among
+the cited chunks, and never overwrites a decided result; and the database refuses
+support without a support verdict, a model and a prompt version.
+
 Implementation note (stage 28): a sentence awaiting re-verification counts as
 *not in the body*, so the outcome computed on the first validation pass is
 provisional — final only once the caller has re-verified those sentences and
@@ -299,7 +321,7 @@ and a widened scope, plus one pure paraphrase. The three changes must trigger
 re-verification and keep the changed meaning out of the body unless re-verified;
 the paraphrase must not trigger re-verification.
 
-## 8. Schema changes (later stages; none in S0)
+## 8. Schema changes (S2; none before it)
 
 One additive migration: `run_configuration.pipeline_version` and `options`
 (fingerprint includes them only when non-null, so legacy fingerprints are
@@ -311,13 +333,31 @@ draft-claim metrics. Also required (no migration): a behaviour-identical
 extraction of the verifier's judging step from its persistence, an extractor
 overflow return, and a budget-aware LLM wrapper.
 
+**Implemented at S2 (stage 29), D1 = full design set.** Migration `ed421047b86d`
+(`20261017_0915_…_report_quality_v1.py`), additive only: the two nullable
+`run_configuration` columns with two CHECKs (legacy is NULL, never the string;
+`options` need a pipeline) and the four tables, each with CHECKs for what SQL can
+state (a not-evaluated row names its reason; a quoted relation names its procedure;
+support for a rewritten sentence needs a support verdict, a model and a prompt
+version; an audit is never legacy). `compute_fingerprint` hashes `pipeline_version`
+and `options` only when set, so legacy fingerprints are byte-identical (pinned by a
+test). The store (`app/services/quality/store.py`) adds what SQL cannot: claim
+audits agree with the stored verdict, quotes are verbatim, a pool-verification
+shortcut reuses a stored evidence row on that exact chunk, and a rewritten
+sentence's support must come through a chunk it cites. The status vocabularies
+moved to `app/core/constants.py` (re-exported unchanged) so the model layer does not
+load the pipeline package. Verified on SQLite (upgrade, model/migration parity,
+round trip) and as offline PostgreSQL SQL; **not yet applied to any PostgreSQL
+database** — the Neon-branch round trip remains an open acceptance item that needs
+the user's approval.
+
 ## 9. Staged sequence
 
 | Stage | Scope | Paid calls |
 |---|---|---|
 | **S0** | this document, `PipelineVersion`, inert knobs, documentation corrections | none — **done (stage 27)** |
 | S1 | deterministic modules (quantities, assessment, validation, rendering, alignment) + local quantitative case-set evaluation | none — **done (stage 28)** |
-| S2 | migration + persistence | none |
+| S2 | migration + persistence | none — **done (stage 29)**; Neon-branch round trip pending approval |
 | S3 | planner + per-subquestion retrieval/selection behind the gate, fake providers | none |
 | S4 | structured draft + rendering + alignment wiring | none |
 | S5 | citation check, budget wrapper, revision, validation, audit (fakes) | none |
@@ -336,7 +376,9 @@ Resolved at S1 (2026-10-17): D2 — deterministic alignment, implemented; D5 —
 cases with a 40/40 target (realised 82, 39/43), labelled by Claude at the user's
 request and recorded as author-labelled, not independent.
 
-Still open: migration scope (D1); citation
+Resolved at S2 (2026-10-17): D1 — full design set (one additive migration).
+
+Still open: citation
 check reusing the v2 prompt (D3, recommended); threshold values (D6); per-depth budget values and reserve (D7);
 claim priority order (D8); in-process jobs vs a queue (D9); macro as the primary
 aggregation (D10); authorization and cost approval for E2 and E4 (D11). D4 was

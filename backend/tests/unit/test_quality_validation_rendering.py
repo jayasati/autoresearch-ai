@@ -257,6 +257,20 @@ class TestRegressionMeaningChangedDuringRevision:
         assert validated.status == "finalization_failed"
         assert any("await re-verification" in reason for reason in validated.reasons)
 
+    def test_reverified_support_through_an_uncited_chunk_never_reaches_the_body(self):
+        """Safety invariant (S2 approval): a flagged sentence is treated as verified only
+        when re-verification succeeded against the exact evidence it cites (E1 here)."""
+        changed = "Moderate coffee intake may reduce type 2 diabetes risk by 25% in adults."
+        elsewhere = self.revise(
+            changed,
+            {(0, 0): Reverification(S.SUPPORTED_BY_CITED_SOURCE, P.SUPPORTED,
+                                    frozenset({CHUNK[2]}))},
+        )
+        body_texts = [p.text for s in elsewhere.sections for p in s.sentences]
+        assert changed not in body_texts
+        [moved] = elsewhere.labelled[Placement.CITATION_NOT_CONFIRMED]
+        assert (moved.text, moved.markers) == (changed, ())
+
     def test_reverified_result_decides_on_the_second_pass(self):
         changed = "Moderate coffee intake may reduce type 2 diabetes risk by 25% in adults."
         failed = self.revise(

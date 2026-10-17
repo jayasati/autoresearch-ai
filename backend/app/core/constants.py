@@ -34,6 +34,82 @@ class PipelineVersion(StrEnum):
     REPORT_QUALITY_V1 = "report-quality-v1"
 
 
+# --- report-quality-v1 stored vocabularies (stage 29, S2) --------------------------
+# Defined here, not in `app.services.quality`, because the database columns use them
+# and the model layer must not load the pipeline package (S1 isolation guarantee).
+
+
+class PoolStatus(StrEnum):
+    """verification-v2's verdict for a claim, or that there is none."""
+
+    SUPPORTED = "supported"
+    PARTIALLY_SUPPORTED = "partially_supported"
+    CONTRADICTED = "contradicted"
+    UNSUPPORTED = "unsupported"
+    NOT_ENOUGH_EVIDENCE = "not_enough_evidence"
+    NOT_EVALUATED = "not_evaluated"
+
+
+class CitationOutcome(StrEnum):
+    """citation-check-v1's result for one cited passage."""
+
+    SUPPORTS = "supports"
+    PARTIALLY_SUPPORTS = "partially_supports"
+    CONTRADICTS = "contradicts"
+    DOES_NOT_ESTABLISH = "does_not_establish"
+    INVALID_REFERENCE = "invalid_reference"
+    NOT_EVALUATED = "not_evaluated"
+
+
+class ClaimStatus(StrEnum):
+    """The five reader-facing claim categories, kept distinct (design §3)."""
+
+    SUPPORTED_BY_CITED_SOURCE = "supported_by_cited_source"
+    CITATION_NOT_CONFIRMED = "supported_citation_not_confirmed"
+    CONTESTED = "contested"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    NOT_EVALUATED = "not_evaluated"
+
+
+class Placement(StrEnum):
+    """Where a final-report sentence ended up (design §5)."""
+
+    BODY = "body"
+    QUALIFIED = "qualified"  # body, explicitly qualified
+    CITATION_NOT_CONFIRMED = "citation_not_confirmed"
+    CONTESTED = "contested"
+    UNRESOLVED = "unresolved"
+    UNVERIFIED_LIST = "unverified_list"
+    NOT_EVALUATED = "not_evaluated"
+
+
+class NotEvaluatedReason(StrEnum):
+    """Why a claim, citation or rewritten sentence was not evaluated — never silent."""
+
+    BUDGET = "budget"
+    DEADLINE = "deadline"
+    TECHNICAL = "technical"
+    CLAIM_CAP = "claim_cap"
+    UNALIGNED = "unaligned"
+    AWAITING_REVERIFICATION = "awaiting_reverification"
+
+
+class EstablishedBy(StrEnum):
+    """Which procedure established a cited passage's relation to its claim."""
+
+    POOL_VERIFICATION = "pool_verification"  # verification-v2 quoted this exact chunk
+    CITATION_CHECK = "citation_check"  # citation-check-v1 over the cited passages
+
+
+class ReportQualityStatus(StrEnum):
+    """A report-quality-v1 finalization's state; the last three are terminal."""
+
+    RUNNING = "running"
+    COMPLETE = "complete"
+    DEGRADED = "degraded"
+    FINALIZATION_FAILED = "finalization_failed"
+
+
 class SourceType(StrEnum):
     WEB = "web"
     ACADEMIC = "academic"

@@ -20,6 +20,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.constants import CitationOutcome as CitationOutcome
+from app.core.constants import ClaimStatus as ClaimStatus
+from app.core.constants import Placement as Placement
+from app.core.constants import PoolStatus as PoolStatus
+
 # --- model-filled (validated, never trusted) ------------------------------------
 
 SentenceKind = Literal["finding", "qualification", "uncertainty", "transition"]
@@ -111,38 +116,9 @@ class AliasTable:
 
 
 # --- claim status (design §3) ----------------------------------------------------
-
-
-class PoolStatus(StrEnum):
-    """verification-v2's verdict, or why there is none."""
-
-    SUPPORTED = "supported"
-    PARTIALLY_SUPPORTED = "partially_supported"
-    CONTRADICTED = "contradicted"
-    UNSUPPORTED = "unsupported"
-    NOT_ENOUGH_EVIDENCE = "not_enough_evidence"
-    NOT_EVALUATED = "not_evaluated"
-
-
-class CitationOutcome(StrEnum):
-    """citation-check-v1's result for one cited passage."""
-
-    SUPPORTS = "supports"
-    PARTIALLY_SUPPORTS = "partially_supports"
-    CONTRADICTS = "contradicts"
-    DOES_NOT_ESTABLISH = "does_not_establish"
-    INVALID_REFERENCE = "invalid_reference"
-    NOT_EVALUATED = "not_evaluated"
-
-
-class ClaimStatus(StrEnum):
-    """The five reader-facing categories, kept distinct (design §3)."""
-
-    SUPPORTED_BY_CITED_SOURCE = "supported_by_cited_source"
-    CITATION_NOT_CONFIRMED = "supported_citation_not_confirmed"
-    CONTESTED = "contested"
-    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
-    NOT_EVALUATED = "not_evaluated"
+# PoolStatus, CitationOutcome, ClaimStatus and Placement are stored vocabularies
+# (stage 29, S2), so they live in `app.core.constants` and are re-exported here
+# unchanged: the database layer must not import this package.
 
 
 # --- quantitative audit (design §4; audit-only) ----------------------------------
@@ -242,17 +218,6 @@ class ConflictContext:
 
 
 # --- final validation (design §5) ------------------------------------------------
-
-
-class Placement(StrEnum):
-    BODY = "body"
-    QUALIFIED = "qualified"  # body, explicitly qualified
-    CITATION_NOT_CONFIRMED = "citation_not_confirmed"
-    CONTESTED = "contested"
-    UNRESOLVED = "unresolved"
-    UNVERIFIED_LIST = "unverified_list"
-    NOT_EVALUATED = "not_evaluated"
-
 
 IN_BODY = frozenset({Placement.BODY, Placement.QUALIFIED})
 

@@ -182,6 +182,13 @@ def detect_meaning_change(
 ) -> set[str]:
     """How a rewritten sentence departs from the claims it says it states.
 
+    **Heuristic.** These signals catch common, surface-visible changes; they do not
+    understand meaning. A sentence that passes every check (an empty result) is NOT
+    proven to mean what the verified claims meant — a reworded causal claim, a
+    swapped subject, or a qualifier outside the fixed word lists can pass unnoticed,
+    and a high embedding cosine is similarity, not equivalence. An empty result means
+    only "no change detected".
+
     `number`        a number (with its unit) was added, changed or dropped
     `negation`      negation words differ
     `qualification` hedges or quantifiers differ (a removed "may", an added "all")

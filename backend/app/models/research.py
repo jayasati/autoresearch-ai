@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     DateTime,
     Float,
@@ -26,7 +27,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.constants import ResearchMode, RunStatus
+from app.core.constants import PipelineVersion, ResearchMode, RunStatus
 from app.db.base import Base, Timestamped, UUIDPrimaryKey, enum_column
 
 if TYPE_CHECKING:
@@ -73,6 +74,15 @@ class RunConfiguration(UUIDPrimaryKey, Base):
     claim_prompt_version: Mapped[str | None] = mapped_column(String(40))
     verifier_prompt_version: Mapped[str | None] = mapped_column(String(40))
 
+    # Opt-in pipeline (stage 29, S2). NULL is the legacy pipeline — every run made so
+    # far — so legacy rows and their fingerprints are untouched. `options` snapshots
+    # the pipeline's knobs (budgets, thresholds, evidence selection), because a
+    # changed knob is a changed, non-comparable configuration.
+    pipeline_version: Mapped[PipelineVersion | None] = mapped_column(
+        enum_column(PipelineVersion)
+    )
+    options: Mapped[dict | None] = mapped_column(JSON)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     runs: Mapped[list["ResearchRun"]] = relationship(back_populates="configuration")
@@ -84,6 +94,16 @@ class RunConfiguration(UUIDPrimaryKey, Base):
         CheckConstraint(
             "chunk_overlap IS NULL OR chunk_size IS NULL OR chunk_overlap < chunk_size",
             name="overlap_smaller_than_chunk",
+        ),
+        # Legacy is represented by NULL, never by the string: two spellings of one
+        # configuration would split its benchmark group.
+        CheckConstraint(
+            "pipeline_version IS NULL OR pipeline_version <> 'legacy'",
+            name="legacy_pipeline_is_null",
+        ),
+        CheckConstraint(
+            "options IS NULL OR pipeline_version IS NOT NULL",
+            name="options_belong_to_a_pipeline",
         ),
     )
 
@@ -102,6 +122,8 @@ class RunConfiguration(UUIDPrimaryKey, Base):
         "claim_prompt_version",
         "verifier_prompt_version",
     )
+    #: Hashed only when not None (see `compute_fingerprint`).
+    OPT_IN_FINGERPRINT_FIELDS = ("pipeline_version", "options")
 
     @classmethod
     def compute_fingerprint(cls, values: dict) -> str:
@@ -114,6 +136,16 @@ class RunConfiguration(UUIDPrimaryKey, Base):
             key: (str(values[key]) if values.get(key) is not None else None)
             for key in cls.FINGERPRINT_FIELDS
         }
+        # The opt-in pipeline fields join the payload ONLY when set. Adding them as
+        # nulls would change the hash of every legacy configuration ever recorded and
+        # silently split each benchmark group from its own history.
+        for key in cls.OPT_IN_FINGERPRINT_FIELDS:
+            if values.get(key) is not None:
+                payload[key] = (
+                    json.dumps(values[key], sort_keys=True, separators=(",", ":"))
+                    if key == "options"
+                    else str(values[key])
+                )
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 

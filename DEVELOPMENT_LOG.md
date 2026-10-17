@@ -5,6 +5,81 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 29 — Report-quality pipeline v1, S2: migration and persistence — 2026-10-17
+
+S2 of `report-quality-v1` (design §8–§9), with decisions made at the start of the
+stage: D1 = the full design set; persistence = typed write/read I/O for the new
+tables only (no plan, retrieval or source writes — S3); verification on SQLite only,
+the Neon-branch round trip left as an acceptance item needing approval. **Still
+unreachable:** no route, request field, orchestrator path or benchmark arm writes or
+reads the new tables; the app does not load `app.services.quality`; the gate stays
+off.
+
+**What was implemented:**
+
+- Migration `ed421047b86d` — additive only. `run_configuration.pipeline_version` and
+  `options` (nullable; NULL = legacy) with two CHECKs (legacy is NULL, never the
+  string; options need a pipeline), and four tables: `report_quality_audit`,
+  `claim_audit`, `citation_check`, `final_claim_check`, with CHECKs for every
+  invariant SQL can state. Drafted with autogenerate and corrected by hand: it
+  rendered each enum CHECK three times (names colliding under the convention on
+  PostgreSQL) and missed the two table-level CHECKs on the existing table.
+- `RunConfiguration.compute_fingerprint` hashes the two new fields only when set.
+  Adding them as nulls would have changed every legacy fingerprint; the two legacy
+  hashes computed at `e8d8fdb` are pinned by a test and unchanged.
+- `app/models/quality.py` (four models), `app/repositories/quality.py`, and
+  `app/services/quality/store.py` — the transaction boundary, enforcing what a CHECK
+  cannot: a claim audit carries the stored verdict (no verdict → only
+  `not_evaluated` with a reason); quotes are verbatim in the cited chunk; a
+  pool-verification shortcut must reuse a stored evidence row on that exact chunk;
+  a rewritten sentence is `supported_by_cited_source` only when a supporting chunk
+  is one it cites; an awaiting row may be replaced once, a decided result never.
+  `quality_configuration_values` snapshots every pipeline knob (not the gate) into
+  `options`.
+- The status vocabularies moved from `app/services/quality/models.py` to
+  `app/core/constants.py` (re-exported unchanged), so the model layer does not load
+  the pipeline package; the S1 suites pass unchanged.
+- Design record, per the S1 approval conditions: the quantitative-audit results
+  are now described as **development diagnostics, not independent validation**, and
+  that the author saw the held-out cases during rule development; **meaning-change
+  detection is documented as heuristic** — passing it means "no change detected",
+  never "meaning unchanged" (also in `detect_meaning_change`'s docstring); the
+  re-verification safety invariant and where it is enforced; §8 records the
+  implemented schema.
+
+**Files changed:** new — `backend/migrations/versions/20261017_0915_ed421047b86d_
+report_quality_v1.py`, `backend/app/models/quality.py`,
+`backend/app/repositories/quality.py`, `backend/app/services/quality/store.py`,
+`backend/tests/integration/test_quality_store.py`; modified —
+`backend/app/core/constants.py` (vocabularies), `backend/app/models/__init__.py`,
+`backend/app/models/research.py` (columns, CHECKs, fingerprint rule),
+`backend/app/services/quality/models.py` (re-exports),
+`backend/app/services/quality/validation.py` (docstring only),
+`backend/tests/integration/test_schema_portability.py` (four tables added to the
+pinned entity set), `backend/tests/unit/test_quality_validation_rendering.py` (one
+invariant test), `docs/REPORT_QUALITY_PIPELINE.md`, this log.
+
+**Tests:** 21 new (20 store/schema, 1 invariant), plus the parametrised portability
+checks now covering the four tables. `pytest` 1042 passed; `ruff check .` clean;
+`mypy app` clean (104 files). Migration: SQLite upgrade, model/migration parity
+(empty autogenerate diff), constraints, no seed rows and the down-up round trip all
+pass; offline PostgreSQL SQL (`alembic upgrade/downgrade --sql`, no connection)
+shows every constraint once under its convention name and a downgrade that drops
+exactly what was added.
+
+**Legacy compatibility:** fingerprints pinned and unchanged; legacy request values
+carry no pipeline fields; API routes and `/start` fields pinned (S1 test, passing);
+every existing read-endpoint, orchestrator, verifier, extractor, finalizer and
+benchmark test passes unmodified. The quant-audit case file and frozen auditor are
+unchanged (`f1a83873…`, `128d6a19…`); held-out cases were not rerun.
+
+**Not done (deliberately):** no migration applied to Neon or any shared database;
+S3+ (planner, retrieval, citation check, budget, orchestration, routes, UI); no
+provider calls, paid runs or database writes outside throwaway SQLite. The stage-26
+end-to-end run remains missing.
+
+---
+
 ## Stage 28 — Report-quality pipeline v1, S1: deterministic foundations — 2026-10-17
 
 S1 of `report-quality-v1` (design §9): the deterministic, independently testable
