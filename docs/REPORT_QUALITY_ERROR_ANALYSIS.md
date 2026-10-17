@@ -288,6 +288,38 @@ was inversely associated with mortality and disability **with some qualification
 The stage-37 guarantee ("a hedge cannot upgrade a verdict") holds only for rewrites that
 keep every content word; a rewrite that drops a restriction and adds a hedge escapes it.
 
+**Status — fixed at stage 40 (`b9fe274`, 2026-10-18).** The pilot results above were
+produced under the old rule and are not re-run or changed.
+
+- `validation.narrowing` replaces the old test and fails closed: a rewrite counts as
+  narrower only if nothing restrictive was dropped or loosened **and** something was
+  tightened. It is "not demonstrated narrower" when negation changed; an original
+  number is gone, unless replaced in the same unit by a stricter bound of the same kind
+  (a lower bound — "≥", "at least", "more than" — raised, or an upper bound — "≤", "up
+  to", "less than" — lowered); an original scope restriction is gone or replaced; or a
+  content word other than an overstatement word ("all", "highly", "significantly", ...)
+  was removed. Positive signals: a restriction or quantity added, a bound tightened, an
+  overstatement word removed. Hedges and wording alone never narrow.
+- A partial claim's rewrite that is not demonstrably narrower is never re-verified and
+  goes to "Unresolved findings" (`superficial_hedge`, or the new `not_narrowed` action
+  with its reason). A narrower rewrite reaches the body only when the citation-specific
+  re-check fully supports the exact rewrite; partial, failed, missing, contested and
+  uncited-only re-checks keep their own placements. Genuine narrowing (an added
+  restriction, a raised lower bound, a lowered upper bound) can still be upgraded.
+- Revision prompt `final-report-structured-v3`: keep every existing restriction
+  (numbers, thresholds, doses, populations, periods, places); narrowing is defined;
+  hedging alone never narrows; the example phrase "with some qualification" is gone.
+- The exact pilot claim and rewrite are a regression test: held back, never re-checked,
+  listed as unresolved even when a fully supporting re-check is on offer (17 new tests;
+  mutation probes restoring the stage-37 rule, always-narrowed and never-narrowed made
+  9, 11 and 17 tests fail).
+- Remaining limits: comparators are read only from the 16 characters before a number
+  (a bound such as "3 cups or more" is not recognised, so its change fails closed); the
+  test is lexical, so a genuinely narrower reformulation is held back until phrased more
+  literally; once narrowing is established, the upgrade still rests on the pipeline's own
+  gpt-4o-mini re-check, and the P1 disagreement with the independent judge is not
+  otherwise addressed. The fix has not yet been exercised on a real run.
+
 #### P2 — Contradiction handling remains untested, including on the conflict item (high)
 
 `dev-conflicting_literature-01` is labelled `expect_conflicts: true`. The pipeline stored
@@ -333,8 +365,13 @@ evidence gap with the outcome degraded. Q2's revision dropped nothing.
 1. **P1:** should narrowing require that no restriction (number, population, period,
    setting) be removed — and should re-verification be forbidden from returning a
    stronger verdict than the original partial one? Either changes the stage-37 policy.
+   *Resolved at stage 40:* narrowing now fails closed and never accepts a dropped or
+   loosened restriction. Re-verification is not forbidden from upgrading; instead only a
+   demonstrably narrower rewrite is re-checked at all, and it is upgraded only on a full
+   citation-specific re-check of the exact rewrite.
 2. **P1:** remove the quoted example phrase from the revision prompt (a prompt change,
-   hence a new prompt version and a new configuration).
+   hence a new prompt version and a new configuration). *Resolved at stage 40:*
+   `final-report-structured-v3`.
 3. **P2:** contradiction handling needs a question where the pipeline actually records a
    conflict; whether to wait for the remaining six dev questions or treat it as a known
    gap.
