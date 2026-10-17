@@ -14,7 +14,24 @@ class ResearchMode(StrEnum):
 
     MODEL_ONLY = "model_only"          # no retrieval; parametric knowledge only
     HYBRID = "hybrid"                  # + web search
-    SEARCH_GROUNDED = "search_grounded"  # + academic papers + RAG over full text
+    # + academic papers + RAG over retrieved snippets and abstracts. No full-text
+    # fetching exists in the pipeline (no document carries EvidenceDepth.FULL_TEXT);
+    # nor does this mode verify claims — that is the separate claims/verify/finalize
+    # path, which the benchmark's full_autoresearch_verified arm adds on top.
+    SEARCH_GROUNDED = "search_grounded"
+
+
+class PipelineVersion(StrEnum):
+    """Which report pipeline produced a run. Orthogonal to `ResearchMode`.
+
+    `legacy` is every run the system has made so far and remains the default.
+    `report-quality-v1` is the opt-in pipeline designed in
+    `docs/REPORT_QUALITY_PIPELINE.md`; as of stage 27 (S0) it is declared only —
+    no request field, route or service selects it, so nothing can run under it.
+    """
+
+    LEGACY = "legacy"
+    REPORT_QUALITY_V1 = "report-quality-v1"
 
 
 class SourceType(StrEnum):

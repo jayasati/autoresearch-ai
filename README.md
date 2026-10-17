@@ -37,7 +37,7 @@ that as the problem to be measured and reduced. It does so by:
 |---|---|---|
 | `model_only` | no sources (parametric knowledge) | the ungrounded baseline |
 | `hybrid` | + web search (Tavily) | does web grounding help? |
-| `search_grounded` | + academic papers + RAG over full text | does deep grounding help more? |
+| `search_grounded` | + academic papers + RAG over retrieved snippets and abstracts (no full-text fetching, no claim verification) | does deep grounding help more? |
 | `full_autoresearch_verified` | search-grounded + claim verification + post-verification final report | the complete system, verification as a product cost |
 
 The project's result is not just the report generator — it is the **measured

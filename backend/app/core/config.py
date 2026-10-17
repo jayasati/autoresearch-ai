@@ -9,7 +9,7 @@ surface that later stages (retrieval, evidence, evaluation) will read from.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -162,6 +162,54 @@ class Settings(BaseSettings):
     MAX_SUBQUESTIONS: int = 6
     MAX_SOURCES_PER_RUN: int = 25
     MAX_LLM_CALLS_PER_RUN: int = 40
+
+    # --- report-quality-v1 (docs/REPORT_QUALITY_PIPELINE.md) -------------------
+    # Declared in stage 27 (S0) and read by NOTHING yet: no code path selects the
+    # pipeline, so these values change no behaviour. Every number below is an
+    # unmeasured starting hypothesis from the design, to be tuned on the
+    # development set only and frozen before validation (design §10, D6/D7).
+    # Later stages copy the effective values into the run configuration, so a
+    # changed knob is a changed, recorded configuration.
+    #
+    # Server-side gate: even once the request field exists, the pipeline is
+    # refused unless this is switched on. Off by default.
+    REPORT_QUALITY_ENABLED: bool = False
+    # Hard per-run budgets, by depth. Attempts count every LLM request sent,
+    # retries included; tokens are prompt + completion.
+    REPORT_QUALITY_MAX_LLM_ATTEMPTS_QUICK: int = Field(default=60, gt=0)
+    REPORT_QUALITY_MAX_LLM_ATTEMPTS_MEDIUM: int = Field(default=100, gt=0)
+    REPORT_QUALITY_MAX_LLM_ATTEMPTS_DEEP: int = Field(default=160, gt=0)
+    REPORT_QUALITY_MAX_TOTAL_TOKENS_QUICK: int = Field(default=120_000, gt=0)
+    REPORT_QUALITY_MAX_TOTAL_TOKENS_MEDIUM: int = Field(default=220_000, gt=0)
+    REPORT_QUALITY_MAX_TOTAL_TOKENS_DEEP: int = Field(default=400_000, gt=0)
+    # Claims beyond the cap are recorded as not evaluated — never silently dropped.
+    REPORT_QUALITY_MAX_CLAIMS_VERIFIED_QUICK: int = Field(default=30, gt=0)
+    REPORT_QUALITY_MAX_CLAIMS_VERIFIED_MEDIUM: int = Field(default=40, gt=0)
+    REPORT_QUALITY_MAX_CLAIMS_VERIFIED_DEEP: int = Field(default=50, gt=0)
+    REPORT_QUALITY_RUN_DEADLINE_SECONDS_QUICK: int = Field(default=600, gt=0)
+    REPORT_QUALITY_RUN_DEADLINE_SECONDS_MEDIUM: int = Field(default=900, gt=0)
+    REPORT_QUALITY_RUN_DEADLINE_SECONDS_DEEP: int = Field(default=1500, gt=0)
+    # Share of the claim budget held back for re-verifying revised sentences.
+    REPORT_QUALITY_REVERIFY_RESERVE_FRACTION: float = Field(default=0.20, ge=0.0, le=1.0)
+    # Final-report outcome thresholds over body_loss_ratio (design §3).
+    REPORT_QUALITY_DEGRADED_BODY_LOSS_RATIO: float = Field(default=0.10, ge=0.0, le=1.0)
+    REPORT_QUALITY_FAIL_BODY_LOSS_RATIO: float = Field(default=0.25, ge=0.0, le=1.0)
+    REPORT_QUALITY_MIN_CORE_COVERAGE: float = Field(default=0.5, ge=0.0, le=1.0)
+    # Claim-to-sentence alignment and meaning-change detection (design §1.2, V2).
+    REPORT_QUALITY_ALIGNMENT_MIN_MARGIN: float = Field(default=0.05, ge=0.0, le=1.0)
+    REPORT_QUALITY_MEANING_CHANGE_MIN_COSINE: float = Field(default=0.90, ge=0.0, le=1.0)
+    # Quantitative audit (audit-only in v1): relative tolerance for "about X".
+    REPORT_QUALITY_QUANT_APPROX_REL_TOLERANCE: float = Field(default=0.10, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def report_quality_thresholds_are_ordered(self) -> "Settings":
+        """A report cannot fail before it degrades: degraded <= fail."""
+        if self.REPORT_QUALITY_DEGRADED_BODY_LOSS_RATIO > self.REPORT_QUALITY_FAIL_BODY_LOSS_RATIO:
+            raise ValueError(
+                "REPORT_QUALITY_DEGRADED_BODY_LOSS_RATIO must not exceed "
+                "REPORT_QUALITY_FAIL_BODY_LOSS_RATIO"
+            )
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:

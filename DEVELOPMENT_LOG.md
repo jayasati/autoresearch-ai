@@ -5,6 +5,57 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 27 — Report-quality pipeline v1, S0: design record and inert knobs — 2026-10-16
+
+S0 of the approved `report-quality-v1` design (revision 2, approved in stages
+with the decisions recorded in `docs/REPORT_QUALITY_PIPELINE.md` §0). **No new
+behaviour is reachable:** nothing reads the new knobs, no request field, route,
+service or benchmark arm selects the pipeline, and no migration exists.
+
+**What was implemented:**
+
+- `docs/REPORT_QUALITY_PIPELINE.md` — the design record: the traced behaviour of
+  the existing verifier (pool search by claim text; `[S#]` is source-level, so the
+  cited passage is never checked), the twelve stages, `citation-check-v1` as a
+  procedure separate from verification-v2, the audit-only quantitative auditor
+  and its evaluation plan, the final-validation and outcome-status policy, cost
+  safeguards, metrics-v3, the regression scenario, the migration later stages
+  need, and the open decisions.
+- `PipelineVersion` (`legacy`, `report-quality-v1`) in `core/constants.py`.
+- `REPORT_QUALITY_*` settings in `core/config.py`: the `REPORT_QUALITY_ENABLED`
+  gate (off), per-depth attempt/token/claim/deadline budgets, the re-verification
+  reserve, body-loss and coverage thresholds, alignment margin, meaning-change
+  cosine and quantitative tolerance — range-validated, with a validator that a
+  report cannot fail before it degrades. Every value is an unmeasured hypothesis.
+- **Documentation correction, confirmed against the code:** SEARCH_GROUNDED was
+  described as "RAG over full text" in `core/constants.py`, `README.md` and the
+  New Research page's mode summary. No full-text fetching exists (no code path
+  produces `EvidenceDepth.FULL_TEXT`); evidence is provider snippets and
+  abstracts. The UI detail line also said "the full evidence pipeline runs on
+  this configuration", which overstated it: the mode does not verify claims. All
+  three now say what the mode does.
+
+**Files changed:** `backend/app/core/config.py`, `backend/app/core/constants.py`,
+`backend/tests/test_config.py`, `README.md`, `frontend/src/lib/constants.js`,
+`docs/REPORT_QUALITY_PIPELINE.md` (new), this log.
+
+**Tests:** 9 new config tests: gate off by default, budgets non-decreasing with
+depth, deep claim cap ≤ the extractor's 50, threshold ordering and its
+rejection, out-of-range fraction and non-positive budget rejected, version
+values, and `ResearchStartRequest` fields pinned to `{topic, mode, depth}` (the
+legacy contract; S6 will change this test deliberately). Commands and results:
+`pytest` 926 passed; `ruff check .` clean; `mypy app` clean (94 files); frontend
+`npm test` 69 passed, `npm run lint` clean.
+
+**Not done (deliberately):** S1 and later; no migration, no verifier, benchmark,
+data, pool or locked-plan change; no provider calls, research runs or database
+writes. **Outstanding from stage 26:** `docs/RETRIEVAL_AUDIT.md` §3 refers to a
+stage-26 entry in this log recording a post-fix end-to-end development run; no
+such entry or run artifact exists yet. That run is unexecuted, not lost, and is
+not recorded here as done.
+
+---
+
 ## Stage 25 — The development set re-judged under external-verification-v2 — 2026-10-16
 
 The stage-24 recommendation, executed with the stage-22 Option B machinery and

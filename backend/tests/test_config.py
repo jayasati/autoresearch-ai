@@ -1,9 +1,11 @@
 """Configuration: defaults, environment loading, and derived values."""
 
+import os
+
 import pytest
 
 from app.core.config import Settings, get_settings
-from app.core.constants import ResearchMode
+from app.core.constants import PipelineVersion, ResearchMode
 
 
 class TestDefaults:
@@ -218,3 +220,80 @@ class TestSharedVocabulary:
         """StrEnum members must cross the API boundary as plain strings."""
         assert ResearchMode.MODEL_ONLY == "model_only"
         assert f"{ResearchMode.HYBRID}" == "hybrid"
+
+
+@pytest.fixture
+def no_report_quality_env(monkeypatch):
+    for key in list(os.environ):
+        if key.upper().startswith("REPORT_QUALITY_"):
+            monkeypatch.delenv(key, raising=False)
+
+
+class TestReportQualityKnobs:
+    """Stage 27 (S0): declared for later stages, inert, and the legacy contract intact."""
+
+    def test_pipeline_is_off_by_default(self, clean_env, no_report_quality_env):
+        assert Settings(_env_file=None).REPORT_QUALITY_ENABLED is False
+
+    def test_budgets_grow_with_depth(self, clean_env, no_report_quality_env):
+        s = Settings(_env_file=None)
+        for knob in (
+            "MAX_LLM_ATTEMPTS",
+            "MAX_TOTAL_TOKENS",
+            "MAX_CLAIMS_VERIFIED",
+            "RUN_DEADLINE_SECONDS",
+        ):
+            quick, medium, deep = (
+                getattr(s, f"REPORT_QUALITY_{knob}_{depth}")
+                for depth in ("QUICK", "MEDIUM", "DEEP")
+            )
+            assert 0 < quick <= medium <= deep, knob
+
+    def test_claim_cap_never_exceeds_the_extraction_cap(
+        self, clean_env, no_report_quality_env
+    ):
+        """Claims the extractor never stores cannot be verified; the cap must fit."""
+        from app.services.claims.models import MAX_CLAIMS_PER_REPORT
+
+        assert Settings(_env_file=None).REPORT_QUALITY_MAX_CLAIMS_VERIFIED_DEEP <= (
+            MAX_CLAIMS_PER_REPORT
+        )
+
+    def test_thresholds_are_ordered(self, clean_env, no_report_quality_env):
+        s = Settings(_env_file=None)
+        assert (
+            s.REPORT_QUALITY_DEGRADED_BODY_LOSS_RATIO
+            <= s.REPORT_QUALITY_FAIL_BODY_LOSS_RATIO
+        )
+
+    def test_degraded_above_fail_is_rejected(
+        self, monkeypatch, clean_env, no_report_quality_env
+    ):
+        monkeypatch.setenv("REPORT_QUALITY_DEGRADED_BODY_LOSS_RATIO", "0.5")
+        monkeypatch.setenv("REPORT_QUALITY_FAIL_BODY_LOSS_RATIO", "0.25")
+        with pytest.raises(Exception, match="must not exceed"):
+            Settings(_env_file=None)
+
+    def test_fraction_out_of_range_is_rejected(
+        self, monkeypatch, clean_env, no_report_quality_env
+    ):
+        monkeypatch.setenv("REPORT_QUALITY_REVERIFY_RESERVE_FRACTION", "1.5")
+        with pytest.raises(Exception, match="REPORT_QUALITY_REVERIFY_RESERVE_FRACTION"):
+            Settings(_env_file=None)
+
+    def test_non_positive_budget_is_rejected(
+        self, monkeypatch, clean_env, no_report_quality_env
+    ):
+        monkeypatch.setenv("REPORT_QUALITY_MAX_TOTAL_TOKENS_QUICK", "0")
+        with pytest.raises(Exception, match="REPORT_QUALITY_MAX_TOTAL_TOKENS_QUICK"):
+            Settings(_env_file=None)
+
+    def test_pipeline_versions(self):
+        assert PipelineVersion.LEGACY == "legacy"
+        assert PipelineVersion.REPORT_QUALITY_V1 == "report-quality-v1"
+
+    def test_start_request_contract_is_unchanged(self):
+        """No pipeline selector exists yet: /start accepts exactly what it did."""
+        from app.schemas.research import ResearchStartRequest
+
+        assert set(ResearchStartRequest.model_fields) == {"topic", "mode", "depth"}

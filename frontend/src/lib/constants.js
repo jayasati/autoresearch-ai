@@ -31,8 +31,8 @@ export const RESEARCH_MODES = [
   {
     value: 'search_grounded',
     label: 'Search grounded',
-    summary: 'Model plus web, academic papers, and RAG over fetched full text.',
-    detail: 'The full evidence pipeline runs on this configuration.',
+    summary: 'Model plus web, academic papers, and RAG over retrieved snippets and abstracts.',
+    detail: 'A grounded draft: no full-text fetching, and this mode does not verify claims.',
     sources: 'Web + Semantic Scholar + RAG',
   },
 ]
