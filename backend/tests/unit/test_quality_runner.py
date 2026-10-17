@@ -194,6 +194,52 @@ class TestIsolation:
                 tmp_path,
             )
 
+    def test_a_workspace_with_an_open_vector_store_is_removed(self, tmp_path):
+        """Regression (first paid run): ChromaDB held data_level0.bin open on Windows
+        and the workspace was left behind. Stores outside the workspace keep working."""
+        chromadb = pytest.importorskip("chromadb")
+        from chromadb.config import Settings as ChromaSettings
+
+        def store(directory):
+            client = chromadb.PersistentClient(
+                path=str(directory), settings=ChromaSettings(anonymized_telemetry=False)
+            )
+            collection = client.get_or_create_collection("probe", embedding_function=None)
+            collection.add(
+                ids=[str(i) for i in range(200)],
+                embeddings=[[float(i), 1.0, 0.5] for i in range(200)],
+            )
+            return client, collection
+
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / runner.MARKER).write_text("x")
+        inside = store(workspace / "vectorstore")  # still referenced, as in a real run
+        outside = store(tmp_path / "other")
+
+        assert runner.remove_workspace(workspace, pause=0.05) is True
+        assert not workspace.exists()
+        assert outside[1].count() == 200
+        assert inside  # kept alive deliberately until here
+
+    def test_a_workspace_that_cannot_be_removed_keeps_its_marker(self, tmp_path, monkeypatch):
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / runner.MARKER).write_text("x")
+        (workspace / "locked.bin").write_text("held open")
+        original = Path.unlink
+
+        def unlink(self, *args, **kwargs):
+            if self.name == "locked.bin":
+                raise PermissionError("in use by another process")
+            return original(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "unlink", unlink)
+        assert runner.remove_workspace(workspace, attempts=2, pause=0) is False
+        assert (workspace / runner.MARKER).is_file()  # still removable later
+        monkeypatch.setattr(Path, "unlink", original)
+        assert runner.remove_workspace(workspace, pause=0) is True
+
     def test_only_a_marked_workspace_is_deleted(self, tmp_path):
         unmarked = tmp_path / "user-data"
         unmarked.mkdir()

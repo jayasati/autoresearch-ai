@@ -5,6 +5,33 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 35 — First paid development run, error analysis, runner cleanup fix — 2026-10-17
+
+**Run (user-approved, the first real-provider run of `report-quality-v1`):**
+`dev-normal_research-01` at quick depth on `bdc4a29`. Outcome **degraded** (exit 3);
+24/60 attempts, 57,894 tokens (all measured), ≈ $0.011, ≈ 115 s. Artifact in
+`data/exports/quality-runs/20261017T131939Z-1d893453/` (git-ignored).
+
+**Error analysis:** `docs/REPORT_QUALITY_ERROR_ANALYSIS.md`, Run 1. Main findings: the
+revision dropped the Q2/Q3 sections, silently losing a supported claim and restoring
+another under the wrong heading; an unanswered core subquestion was not disclosed; an
+overstated partially supported claim reached the body; `body_loss_ratio` is blind to
+revision omissions; many verifier quotes failed the exact-substring check; the artifact
+lacks the passages and verifier output needed to confirm two of these. Recommendations
+R1–R6 are listed there; none is implemented.
+
+**Runner fix (F8):** the workspace was left behind on Windows because
+`SharedSystemClient.clear_system_cache()` forgets ChromaDB systems without stopping them,
+so `data_level0.bin` stayed open. `remove_workspace` now stops only the ChromaDB systems
+inside the workspace, retries briefly, and deletes the marker last (a leftover stays
+removable). 2 new tests; the open-store test reproduces the original `WinError 32` with
+the old cleanup restored (scratch plugin) and passes with the fix. `pytest` 1141 passed
+(exit 0); ruff and mypy clean. Files: `scripts/run_quality_pipeline.py`,
+`backend/tests/unit/test_quality_runner.py`, `docs/REPORT_QUALITY_ERROR_ANALYSIS.md`
+(new), this log.
+
+---
+
 ## Stage 34 — Report-quality pipeline v1: local experiment runner — 2026-10-17
 
 S5a and S5b were reviewed and committed first (`37367a6`; the review found one garbled

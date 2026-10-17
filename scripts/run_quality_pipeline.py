@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import gc
 import json
 import os
 import shutil
@@ -160,23 +161,60 @@ def check_isolated(settings: Settings, path: Path) -> None:
         raise UnsafeWorkspace("REPORT_QUALITY_ENABLED did not take effect")
 
 
-def remove_workspace(path: Path) -> bool:
+def release_vector_stores(path: Path) -> int:
+    """Stop ChromaDB's cached systems whose persist directory is inside `path`.
+
+    ChromaDB keeps one system per persist directory in a process-wide cache and
+    holds its files open until that system is stopped; `clear_system_cache()` only
+    forgets the cache without stopping anything, which on Windows left
+    `data_level0.bin` locked (first paid run, 2026-10-17). Systems for other
+    directories are left alone. Returns how many were stopped."""
+    if "chromadb" not in sys.modules:
+        return 0
+    from chromadb.api.shared_system_client import SharedSystemClient
+
+    gc.collect()  # drop unreachable clients first
+    stopped = 0
+    for identifier, system in list(SharedSystemClient._identifier_to_system.items()):
+        try:
+            location = Path(identifier).resolve()
+        except (OSError, ValueError):
+            continue
+        if location == path or path in location.parents:
+            SharedSystemClient._identifier_to_system.pop(identifier, None)
+            SharedSystemClient._identifier_to_refcount.pop(identifier, None)
+            system.stop()
+            stopped += 1
+    return stopped
+
+
+def remove_workspace(path: Path, *, attempts: int = 5, pause: float = 0.5) -> bool:
     """Delete a workspace this runner created — identified by its marker — and
-    nothing else. Returns False if anything was left behind."""
+    nothing else. The marker is deleted last, so a workspace that could not be
+    fully removed still carries it and can be removed later. Returns False if
+    anything was left behind."""
     if not (path / MARKER).is_file():
         print(f"  Not removing {path}: no runner marker.")
         return False
-    if (path / "vectorstore").exists() and "chromadb" in sys.modules:
-        # Release ChromaDB's cached client for this path, which holds its files open.
-        from chromadb.api.client import SharedSystemClient
-
-        SharedSystemClient.clear_system_cache()
-    try:
-        shutil.rmtree(path)
-    except OSError as exc:
-        print(f"  Workspace could not be fully removed ({exc}); left at {path}")
-        return False
-    return True
+    release_vector_stores(path)
+    error: OSError | None = None
+    for attempt in range(attempts):
+        try:
+            for child in path.iterdir():
+                if child.name == MARKER:
+                    continue
+                if child.is_dir() and not child.is_symlink():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
+            (path / MARKER).unlink()
+            path.rmdir()
+            return True
+        except OSError as exc:  # a file still held open; give the OS a moment
+            error = exc
+            time.sleep(pause * (attempt + 1))
+    print(f"  Workspace could not be fully removed ({error}); left at {path} (marker kept)")
+    return False
 
 
 @contextmanager
