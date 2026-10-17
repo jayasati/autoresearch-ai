@@ -1,11 +1,16 @@
 """
-The report-quality-v1 pipeline, as far as stage 30 (S3) takes it: stages 1–5.
+The report-quality-v1 pipeline, as far as stage 31 (S4) takes it: stages 1–5, 10a, 6
+and the claim→sentence alignment.
 
     gate ─▶ run (report-quality configuration) ─▶ PLANNING: plan, plan rows
          ─▶ RETRIEVING: per-subquestion retrieval, sources linked with their
             subquestion, documents processed and stored, evidence selected,
             S# labels frozen and persisted, gaps marked not addressed
-         ─▶ EvidencePreparation (in memory) — drafting is S4
+         ─▶ EvidencePreparation (in memory)
+    draft_and_align ─▶ DRAFTING: structured draft (synthesis-structured-v1), report and
+            sections stored (sections linked to subquestions), the existing claim
+            extractor, deterministic claim→sentence alignment, audit row started
+         ─▶ DraftPreparation — verification, citation check and revision are S5
 
 **Gated.** Nothing runs unless `REPORT_QUALITY_ENABLED` is on (off by default) and the
 mode is `search_grounded`; the check happens before any row is written or any call
@@ -27,11 +32,14 @@ from app.core.config import Settings, get_settings
 from app.core.constants import ResearchMode, RunStatus
 from app.core.exceptions import AppError
 from app.schemas.research import ResearchRequest, ResearchStartRequest
+from app.services.claims import ClaimExtractor
 from app.services.llm import LLMNotConfigured, LLMService
 from app.services.orchestration import DEPTH_PROFILES
 from app.services.orchestration.exceptions import NoEvidenceError
 from app.services.orchestration.orchestrator import DepthProfile
 from app.services.processing import DocumentProcessor, SourceMetadata
+from app.services.quality.alignment import Alignment, ClaimToAlign, align_claims
+from app.services.quality.drafting import DraftResult, write_draft
 from app.services.quality.evidence import (
     EvidenceSet,
     RetrievalOutcome,
@@ -40,6 +48,7 @@ from app.services.quality.evidence import (
     select_evidence,
 )
 from app.services.quality.exceptions import ReportQualityDisabled, ReportQualityModeError
+from app.services.quality.models import AliasTable
 from app.services.quality.planner import CoveragePlanner, PlanResult
 from app.services.quality.prompts import PLANNER_PROMPT_VERSION
 from app.services.quality.store import QualityStore, quality_configuration_values
@@ -61,6 +70,19 @@ class EvidencePreparation:
     evidence: EvidenceSet
     retrieval: RetrievalOutcome
     timings: dict[str, float] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+    topic: str = ""
+    depth: str = "quick"
+
+
+@dataclass
+class DraftPreparation:
+    research_id: uuid.UUID
+    report_id: uuid.UUID
+    draft: DraftResult
+    aliases: AliasTable  # sources, passages, subquestions — and now claims
+    alignments: dict[str, Alignment]
+    extractor_model: str
     warnings: list[str] = field(default_factory=list)
 
 
@@ -259,4 +281,134 @@ class ReportQualityPipeline:
             len(evidence.chunks),
             len(evidence.gaps),
         )
-        return EvidencePreparation(run_id, plan, evidence, retrieval, timings, warnings)
+        return EvidencePreparation(
+            run_id,
+            plan,
+            evidence,
+            retrieval,
+            timings,
+            warnings,
+            topic=request.topic,
+            depth=request.depth,
+        )
+
+    # --- stages 10a, 6 and alignment (stage 31, S4) ---------------------------------
+
+    async def draft_and_align(self, prepared: EvidencePreparation) -> DraftPreparation:
+        """Draft, store, extract claims and align them. Same gate, same failure policy:
+        any failure marks the run failed with the error's own code."""
+        if not self.settings.REPORT_QUALITY_ENABLED:
+            raise ReportQualityDisabled()
+        try:
+            return await self._draft(prepared)
+        except Exception as exc:
+            code = exc.code if isinstance(exc, AppError) else "internal_error"
+            message = exc.message if isinstance(exc, AppError) else str(exc)[:500]
+            try:
+                self.research.fail_run(prepared.research_id, code=code, message=message)
+            except Exception:  # noqa: BLE001 - the original error must not be masked
+                logger.exception("Could not record the failure of run %s", prepared.research_id)
+            raise
+
+    async def _draft(self, prepared: EvidencePreparation) -> DraftPreparation:
+        run_id, evidence, plan = prepared.research_id, prepared.evidence, prepared.plan
+        embedder = self._embedder or get_default_embedder()
+        self.research.advance_status(run_id, RunStatus.DRAFTING)
+
+        llm = self._llm or LLMService(settings=self.settings)
+        try:
+            draft = await write_draft(
+                llm,
+                prepared.topic,
+                plan,
+                evidence,
+                max_tokens=getattr(
+                    self.settings, f"REPORT_QUALITY_DRAFT_MAX_TOKENS_{prepared.depth.upper()}"
+                ),
+            )
+            report = self.research.record_report(
+                run_id,
+                title=draft.report.title,
+                markdown=draft.markdown,
+                model=draft.model,
+                prompt_version=draft.prompt_version,
+            )
+            self.store.link_sections(
+                report.id,
+                [
+                    evidence.aliases.subquestions.get(section.subquestion)
+                    for section in draft.report.sections
+                ],
+                [section.heading for section in draft.report.sections],
+            )
+            # Stage 6: the existing extractor, unmodified (claim-extraction-v1).
+            extraction = await ClaimExtractor(
+                settings=self.settings, research_service=self.research, llm=llm
+            ).extract(run_id)
+        finally:
+            if self._llm is None:
+                await llm.aclose()
+
+        claims = sorted(extraction.claims, key=lambda claim: claim.position)
+        claim_aliases = {f"C{index + 1}": claim.claim_id for index, claim in enumerate(claims)}
+        alignments = align_claims(
+            [
+                ClaimToAlign(alias, claim.claim_text, frozenset(claim.markers))
+                for alias, claim in zip(claim_aliases, claims, strict=True)
+            ],
+            draft.sentences(evidence),
+            embedder.embed_documents,
+            min_margin=self.settings.REPORT_QUALITY_ALIGNMENT_MIN_MARGIN,
+        )
+        aliases = AliasTable(
+            sources=evidence.aliases.sources,
+            passages=evidence.aliases.passages,
+            claims=claim_aliases,
+            subquestions=evidence.aliases.subquestions,
+        )
+
+        warnings = [*prepared.warnings, *draft.warnings]
+        unaligned = sorted(a for a, result in alignments.items() if result.status == "unaligned")
+        if unaligned:
+            warnings.append(
+                f"{len(unaligned)} claim(s) could not be aligned to one draft "
+                f"sentence and will not get a citation check: {unaligned}"
+            )
+        self.store.start_audit(report.id)
+        self.store.update_audit(
+            report.id,
+            stage="aligned",
+            payload={
+                "plan": plan.as_record(),
+                "evidence": evidence.as_record(),
+                "draft": draft.as_record(),
+                "aliases": aliases.as_record(),
+                "alignments": {
+                    alias: {
+                        "status": a.status,
+                        "reason": a.reason,
+                        "sentence_index": a.sentence_index,
+                        "score": a.score,
+                        "margin": a.margin,
+                    }
+                    for alias, a in alignments.items()
+                },
+                "extraction": {
+                    "model": extraction.extractor_model,
+                    "prompt_version": extraction.prompt_version,
+                    "claims": len(claims),
+                },
+                "timings": prepared.timings,
+                "warnings": warnings,
+            },
+        )
+        logger.info(
+            "Run %s drafted: %d sections, %d claims, %d unaligned",
+            run_id,
+            len(draft.report.sections),
+            len(claims),
+            len(unaligned),
+        )
+        return DraftPreparation(
+            run_id, report.id, draft, aliases, alignments, extraction.extractor_model, warnings
+        )

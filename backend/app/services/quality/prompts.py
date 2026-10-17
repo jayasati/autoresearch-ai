@@ -3,8 +3,8 @@ report-quality-v1 prompts. Versioned like every prompt in the project: a changed
 wording is a changed configuration, and the version is recorded on the run's
 configuration (`planner_prompt_version`).
 
-Stage 30 (S3) adds only the planner. The drafting and revision prompts arrive with
-their stages (S4, S5).
+Stage 30 (S3) added the planner; stage 31 (S4) the structured draft. The revision
+prompt arrives with S5.
 """
 
 PLANNER_PROMPT_VERSION = "planner-v1"
@@ -46,4 +46,53 @@ PLANNER_RETRY_REMINDER = (
     "\n\nIMPORTANT: your previous output did not validate against the required schema. "
     "Return ONLY the structured object, with every field present, question_type and "
     "priority drawn exactly from the allowed values."
+)
+
+
+DRAFT_PROMPT_VERSION = "synthesis-structured-v1"
+
+DRAFT_SYSTEM = """\
+You write a research report, grounded strictly in the evidence passages you are given,
+as structured sentences.
+
+Rules, none of which may be broken:
+1. Use ONLY the evidence passages below. No outside knowledge, nothing from memory.
+2. Write one section per planned subquestion, in plan order, with "subquestion" set to
+   its alias (Q1, Q2, ...); you may add one overview section with subquestion
+   "SYNTHESIS". Headings are plain text.
+3. Each sentence has a kind: "finding" (states what the evidence shows),
+   "qualification" (limits or conditions a finding), "uncertainty" (what the evidence
+   does not establish, or where it is thin or conflicting), "transition" (connective
+   prose that asserts nothing).
+4. Every finding and qualification lists in evidence_ids the passage aliases (E1, E2,
+   ...) it rests on. Use only aliases that appear below. Never invent an alias, a
+   source, a quotation, a statistic, a title or a URL, and never write source names or
+   citation markers into the text — citations are rendered from evidence_ids by code.
+5. A subquestion marked "no evidence retrieved" gets an uncertainty sentence saying the
+   retrieved evidence does not address it — never fill that gap.
+6. Keep numbers, units, periods and populations exactly as the passage states them.
+   The passages are excerpts (snippets and abstracts): do not overstate them.
+7. claim_ids and finding_refs are always empty lists in a draft.
+"""
+
+
+def build_draft_prompt(topic: str, plan_lines: list[str], evidence_blocks: list[str]) -> str:
+    return (
+        f"Topic: {topic}\n\n"
+        "Planned subquestions:\n" + "\n".join(plan_lines) + "\n\n"
+        "Evidence passages:\n\n" + "\n\n".join(evidence_blocks) + "\n\n"
+        "Write the structured report now."
+    )
+
+
+DRAFT_RETRY_INVALID = (
+    "\n\nIMPORTANT: your previous output did not validate against the required schema. "
+    "Return ONLY the structured object, every field present, kind drawn exactly from "
+    "the allowed values."
+)
+
+DRAFT_RETRY_UNCITED = (
+    "\n\nIMPORTANT: your previous draft cited no evidence passage. Every finding and "
+    "qualification must list the passage aliases it rests on in evidence_ids, e.g. "
+    '["E2"].'
 )

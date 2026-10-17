@@ -250,6 +250,47 @@ class QualityStore:
                     )
                 row.addressed = False
 
+    def link_sections(
+        self,
+        report_id: uuid.UUID,
+        subquestion_ids: Sequence[uuid.UUID | None],
+        expected_headings: Sequence[str],
+    ) -> None:
+        """Attach the report's sections, by position, to the subquestions they answer
+        (None for an overview). Sections beyond the list (the code-built Sources list)
+        stay unlinked. Each subquestion must belong to the report's run (stage 31, S4).
+
+        Linking is by position, so it is refused unless the stored sections' headings
+        are exactly `expected_headings` in order: a stray markdown heading in the text
+        would otherwise shift every link after it, silently."""
+        if len(expected_headings) != len(subquestion_ids):
+            raise _invalid("One expected heading per section link is required.")
+        with unit_of_work(self._session) as session:
+            report = session.get(Report, report_id)
+            if report is None:
+                raise NotFoundError(f"No report with id {report_id}.")
+            sections = sorted(report.sections, key=lambda s: s.position)
+            if len(subquestion_ids) > len(sections):
+                raise _invalid("More section links than report sections.", report_id=report_id)
+            stored = [section.heading for section in sections[: len(expected_headings)]]
+            if stored != list(expected_headings):
+                raise _invalid(
+                    "The stored report sections do not match the draft's sections; "
+                    "refusing to link by position.",
+                    report_id=report_id,
+                    stored=stored,
+                    expected=list(expected_headings),
+                )
+            for section, subquestion_id in zip(sections, subquestion_ids, strict=False):
+                if subquestion_id is not None:
+                    row = session.get(SubQuestion, subquestion_id)
+                    if row is None or row.research_run_id != report.research_run_id:
+                        raise _invalid(
+                            "The subquestion does not belong to this run.",
+                            subquestion_id=subquestion_id,
+                        )
+                section.subquestion_id = subquestion_id
+
     # --- the audit row ---------------------------------------------------------
 
     def start_audit(self, report_id: uuid.UUID) -> uuid.UUID:

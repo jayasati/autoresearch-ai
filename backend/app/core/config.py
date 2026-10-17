@@ -215,6 +215,11 @@ class Settings(BaseSettings):
     REPORT_QUALITY_EVIDENCE_PASSAGES_MEDIUM: int = Field(default=12, gt=0)
     REPORT_QUALITY_EVIDENCE_PASSAGES_DEEP: int = Field(default=18, gt=0)
     REPORT_QUALITY_PLAN_DUPLICATE_MIN_COSINE: float = Field(default=0.90, ge=0.0, le=1.0)
+    # Added in stage 31 (S4), approved as provisional: output tokens for the structured
+    # (JSON) draft, ~1.5x the legacy markdown limits for the per-sentence structure.
+    REPORT_QUALITY_DRAFT_MAX_TOKENS_QUICK: int = Field(default=1400, gt=0)
+    REPORT_QUALITY_DRAFT_MAX_TOKENS_MEDIUM: int = Field(default=2400, gt=0)
+    REPORT_QUALITY_DRAFT_MAX_TOKENS_DEEP: int = Field(default=4200, gt=0)
 
     @model_validator(mode="after")
     def report_quality_thresholds_are_ordered(self) -> "Settings":

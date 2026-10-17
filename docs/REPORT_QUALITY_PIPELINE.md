@@ -386,6 +386,38 @@ merge at cosine 0.90, an evidence gap = zero selected passages.
 - **Not indexed into ChromaDB here:** the verifier rebuilds a run's collection from
   its stored chunks when it needs it.
 
+### Implemented at S4 (stage 31)
+
+`ReportQualityPipeline.draft_and_align` (same gate, same failure policy) and
+`app/services/quality/drafting.py`. Decisions taken at the start of S4: an invalid
+draft fails the run (no legacy fallback, so no mixed pipeline versions); alignment
+results live in the audit payload, with `claim_audit` rows written in S5 once
+verdicts exist (no reason code means "verification pending", and no migration was
+added for one); approved provisional draft budget 1400/2400/4200 output tokens.
+
+- **Draft (`synthesis-structured-v1`).** One structured call, one retry on invalid
+  output, then `draft_invalid`; a draft citing no valid passage is retried once, then
+  the existing `UncitedReportError`. Code maps unknown section aliases to SYNTHESIS,
+  strips claim/finding aliases (a draft has none) and records unknown passage aliases,
+  which are never rendered. Model-written text cannot forge structure (fixed in the
+  final S4 review): marker-like text (`[S#]`/`[E#]`) is removed from sentences,
+  headings and the title, leading `#` is removed from sentences, and section links are
+  refused unless the stored headings match the draft's. Missing or repeated
+  subquestion sections are warned about, not repaired. Markers are rendered from `E#` via the alias table; the
+  Sources list is the legacy formatter over stored provider metadata.
+- **Stored.** The report (immutable draft, `prompt_version` recorded) and its sections
+  through the existing `record_report`; sections linked by position to the
+  subquestions they answer (the Sources section unlinked). The run moves to DRAFTING
+  and stays there — VERIFYING is S5.
+- **Claims.** The existing `ClaimExtractor` (claim-extraction-v1), unmodified, over the
+  stored draft; claims aliased `C#` in reading order.
+- **Alignment.** Deterministic claim→sentence alignment (D2) over the draft's
+  sentences and their rendered markers; unaligned claims are listed in the warnings
+  and will not get a citation check.
+- **Audit.** `report_quality_audit` started (`running`, stage `aligned`) with the plan,
+  evidence record, structured draft, alias table (now with claims), alignments and
+  warnings — none of it in the report text.
+
 **Outstanding gate (unchanged since S2):** the migration has not been applied to
 Neon or any PostgreSQL database; the Neon-branch round trip needs the user's
 approval before any run of this pipeline can be persisted there.
@@ -398,7 +430,7 @@ approval before any run of this pipeline can be persisted there.
 | S1 | deterministic modules (quantities, assessment, validation, rendering, alignment) + local quantitative case-set evaluation | none — **done (stage 28)** |
 | S2 | migration + persistence | none — **done (stage 29)**; Neon-branch round trip pending approval |
 | S3 | planner + per-subquestion retrieval/selection behind the gate, fake providers | none — **done (stage 30)**: stages 1–5, ending at an in-memory evidence set |
-| S4 | structured draft + rendering + alignment wiring | none |
+| S4 | structured draft + rendering + alignment wiring | none — **done (stage 31)**: stages 10a, 6 and alignment; run left in DRAFTING |
 | S5 | citation check, budget wrapper, revision, validation, audit (fakes) | none |
 | S6 | additive API (jobs, progress, quality) + frontend | none |
 | S7 | opt-in benchmark arm; development evaluation | **requires separate authorization** |

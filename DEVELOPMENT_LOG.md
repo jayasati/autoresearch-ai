@@ -5,6 +5,92 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 31 — Report-quality pipeline v1, S4: structured draft, claims and alignment — 2026-10-17
+
+S4 of `report-quality-v1` (design §2 stages 10a and 6, plus the D2 alignment).
+Decisions at the start of the stage: an invalid draft fails the run (no legacy
+fallback); alignment lives in the audit payload until S5 writes `claim_audit` rows
+(no schema change); approved provisional draft budget 1400/2400/4200 output tokens.
+**Still unreachable:** `draft_and_align` is behind the same gate (off) and nothing
+calls it.
+
+**What was implemented** (details in design doc §8 "Implemented at S4"):
+
+- `prompts.py` — `synthesis-structured-v1`: one section per planned subquestion,
+  sentences typed finding / qualification / uncertainty / transition, every finding
+  naming the passage aliases it rests on; no markers, sources or metadata in text;
+  gaps get an uncertainty sentence, never filler.
+- `drafting.py` — the draft call (one retry on invalid output, then `draft_invalid`;
+  uncited retried once, then the existing `UncitedReportError`); code-side
+  normalisation (unknown sections → SYNTHESIS, claim/finding aliases stripped, unknown
+  passage aliases recorded and never rendered); markdown rendered from the alias
+  table with the legacy Sources formatter reused unchanged.
+- `pipeline.py` — `draft_and_align`: DRAFTING; report and sections via the existing
+  `record_report`; sections linked to subquestions; the existing `ClaimExtractor`,
+  unmodified; claims aliased `C#`; deterministic alignment; audit row started with the
+  plan, evidence, draft structure, alias table, alignments and warnings.
+- `store.py` — `link_sections`; `config.py` — the three draft-token knobs.
+
+**Files changed:** new — `backend/app/services/quality/drafting.py`,
+`backend/tests/unit/test_quality_drafting.py`; modified —
+`backend/app/core/config.py`, `backend/app/services/quality/{pipeline,prompts,
+store}.py`, `docs/REPORT_QUALITY_PIPELINE.md`, this log.
+
+**Final review before commit — two defects found and fixed.** A probe showed that
+model-written text could (1) **forge citations**: a literal `[S9]` (no such source)
+or `[S1]` (no evidence behind it) in a sentence, heading or title was rendered as a
+marker and reached the claim extractor as a citation; and (2) **shift section
+links**: a sentence beginning `## ` became an extra markdown section, and linking by
+position then attached the wrong subquestion to every later section — silently.
+Fixes: the draft cleanup removes marker-like text (`[S#]`/`[E#]`, any case and
+spacing) from sentences, headings and the title and strips leading `#` from
+sentences, dropping a sentence that held only markup (all recorded as warnings);
+`link_sections` now refuses to link unless the stored headings equal the draft's.
+Also added (warnings only, no behaviour change): planned subquestions with no
+section, or with more than one. Four regression tests; with the fixes disabled by a
+scratch-only plugin, the injection and link tests fail, and with them they pass.
+
+**Tests:** 12 new. The fake LLM answers by schema and reads the real prompts — the
+draft is built from the plan lines and passage aliases the pipeline sent, the claims
+from the rendered report the unmodified extractor sent — so aliases, markers and
+alignment are exercised end to end. Acceptance checks: every rendered marker is the
+label of the passage its sentence names and resolves to a stored, labelled source;
+no forged marker reaches the extractor (no `fabricated` citation row); sections link
+to the right subquestions; the extractor runs unmodified; no model field can carry
+metadata (S1 schema test); audit internals never appear in the report; retries are
+exactly one per failure kind; an extraction failure after the draft is stored fails
+the run and keeps the draft; an unalignable claim is warned about and recorded in the
+audit. `pytest` 1078 passed in two consecutive full runs (exit 0; an earlier run of
+three before the review hit the intermittent legacy failure below); `ruff check .`
+clean; `mypy app` clean (110 files).
+
+**Issue found — intermittent legacy test failure.**
+`tests/unit/test_reevaluation.py::TestReevaluationObligations::test_mismatched_benchmark_id_is_refused`
+failed once in three full runs with ChromaDB's "Error creating hnsw segment reader:
+Nothing found on disk", raised inside the legacy benchmark harness's real
+`PersistentClient` on a temp directory. **Evidence, not proof:** run in isolation
+(that file alone, so no test-order effect) ten times each, it failed 1/10 on a clean
+worktree of `ea2e4ba` (before S4) and 1/10 on the S4 tree (plus 1/5 and 0/5 in an
+earlier five-run batch). Verified directly: S4 adds no ChromaDB/`VectorStore` use
+(the default embedder is only loaded when none is injected, and every test injects
+one), and `test_reevaluation.py` imports nothing from `app.services.quality`. Inferred,
+not established: the failure is a pre-existing ChromaDB persistence race; rates this
+low cannot rule out a small S4 influence. Not fixed, skipped or weakened here — it is
+legacy benchmark-test territory, recorded as a separate open issue. It did not occur
+in the two full runs after the review.
+
+**Legacy compatibility:** orchestrator, research service, extractor, verifier,
+finalizer, benchmark code, routes, migrations and frontend unmodified; the legacy
+Sources formatter and `record_report`/`ClaimExtractor` are reused, not changed; the
+S1 isolation test passes. Quant-audit case file and frozen auditor unchanged.
+
+**Not done (deliberately):** S5 (pool verification wiring, citation check, budget
+wrapper, revision, validation, `claim_audit`/`citation_check` writes, finalization),
+S6 (routes/UI), S7 (benchmark arm, any paid run). **The Neon-branch migration round
+trip remains an outstanding gate.** The stage-26 end-to-end run remains missing.
+
+---
+
 ## Stage 30 — Report-quality pipeline v1, S3: plan, retrieval and evidence selection — 2026-10-17
 
 S3 of `report-quality-v1` (design §2 stages 1–5, §9). Decisions at the start of the
