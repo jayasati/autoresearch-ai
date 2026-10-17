@@ -189,8 +189,12 @@ mean dev-pool passage 637 characters, `top_k` 4, ≈ 30 items per question):
 
 - product: run 1 measured $0.011 per quick run; configured cap $0.072 per run;
 - evaluation with `--judge-model gpt-4o`: ≈ 42k input + 18k output tokens per
-  question ≈ $0.29, capped at 1.5× ≈ $0.43 per question (`--max-usd 0.50` refuses
-  more; the budgeted client enforces the 1.5× token cap);
+  question ≈ $0.29 at the August-2024 snapshot's prices; `--max-usd` is enforced at
+  run time by a dollar ledger across every judge request and retry (stage 39: each
+  request carries an 800-token output limit and reserves its worst case — byte-bounded
+  input at the model family's highest list price — before it is sent; failures are
+  charged in full; a request that does not fit is refused and becomes a missing
+  judgment);
 - worst case 2 × $0.072 + 2 × $0.50 = **$1.144; expected ≈ $0.60** — pilot cap
   **$1.20**; stop after the first question if its actual cost exceeds $0.60.
 - retrieval outside model budgets: ≤ 3 Tavily + ≤ 3 Semantic Scholar searches per run.

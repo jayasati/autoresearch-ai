@@ -439,14 +439,15 @@ class TestGuardsAndModes:
         assert pair.main(same) == 2  # the pipeline's own model, refused before any call
         assert "pipeline's own model" in capsys.readouterr().out
 
-    def test_the_estimate_prices_input_and_output_and_caps_with_a_margin(self, tmp_path):
+    def test_the_estimate_uses_the_reservation_prices(self, tmp_path):
         args = write_fixture(tmp_path)
         items = [json.loads(line) for line in self._items(args)]
         cost = pair.estimate(items, args.pools / f"{QID}.json", "gpt-4o")
         assert cost["output_tokens"] == 600 * len(items)
-        expected = cost["input_tokens"] * 2.5e-6 + cost["output_tokens"] * 10e-6
+        # gpt-4o's most expensive listed snapshot: $5 / $15 per million
+        expected = cost["input_tokens"] * 5e-6 + cost["output_tokens"] * 15e-6
         assert cost["cost_usd"] == round(expected, 4)
-        assert cost["cost_usd_cap"] == round(expected * 1.5, 4)
+        assert cost["worst_case_usd"] > cost["cost_usd"]
         assert pair.estimate(items, args.pools / f"{QID}.json", "unlisted")["cost_usd"] is None
 
     def test_a_cost_cap_above_max_usd_is_refused_before_any_call(self, tmp_path, capsys):
@@ -596,3 +597,247 @@ def configured(monkeypatch, tmp_path):
 
     get_settings.cache_clear()
     return tmp_path
+
+
+# --- the runtime dollar ledger (stage 39) --------------------------------------------------
+
+#: Fixed test prices: one snapshot at $1 / $2 per million tokens.
+TEST_PRICES = {"test-model-1": (1e-6, 2e-6)}
+
+
+@pytest.fixture
+def fixed_prices(monkeypatch):
+    monkeypatch.setattr(pair, "SNAPSHOT_PRICES", dict(TEST_PRICES))
+    monkeypatch.setattr(pair, "MODEL_FAMILIES", {"test-model": ("test-model-1",)})
+
+
+class Usage:
+    def __init__(self, prompt, completion):
+        self.prompt_tokens, self.completion_tokens = prompt, completion
+
+
+class Reply:
+    def __init__(self, data, usage, model="test-model-1"):
+        self.data, self.usage, self.model = data, usage, model
+
+
+class ScriptedClient:
+    """A fake judge client: answers from a script, records every request it receives."""
+
+    def __init__(self, *answers):
+        self.answers = list(answers)
+        self.requests: list[dict] = []
+
+    async def generate_structured_output(self, prompt, schema, **kwargs):
+        self.requests.append({"prompt": prompt, **kwargs})
+        answer = self.answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+
+def verdict(prompt):
+    return judge(pick="Alpha")(prompt)
+
+
+PROMPT = pair.build_verification_prompt("Coffee helps.", [("P1", "T", "Alpha x")])
+
+
+def bound():  # the ledger tests send PROMPT with no system prompt
+    return pair.input_token_bound(PROMPT, None, pair.ClaimVerificationModel)
+
+
+def worst(limit_tokens=800):
+    return bound() * 1e-6 + limit_tokens * 2e-6
+
+
+def worst_for(prompt):
+    tokens = pair.input_token_bound(prompt, pair.VERIFICATION_SYSTEM, pair.ClaimVerificationModel)
+    return tokens * 1e-6 + 800 * 2e-6
+
+
+class TestDollarLedger:
+    def test_a_request_is_refused_exactly_when_its_worst_case_exceeds_the_remaining(
+        self, fixed_prices
+    ):
+        cost = worst()
+        fits = pair.DollarLedger(cost, "test-model")
+        rid = fits.reserve("i1", bound(), 800)  # exactly the remaining: permitted
+        assert fits.entries[rid]["status"] == "open"
+        short = pair.DollarLedger(cost - 1e-9, "test-model")
+        with pytest.raises(pair.BudgetRefused):
+            short.reserve("i1", bound(), 800)
+        assert short.entries[0]["status"] == "refused" and short.spent == 0.0
+
+    async def test_the_output_limit_is_attached_to_every_request_and_retry(self, fixed_prices):
+        client = ScriptedClient(LLMResponseInvalid("bad"), Reply(None, Usage(10, 5)))
+        llm = pair.LedgeredLLM(client, pair.DollarLedger(1.0, "test-model"))
+        with pytest.raises(pair.JudgeCallFailed):
+            await llm.generate_structured_output(PROMPT, pair.ClaimVerificationModel)
+        await llm.generate_structured_output(
+            PROMPT, pair.ClaimVerificationModel, max_tokens=5000
+        )  # a caller cannot raise the limit
+        assert [r["max_tokens"] for r in client.requests] == [800, 800]
+
+    async def test_known_usage_is_charged_measured_and_the_rest_released(self, fixed_prices):
+        ledger = pair.DollarLedger(1.0, "test-model")
+        llm = pair.LedgeredLLM(ScriptedClient(Reply(None, Usage(1000, 200))), ledger)
+        await llm.generate_structured_output(PROMPT, pair.ClaimVerificationModel)
+        [entry] = ledger.entries
+        assert entry["charge_basis"] == "measured"
+        assert entry["charged_usd"] == round(1000 * 1e-6 + 200 * 2e-6, 8)
+        assert ledger.open == {} and ledger.remaining == pytest.approx(1.0 - 0.0014)
+
+    @pytest.mark.parametrize(
+        ("failure", "reason"),
+        [
+            (LLMResponseInvalid("cut", details={"finish_reason": "length"}), "truncated"),
+            (LLMResponseInvalid("not json"), "malformed"),
+            (TimeoutError(), "TimeoutError"),
+        ],
+    )
+    async def test_a_failed_request_without_usage_is_charged_its_full_reservation(
+        self, fixed_prices, failure, reason
+    ):
+        ledger = pair.DollarLedger(1.0, "test-model")
+        llm = pair.LedgeredLLM(ScriptedClient(failure), ledger)
+        with pytest.raises(pair.JudgeCallFailed) as raised:
+            await llm.generate_structured_output(PROMPT, pair.ClaimVerificationModel)
+        assert raised.value.reason == reason
+        [entry] = ledger.entries
+        assert entry["charge_basis"] == "reserved (usage unknown)"
+        assert entry["charged_usd"] == entry["reserved_usd"]  # never refunded
+        assert ledger.spent == pytest.approx(worst()) and entry["reason"] == reason
+
+    async def test_calls_and_retries_share_one_budget_and_none_exceeds_it(self, fixed_prices):
+        # room for exactly two worst-case requests; usage unknown -> each costs its worst
+        ledger = pair.DollarLedger(2 * worst() + 1e-9, "test-model")
+        client = ScriptedClient(LLMResponseInvalid("a"), LLMResponseInvalid("b"), Reply(None, None))
+        llm = pair.LedgeredLLM(client, ledger)
+        for _ in range(3):
+            try:
+                await llm.generate_structured_output(PROMPT, pair.ClaimVerificationModel)
+            except pair.BudgetRefused:
+                break
+            except pair.JudgeCallFailed:
+                continue
+        assert len(client.requests) == 2  # the third was refused, never sent
+        assert ledger.spent <= ledger.limit_usd
+        assert [e["status"] for e in ledger.entries] == ["failed", "failed", "refused"]
+
+    async def test_a_measured_charge_above_its_reservation_closes_the_ledger(self, fixed_prices):
+        ledger = pair.DollarLedger(1.0, "test-model")
+        llm = pair.LedgeredLLM(ScriptedClient(Reply(None, Usage(10**6, 0))), ledger)
+        await llm.generate_structured_output(PROMPT, pair.ClaimVerificationModel)
+        assert ledger.closed and ledger.entries[0]["bound_exceeded"]
+        with pytest.raises(pair.BudgetRefused):
+            ledger.reserve("next", 1, 1)
+
+    def test_an_unlisted_judge_model_is_refused(self):
+        with pytest.raises(pair.Refused):
+            pair.DollarLedger(1.0, "some-unlisted-model")
+
+    def test_reservation_prices_are_the_family_maximum(self):
+        assert pair.worst_prices("gpt-4o") == (5.00e-6, 15.00e-6)
+        assert pair.worst_prices("gpt-4o-2024-08-06") == (2.50e-6, 10.00e-6)
+        assert pair.worst_prices("gpt-4o-mini") == (0.15e-6, 0.60e-6)
+
+    def test_the_input_bound_counts_bytes_schema_and_overhead(self):
+        text = "Claim to verify:\nCafé ☕.\n"
+        got = pair.input_token_bound(text, "sys", pair.ClaimVerificationModel)
+        assert got > len(text.encode("utf-8")) + 3 + pair.REQUEST_OVERHEAD_TOKENS
+        assert len(text.encode("utf-8")) > len(text)  # bytes, not characters
+
+
+class TestLedgerInTheEvaluation:
+    """Refusals and failures through the real judging path become missing judgments with
+    their reason — never support, never `does_not_establish`."""
+
+    async def test_refusals_and_failures_are_missing_judgments_with_reasons(self, fixed_prices):
+        class Hit:
+            text = "Alpha trial: moderate coffee lowered risk in adults."
+            chunk_id = "00000000-0000-4000-8000-0000000000aa"
+            source = type("Src", (), {"title": "Pool", "url": None})()
+
+        class Store:
+            def search(self, text, k):
+                return [Hit()]
+
+        items = [
+            {"item_id": "00000000-0000-4000-8000-000000000001", "type": "pool",
+             "text": "Coffee lowered risk."},
+            {"item_id": "00000000-0000-4000-8000-000000000002", "type": "pair",
+             "text": "Coffee lowered risk.",
+             "passages": [{"label": "P1", "title": "T", "text": "Alpha trial: coffee helped."}]},
+            {"item_id": "00000000-0000-4000-8000-000000000003", "type": "pair",
+             "text": "Coffee raised risk.",
+             "passages": [{"label": "P1", "title": "T", "text": "Alpha trial: coffee helped."}]},
+        ]  # fmt: skip
+
+        class Answering:
+            def __init__(self):
+                self.prompts = []
+
+            async def generate_structured_output(self, prompt, schema, **kwargs):
+                self.prompts.append(prompt)
+                if len(self.prompts) == 1:  # the pool item: a good answer with usage
+                    return Reply(verdict(prompt), Usage(500, 100))
+                raise LLMResponseInvalid("cut", details={"finish_reason": "length"})
+
+        # exact reservations from the prompts the judges will build
+        def reservation(text, passages):
+            prompt = pair.build_verification_prompt(text, passages)
+            return worst_for(prompt)
+
+        r1 = reservation(items[0]["text"], [("P1", "Pool", Hit.text)])
+        r2 = reservation(items[1]["text"], [("P1", "T", "Alpha trial: coffee helped.")])
+        r3 = reservation(items[2]["text"], [("P1", "T", "Alpha trial: coffee helped.")])
+        measured = 500 * 1e-6 + 100 * 2e-6
+        # item 1 fits and is charged measured; both truncated attempts of item 2 are
+        # charged in full; then only half of item 3's reservation is left
+        ledger = pair.DollarLedger(measured + 2 * r2 + r3 / 2, "test-model")
+        assert ledger.limit_usd >= r1
+        llm = pair.LedgeredLLM(Answering(), ledger)
+        judgments = {j["item_id"]: j for j in await pair.judge_items_llm(items, llm, Store())}
+        first, second, third = (judgments[i["item_id"]] for i in items)
+        assert first["verdict"] == "supported" and "missing_reason" not in first
+        assert second["outcome"] is None and second["missing_reason"] == "truncated"
+        assert third["outcome"] is None and third["missing_reason"] == "budget_refused"
+        assert ledger.spent <= ledger.limit_usd
+        record = ledger.as_record()
+        assert (record["sent"], record["ok"], record["failed"], record["refused"]) == (3, 1, 2, 2)
+        assert record["retries"] == 2  # item 2's second attempt and item 3's second refusal
+        assert record["charged_at_reservation"] == 2
+        assert record["remaining_usd"] == pytest.approx(ledger.limit_usd - ledger.spent)
+
+    def test_budget_refusal_is_never_scored_as_supported_or_unsupported(self, tmp_path):
+        async def everything_refused(items):
+            return [
+                {"item_id": i["item_id"], "verdict": None, "outcome": None,
+                 "missing_reason": "budget_refused"}
+                for i in items
+            ]  # fmt: skip
+
+        s = scored(tmp_path, everything_refused)
+        for arm in ("off", "on"):
+            pool, cites = s["arms"][arm]["pool"], s["arms"][arm]["citations"]
+            assert pool["judged"] == 0 and pool["support_strict"] is None
+            assert pool["unsupported_or_contradicted"] is None
+            assert cites["judged"] == 0 and cites["strict"] is None
+            assert cites.get("counts") == {}
+        assert s["missing_judgments_by_reason"] == {"budget_refused": 8}
+
+    def test_the_ledger_audit_is_persisted_with_the_scores(self, tmp_path, fixed_prices):
+        args = write_fixture(tmp_path)
+        ledger = pair.DollarLedger(0.5, "test-model")
+        rid = ledger.reserve("x", 100, 800)
+        ledger.settle(rid, usage=Usage(80, 40), model="test-model-1")
+        judge_items = fake_judge()
+        judge_items.ledger = ledger
+        result = pair.evaluate(args, judge=judge_items)
+        audit = json.loads((args.out / "budget.json").read_text("utf-8"))
+        assert audit["limit_usd"] == 0.5 and audit["sent"] == 1 and audit["refused"] == 0
+        assert audit["entries"][0]["charge_basis"] == "measured"
+        assert audit["spent_usd"] == round(80 * 1e-6 + 40 * 2e-6, 8)
+        cost = result["scores"]["evaluation_cost"]
+        assert cost["remaining_usd"] == audit["remaining_usd"] and "entries" not in cost

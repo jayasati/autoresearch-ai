@@ -217,6 +217,225 @@ def build_items(
     return items, arm_key
 
 
+# --- the runtime dollar ledger (stage 39) ---------------------------------------------------
+
+#: Hard output limit sent with EVERY judge request (as max_completion_tokens).
+OUTPUT_TOKEN_LIMIT = 800
+#: Chat-format and response-format tokens beyond the text itself (messages, roles, the
+#: structured-output wrapper) — a generous constant.
+REQUEST_OVERHEAD_TOKENS = 256
+#: The provider renders the response schema into the prompt in its own format; the
+#: bound allows twice the JSON schema the SDK sends.
+SCHEMA_BOUND_FACTOR = 2
+
+#: List prices, USD per token, by model snapshot. Settlement prices the snapshot the
+#: provider reports; a reservation prices the most expensive snapshot of the requested
+#: model's family; an unlisted snapshot is charged at that maximum.
+SNAPSHOT_PRICES: dict[str, tuple[float, float]] = {
+    "gpt-4o-2024-05-13": (5.00e-6, 15.00e-6),
+    "gpt-4o-2024-08-06": (2.50e-6, 10.00e-6),
+    "gpt-4o-2024-11-20": (2.50e-6, 10.00e-6),
+    "gpt-4o-mini-2024-07-18": (0.15e-6, 0.60e-6),
+}
+MODEL_FAMILIES: dict[str, tuple[str, ...]] = {
+    "gpt-4o": ("gpt-4o-2024-05-13", "gpt-4o-2024-08-06", "gpt-4o-2024-11-20"),
+    "gpt-4o-mini": ("gpt-4o-mini-2024-07-18",),
+}
+
+
+class BudgetRefused(LLMResponseInvalid):
+    """A judge request whose worst-case cost does not fit the remaining budget. Never
+    sent; the item becomes a missing judgment."""
+
+
+class JudgeCallFailed(LLMResponseInvalid):
+    """A sent judge request that produced no usable judgment (truncated, malformed,
+    timeout, provider error). Charged conservatively; a missing judgment."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"judge call failed: {reason}", details={"reason": reason})
+        self.reason = reason
+
+
+def worst_prices(model: str) -> tuple[float, float] | None:
+    """The highest input and output price among the snapshots `model` may resolve to."""
+    snapshots = MODEL_FAMILIES.get(model) or ((model,) if model in SNAPSHOT_PRICES else ())
+    if not snapshots:
+        return None
+    return (
+        max(SNAPSHOT_PRICES[s][0] for s in snapshots),
+        max(SNAPSHOT_PRICES[s][1] for s in snapshots),
+    )
+
+
+def input_token_bound(prompt: str, system: str | None, schema) -> int:
+    """An upper bound on the request's input tokens: byte-level BPE tokens are at least
+    one byte each, so tokens <= UTF-8 bytes; plus the rendered schema (bounded at
+    SCHEMA_BOUND_FACTOR x its JSON) and a constant overhead."""
+    from openai.lib._pydantic import to_strict_json_schema
+
+    schema_bytes = len(json.dumps(to_strict_json_schema(schema)).encode("utf-8"))
+    text_bytes = len(prompt.encode("utf-8")) + len((system or "").encode("utf-8"))
+    return text_bytes + SCHEMA_BOUND_FACTOR * schema_bytes + REQUEST_OVERHEAD_TOKENS
+
+
+class DollarLedger:
+    """One budget across every judge request and retry of an evaluation.
+
+    reserve: before a request, its worst-case cost (input bound x the family's highest
+    input price + the output limit x the highest output price) must fit
+    `limit - spent - open reservations`, or it is refused and never sent.
+    settle: with reported usage, the request is charged its measured tokens at the
+    reported snapshot's price and the rest of the reservation is released; without
+    usage (any failure), it is charged the full reservation — never refunded. If a
+    measured charge ever exceeds its reservation (a bound assumption failed), the
+    ledger closes: every later request is refused."""
+
+    def __init__(self, limit_usd: float, model: str) -> None:
+        prices = worst_prices(model)
+        if prices is None:
+            raise Refused(f"no listed price for judge model {model}; refusing to judge")
+        self.limit_usd = limit_usd
+        self.model = model
+        self.reserve_prices = prices
+        self.spent = 0.0
+        self.open: dict[int, float] = {}
+        self.entries: list[dict] = []
+        self.closed: str | None = None
+
+    @property
+    def remaining(self) -> float:
+        return self.limit_usd - self.spent - sum(self.open.values())
+
+    def reserve(self, item_id: str | None, input_bound: int, output_limit: int) -> int:
+        worst = input_bound * self.reserve_prices[0] + output_limit * self.reserve_prices[1]
+        attempt = sum(1 for e in self.entries if e["item_id"] == item_id) + 1
+        rid = len(self.entries)
+        entry: dict = {
+            "id": rid,
+            "item_id": item_id,
+            "attempt": attempt,
+            "input_token_bound": input_bound,
+            "output_token_limit": output_limit,
+            "reserved_usd": round(worst, 8),
+            "remaining_before_usd": round(self.remaining, 8),
+        }
+        self.entries.append(entry)
+        if self.closed is not None or worst > self.remaining:
+            entry.update(status="refused", charged_usd=0.0, reason=self.closed or "budget")
+            raise BudgetRefused(
+                f"worst-case cost {worst:.6f} exceeds the remaining {self.remaining:.6f}"
+            )
+        entry["status"] = "open"
+        self.open[rid] = worst
+        return rid
+
+    def settle(self, rid: int, *, usage=None, model: str | None = None, reason=None) -> None:
+        entry = self.entries[rid]
+        reserved = self.open.pop(rid)
+        prompt = getattr(usage, "prompt_tokens", None)
+        completion = getattr(usage, "completion_tokens", None)
+        if prompt is not None and completion is not None:
+            price = SNAPSHOT_PRICES.get(model or "", self.reserve_prices)
+            charge = prompt * price[0] + completion * price[1]
+            entry.update(
+                charge_basis="measured",
+                prompt_tokens=prompt,
+                completion_tokens=completion,
+                model=model,
+                price_per_token=list(price),
+            )
+            if charge > reserved + 1e-12 or prompt > entry["input_token_bound"]:
+                self.closed = f"bound exceeded on request {rid}; ledger closed"
+                entry["bound_exceeded"] = True
+        else:
+            charge = reserved
+            entry.update(charge_basis="reserved (usage unknown)")
+        self.spent += charge
+        entry.update(
+            status="failed" if reason else "ok",
+            reason=reason,
+            charged_usd=round(charge, 8),
+            remaining_after_usd=round(self.remaining, 8),
+        )
+
+    def as_record(self) -> dict:
+        statuses = [e["status"] for e in self.entries]
+        return {
+            "limit_usd": self.limit_usd,
+            "judge_model": self.model,
+            "reservation_prices_per_token": list(self.reserve_prices),
+            "output_token_limit": OUTPUT_TOKEN_LIMIT,
+            "input_bound": "UTF-8 bytes of system + prompt + "
+            f"{SCHEMA_BOUND_FACTOR}x strict JSON schema + {REQUEST_OVERHEAD_TOKENS}",
+            "spent_usd": round(self.spent, 8),
+            "open_reservations_usd": round(sum(self.open.values()), 8),
+            "remaining_usd": round(self.remaining, 8),
+            "requests": len(self.entries),
+            "sent": sum(s in ("ok", "failed") for s in statuses),
+            "ok": statuses.count("ok"),
+            "failed": statuses.count("failed"),
+            "refused": statuses.count("refused"),
+            "retries": sum(1 for e in self.entries if e["attempt"] > 1),
+            "charged_at_reservation": sum(
+                1 for e in self.entries if e.get("charge_basis", "").startswith("reserved")
+            ),
+            "closed": self.closed,
+            "entries": self.entries,
+        }
+
+
+class LedgeredLLM:
+    """The judge client behind the ledger: every request carries the output limit and is
+    reserved first; every failure is charged and surfaces as a missing judgment."""
+
+    def __init__(self, inner, ledger: DollarLedger) -> None:
+        self._inner = inner
+        self.ledger = ledger
+        self.item_id: str | None = None
+
+    async def generate_structured_output(self, prompt, schema, *, system=None, **kwargs):
+        kwargs["max_tokens"] = min(kwargs.get("max_tokens") or OUTPUT_TOKEN_LIMIT,
+                                   OUTPUT_TOKEN_LIMIT)  # fmt: skip
+        rid = self.ledger.reserve(
+            self.item_id, input_token_bound(prompt, system, schema), kwargs["max_tokens"]
+        )
+        try:
+            response = await self._inner.generate_structured_output(
+                prompt, schema, system=system, **kwargs
+            )
+        except LLMResponseInvalid as exc:
+            finish = (getattr(exc, "details", None) or {}).get("finish_reason")
+            reason = "truncated" if finish == "length" else "malformed"
+            self.ledger.settle(rid, reason=reason)
+            raise JudgeCallFailed(reason) from exc
+        except Exception as exc:  # noqa: BLE001 - timeout, provider error: charged, missing
+            self.ledger.settle(rid, reason=type(exc).__name__)
+            raise JudgeCallFailed(type(exc).__name__) from exc
+        self.ledger.settle(
+            rid, usage=getattr(response, "usage", None), model=getattr(response, "model", None)
+        )
+        return response
+
+    async def aclose(self) -> None:
+        close = getattr(self._inner, "aclose", None)
+        if close is not None:
+            await close()
+
+
+def missing_reason(item_id: str, ledger: DollarLedger | None) -> str:
+    """Why an item has no judgment: its last request's outcome."""
+    if ledger is None:
+        return "no_judgment"
+    attempts = [e for e in ledger.entries if e["item_id"] == item_id]
+    if not attempts:
+        return "no_request"
+    last = attempts[-1]
+    if last["status"] == "refused":
+        return "budget_refused"
+    return last.get("reason") or "invalid_output"
+
+
 # --- judges ----------------------------------------------------------------------------------
 
 
@@ -273,20 +492,30 @@ def _best(outcomes: set[CitationOutcome]) -> CitationOutcome:
 
 
 async def judge_items_llm(items: list[dict], llm, pool_store) -> list[dict]:
-    """Pool items through the existing external judge; pair items as above."""
-    from app.services.benchmark.external_judge import judge_claims_against_pool
+    """Every item, one at a time: pool items through the existing external judge's
+    per-claim function, pair items as above. Sequential so each request is tagged with
+    its item (for the ledger's audit and the missing-judgment reasons)."""
+    from app.services.benchmark.external_judge import _judge_claim
 
-    pool_items = [i for i in items if i["type"] == "pool"]
-    outcome = await judge_claims_against_pool(
-        llm, pool_store, [{"claim_id": i["item_id"], "text": i["text"]} for i in pool_items]
-    )
-    judgments = [
-        {"item_id": r["claim_id"], "verdict": r["verdict"], "quote": r["quote"], "source": "llm"}
-        for r in outcome["claims"]
-    ]
+    judgments = []
     for item in items:
-        if item["type"] == "pair":
+        if isinstance(llm, LedgeredLLM):
+            llm.item_id = item["item_id"]
+        if item["type"] == "pool":
+            record = await _judge_claim(
+                llm, pool_store, {"claim_id": item["item_id"], "text": item["text"]},
+                TOP_K_PER_CLAIM,
+            )  # fmt: skip
+            judgments.append(
+                {"item_id": item["item_id"], "verdict": record["verdict"],
+                 "quote": record["quote"], "source": "llm"}
+            )  # fmt: skip
+        else:
             judgments.append(await judge_pair_llm(llm, item))
+    ledger = llm.ledger if isinstance(llm, LedgeredLLM) else None
+    for judgment in judgments:
+        if judgment.get("verdict") is None and judgment.get("outcome") is None:
+            judgment["missing_reason"] = missing_reason(judgment["item_id"], ledger)
     return judgments
 
 
@@ -547,38 +776,38 @@ def check_pool(question_id: str, pools: Path) -> Path:
     return path
 
 
-#: Output tokens assumed per judged item (the verifier's structured answer), and the
-#: margin for one validation retry per item; the margin is also the hard token cap.
+#: Output tokens assumed per judged item for the expected-cost figure.
 OUTPUT_TOKENS_PER_ITEM = 600
-RETRY_MARGIN = 1.5
 
 
 def estimate(items: list[dict], pool_path: Path, judge_model: str | None) -> dict:
-    """Pre-call estimate: input = characters / 4 (system prompt, text, and the passages
-    shown — a pool item sees TOP_K pool passages of the pool's mean length); output =
-    600 per item. Priced at list prices; `cost_usd_cap` adds the retry margin and is
-    what `--max-usd` is checked against. None when the model has no listed price."""
+    """Pre-call figures, both at the RESERVATION prices (the judge family's highest):
+    `cost_usd` expected (input characters / 4, 600 output per item) and
+    `worst_case_usd` (every item's request and one retry at its full reservation:
+    the byte-bounded input and the 800-token output limit). The runtime ledger, not
+    this estimate, is what enforces `--max-usd`."""
     chunks = json.loads(pool_path.read_text(encoding="utf-8"))["chunks"]
     mean_chunk = mean(len(c["text"]) for c in chunks) if chunks else 0
-    system = len(VERIFICATION_SYSTEM)
-    input_tokens = 0
+    sample = "x" * int(TOP_K_PER_CLAIM * mean_chunk)
+    input_tokens, worst_tokens = 0, 0
     for item in items:
-        context = (
-            sum(len(p["text"]) for p in item["passages"])
-            if item["type"] == "pair"
-            else TOP_K_PER_CLAIM * mean_chunk
-        )
-        input_tokens += int((system + len(item["text"]) + context) / 4)
+        context = "".join(p["text"] for p in item["passages"]) if item["type"] == "pair" else sample
+        prompt = item["text"] + context
+        input_tokens += int((len(VERIFICATION_SYSTEM) + len(prompt)) / 4)
+        worst_tokens += input_token_bound(prompt, VERIFICATION_SYSTEM, ClaimVerificationModel)
     output_tokens = OUTPUT_TOKENS_PER_ITEM * len(items)
-    price = _price(judge_model)
-    cost = None if price is None else input_tokens * price[0] + output_tokens * price[1]
+    price = worst_prices(judge_model) if judge_model else None
+    cost = worst = None
+    if price is not None:
+        cost = input_tokens * price[0] + output_tokens * price[1]
+        worst = 2 * (worst_tokens * price[0] + OUTPUT_TOKEN_LIMIT * len(items) * price[1])
     return {
         "items": len(items),
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "tokens": input_tokens + output_tokens,
         "cost_usd": None if cost is None else round(cost, 4),
-        "cost_usd_cap": None if cost is None else round(cost * RETRY_MARGIN, 4),
+        "worst_case_usd": None if worst is None else round(worst, 4),
     }
 
 
@@ -640,6 +869,9 @@ def evaluate(args: argparse.Namespace, *, judge=None, pool_store=None, pool_hits
     else:
         return {"mode": "dry_run", "items": len(items), "estimate": cost}
     _write(out / "judgments.jsonl", judgments, lines=True)  # stored before unblinding
+    ledger = getattr(judge, "ledger", None)
+    if ledger is not None:
+        _write(out / "budget.json", ledger.as_record())
     key = json.loads((out / "key.json").read_text(encoding="utf-8"))
     scores = score(arms, key, judgments, payload, missing_on)
     scores.update(
@@ -649,9 +881,19 @@ def evaluate(args: argparse.Namespace, *, judge=None, pool_store=None, pool_hits
         usage=usage(run),
         finalization_status=(payload.get("finalization") or {}).get("status"),
         framing="support relative to the frozen evidence pool, not absolute factual accuracy",
+        missing_judgments_by_reason=_reasons(judgments),
+        evaluation_cost=None
+        if ledger is None
+        else {k: v for k, v in ledger.as_record().items() if k != "entries"},
     )
     _write(out / "scores.json", scores)
     return {"mode": "scored", "items": len(items), "scores": scores}
+
+
+def _reasons(judgments: list[dict]) -> dict[str, int]:
+    found = [j.get("missing_reason", "no_judgment") for j in judgments
+             if j.get("verdict") is None and j.get("outcome") is None]  # fmt: skip
+    return {reason: found.count(reason) for reason in sorted(set(found))}
 
 
 def aggregate(directories: list[Path]) -> dict:
@@ -781,28 +1023,25 @@ def _pool_hits(store):
     return hits
 
 
-def _live_judge(args, settings: Settings, pool_path: Path, cap: dict):
-    """The paid path: a budgeted client on the judge model, over the frozen pool."""
+def _live_judge(args, settings: Settings, pool_path: Path):
+    """The paid path: the judge model behind the dollar ledger (`--max-usd`), SDK
+    retries off (each attempt is exactly one request), over the frozen pool."""
     from app.services.llm import LLMService
-    from app.services.quality.budget import BudgetedLLM, RunBudget, no_sdk_retries
+    from app.services.quality.budget import no_sdk_retries
 
     judge_settings = no_sdk_retries(settings).model_copy(update={"OPENAI_MODEL": args.judge_model})
     load_store = _pool_store(args, settings, pool_path)
+    ledger = DollarLedger(args.max_usd, args.judge_model)
 
     async def judge(items):
         store = await load_store()
-        budget = RunBudget(
-            max_attempts=2 * cap["items"] + 4,
-            max_tokens=int(cap["tokens"] * RETRY_MARGIN),
-            max_claims=cap["items"],
-            deadline_seconds=1800,
-        )
-        llm = BudgetedLLM(LLMService(settings=judge_settings), budget, stage="evaluation")
+        llm = LedgeredLLM(LLMService(settings=judge_settings), ledger)
         try:
             return await judge_items_llm(items, llm, store)
         finally:
             await llm.aclose()
 
+    judge.ledger = ledger  # type: ignore[attr-defined]
     return judge
 
 
@@ -824,15 +1063,15 @@ def main(argv: list[str] | None = None) -> int:
             pool_path = check_pool(args.question_id, args.pools)
             dry = evaluate(argparse.Namespace(**{**vars(args), "execute": False}))
             cost = dry["estimate"]
-            if cost["cost_usd_cap"] is None or cost["cost_usd_cap"] > args.max_usd:
+            if cost["cost_usd"] is None or cost["cost_usd"] > args.max_usd:
                 raise Refused(
-                    f"estimated cost cap {cost['cost_usd_cap']} exceeds --max-usd {args.max_usd} "
+                    f"expected cost {cost['cost_usd']} exceeds --max-usd {args.max_usd} "
                     "(or the judge model has no listed price)"
                 )
             settings = Settings()
-            if settings.llm_provider is None:
-                raise Refused("no LLM credential configured")
-            result = evaluate(args, judge=_live_judge(args, settings, pool_path, cost))
+            if settings.llm_provider != "openai":
+                raise Refused("the judge needs the OpenAI provider (listed prices); none set")
+            result = evaluate(args, judge=_live_judge(args, settings, pool_path))
         elif args.export_annotations:
             run, _ = load_artifact(args.artifact)
             check_question(run, args.question_id, args.dataset)
