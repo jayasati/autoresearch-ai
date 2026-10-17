@@ -5,6 +5,56 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 40 — P1 fix: fail-closed narrowing and no verdict inflation — 2026-10-18
+
+Pilot finding P1 (`docs/REPORT_QUALITY_ERROR_ANALYSIS.md`, Pilot): a partly supported
+claim, "High coffee consumption (≥ 3 cups/day) was inversely associated with mortality
+and disability", was rewritten without its threshold and with "with some
+qualification" appended. The stage-37 `narrowed` treated any changed number or scope
+as narrowing, so the broadened rewrite was re-checked and upgraded to supported. (Stage
+39 was the evaluator's dollar ledger, `b66175b`; the pilot write-up is `e6e6f92`.)
+
+**What was implemented:**
+
+- `validation.narrowing` replaces the old test and fails closed. A rewrite is narrower
+  only if nothing restrictive was dropped or loosened AND something was tightened.
+  Not narrower when: negation changed; an original number is gone unless replaced, in
+  the same unit, by a stricter bound of the same kind (a lower bound — "≥", "at least",
+  "more than" — raised, or an upper bound — "≤", "up to", "less than" — lowered); an
+  original scope restriction (population, period, place, setting, method, denominator,
+  entity) is gone or replaced; a content word other than an overstatement word ("all",
+  "highly", "significantly", ...) was removed. Positive signals: a scope restriction or
+  quantity added, a bound tightened, an overstatement word removed. Hedges and wording
+  alone never narrow.
+- Gate unchanged in shape, now sound: a rewrite of a partly supported claim that is not
+  demonstrably narrower is never sent to re-verification and goes to "Unresolved
+  findings" (`superficial_hedge` when nothing restrictive changed, otherwise the new
+  `not_narrowed` action with the reason). A narrower rewrite reaches the body only if
+  the citation-specific re-check fully supports the exact rewrite; a partial, failed,
+  missing, contested or uncited-only re-check keeps its own placement.
+- Revision prompt `final-report-structured-v3`: keep every existing restriction
+  (numbers, thresholds, doses, populations, periods, places); narrowing means adding a
+  stated restriction, tightening a threshold or removing an overstated word; hedging
+  alone never narrows; the misleading example phrase is gone.
+
+**Tests:** 17 new (the exact P1 claim and rewrite held back even with a fully
+supporting re-check on offer, its rendered report checked; a dropped population; a
+loosened threshold; a hedge; a paraphrase; ambiguous scope and number changes failing
+closed; narrower rewrites — added restriction, raised lower bound, lowered upper bound
+— upgraded only with a full re-check; missing, technical, insufficient, contested and
+uncited-only re-checks keeping their placements; end to end through finalization; the
+v3 prompt). One stage-37 fixture changed: its "narrowed" example was a reformulation
+("highly beneficial" -> "associated with better") that the fail-closed test rightly no
+longer accepts; it now adds an age restriction, and the reformulation is asserted not
+narrowed. Mutation probes (stage-37 rule restored, always narrowed, never narrowed)
+made 9, 11 and 17 tests fail.
+
+**Limits:** comparators are read from the 16 characters before a number; a bound
+phrased elsewhere ("3 cups or more") is not recognised, so its change fails closed. The
+test is lexical: a genuinely narrower reformulation is held back (fail closed) and
+needs a more literal rewrite to pass. Pilot records and metrics are unchanged; P2–P5
+are not addressed.
+
 ## Stage 38 — Paired evaluator for the verification comparison (Phase A) — 2026-10-17
 
 The comparison protocol was approved with five decisions (recorded in

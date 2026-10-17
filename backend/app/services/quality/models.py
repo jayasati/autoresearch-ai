@@ -276,6 +276,7 @@ ActionName = Literal[
     "omission_recorded",
     "partial_not_narrowed",
     "superficial_hedge",
+    "not_narrowed",
     "section_restored",
 ]
 

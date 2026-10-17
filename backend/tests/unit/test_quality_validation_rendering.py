@@ -478,7 +478,14 @@ class TestRun1IntegrityRegressions:
         "cardiovascular health in all adults, albeit with some qualification regarding its "
         "benefits."
     )
+    # Demonstrably narrower (stage 40): every restriction kept, an age range added.
     NARROWED = (
+        "Moderate coffee consumption (3 to 5 cups daily) is highly beneficial for "
+        "cardiovascular health in all adults aged 45 to 65."
+    )
+    # The stage-37 example: a reformulation ("highly beneficial" -> "associated with
+    # better") that the fail-closed test no longer accepts as proof of narrowing.
+    REFORMULATED = (
         "Moderate coffee consumption (3 to 5 cups daily) was associated with better "
         "cardiovascular health in adults aged 45 to 65."
     )
@@ -575,7 +582,8 @@ class TestRun1IntegrityRegressions:
         from app.services.quality.validation import narrowed
 
         assert not narrowed(self.HEDGED, [self.OVERSTATED])  # run 1's exact rewrite
-        assert narrowed(self.NARROWED, [self.OVERSTATED])  # strength and scope replaced
+        assert narrowed(self.NARROWED, [self.OVERSTATED])  # an age restriction added
+        assert not narrowed(self.REFORMULATED, [self.OVERSTATED])  # reworded: fail closed
         assert narrowed("Coffee lowers risk in women.", ["Coffee lowers risk."])  # scope added
 
     def test_an_omitted_important_partial_claim_is_listed_not_restored_to_the_body(self):
@@ -638,3 +646,171 @@ class TestRun1IntegrityRegressions:
         )
         gaps = markdown.split("## Evidence gaps", 1)[1]
         assert "What are the mental-health risks?" in gaps
+
+
+class TestP1NarrowingRegressions:
+    """Stage 40: pilot finding P1 (docs/REPORT_QUALITY_ERROR_ANALYSIS.md, Pilot). A partly
+    supported claim reaches the body only if its rewrite is DEMONSTRABLY narrower and
+    the citation-specific re-check fully supports that exact rewrite."""
+
+    P1_CLAIM = (
+        "High coffee consumption (≥ 3 cups/day) was inversely associated with mortality "
+        "and disability."
+    )
+    P1_REWRITE = (
+        "High coffee consumption was inversely associated with mortality and disability "
+        "with some qualification."
+    )
+    #: Four supported findings beside the partial one, so holding one back leaves a
+    #: renderable (degraded) report rather than a finalization failure.
+    OTHERS = (
+        ("C2", "Tea intake was not linked to stroke.", "E3", 3),
+        ("C3", "Green tea drinkers reported better sleep.", "E3", 3),
+        ("C4", "Decaffeinated coffee showed similar associations.", "E4", 4),
+        ("C5", "Milk added to coffee did not change the association.", "E4", 4),
+    )
+    FULL = Reverification(S.SUPPORTED_BY_CITED_SOURCE, P.SUPPORTED, frozenset({CHUNK[1]}))
+
+    def validate(self, claim_text, rewrite, reverified=None):
+        partial = claim(
+            "C1", claim_text, S.SUPPORTED_BY_CITED_SOURCE, pool=P.PARTIALLY_SUPPORTED,
+            importance="high", chunks=[1],
+        )  # fmt: skip
+        others = [
+            claim(alias, text, S.SUPPORTED_BY_CITED_SOURCE, chunks=[chunk])
+            for alias, text, _, chunk in self.OTHERS
+        ]
+        rep = report(
+            ("Q1", "Mortality", [
+                said(rewrite, kind="qualification", claims=["C1"], evidence=["E1"]),
+                *(said(text, claims=[alias], evidence=[passage])
+                  for alias, text, passage, _ in self.OTHERS),
+            ])
+        )  # fmt: skip
+        reverified = {(0, 0): reverified} if reverified is not None else None
+        return run(rep, [partial, *others], reverified=reverified)
+
+    @staticmethod
+    def body_texts(validated):
+        return [p.text for s in validated.sections for p in s.sentences]
+
+    def assert_held_back(self, claim_text, rewrite, action="not_narrowed"):
+        """Not narrower: never re-verified, never in the body, listed as unresolved —
+        even when a fully supporting re-check result is on offer."""
+        for offered in (None, self.FULL):
+            validated = self.validate(claim_text, rewrite, offered)
+            assert validated.needs_reverification == []
+            assert rewrite not in " ".join(self.body_texts(validated))
+            [listed] = validated.labelled[Placement.UNRESOLVED]
+            assert listed.text == PARTIAL_PREFIX + rewrite and listed.markers == ()
+            assert [a.action for a in validated.actions if a.action == action] == [action]
+            markdown = render_final(validated)
+            body, _, rest = markdown.partition("\n---\n")
+            assert rewrite not in body and "[S1]" not in body
+            assert PARTIAL_PREFIX + rewrite in rest.split("## Unresolved findings", 1)[1]
+        return validated
+
+    # 1 — the exact pilot case
+    def test_the_p1_rewrite_dropping_the_threshold_is_not_narrowed_or_upgraded(self):
+        from app.services.quality.validation import narrowing
+
+        verdict = narrowing(self.P1_REWRITE, [self.P1_CLAIM])
+        assert not verdict.narrowed and "3 cups" in verdict.reason
+        validated = self.assert_held_back(self.P1_CLAIM, self.P1_REWRITE)
+        detail = next(a.detail for a in validated.actions if a.action == "not_narrowed")
+        assert "3 cups" in detail
+
+    # 2 — another dropped restriction
+    def test_dropping_a_population_restriction_is_not_narrowing(self):
+        self.assert_held_back("Coffee lowers stroke risk in women.", "Coffee lowers stroke risk.")
+
+    # 4 — a threshold loosened
+    def test_a_loosened_threshold_is_not_narrowing(self):
+        self.assert_held_back(
+            self.P1_CLAIM,
+            "High coffee consumption (≥ 1 cup/day) was inversely associated with mortality "
+            "and disability.",
+        )
+
+    # 6 — a hedge alone
+    def test_a_hedge_alone_is_not_narrowing(self):
+        self.assert_held_back(
+            "Coffee lowers stroke risk in women.",
+            "Coffee may lower stroke risk in women.",
+            action="superficial_hedge",
+        )
+
+    # 8 — ambiguous scope or number changes fail closed
+    @pytest.mark.parametrize(
+        ("claim_text", "rewrite"),
+        [
+            ("Coffee lowers stroke risk in women.", "Coffee lowers stroke risk in men."),
+            ("Coffee cut stroke risk by 15%.", "Coffee cut stroke risk by 10%."),
+        ],
+    )
+    def test_an_ambiguous_change_fails_closed(self, claim_text, rewrite):
+        self.assert_held_back(claim_text, rewrite)
+
+    # 7 — a wording-only paraphrase
+    def test_a_paraphrase_is_not_narrowing(self):
+        from app.services.quality.validation import narrowing
+
+        claim_text = "Coffee lowers stroke risk in women."
+        rewrite = "In women, drinking coffee reduces the risk of stroke."
+        assert not narrowing(rewrite, [claim_text]).narrowed
+        validated = self.validate(claim_text, rewrite, self.FULL)
+        assert rewrite not in " ".join(self.body_texts(validated))
+        assert validated.labelled[Placement.UNRESOLVED][0].text == PARTIAL_PREFIX + rewrite
+
+    # 3 and 5 — a demonstrably narrower rewrite can still be upgraded
+    @pytest.mark.parametrize(
+        ("claim_text", "rewrite"),
+        [
+            ("Coffee lowers stroke risk.", "Coffee lowers stroke risk in women."),  # restriction
+            (
+                P1_CLAIM,
+                "High coffee consumption (≥ 5 cups/day) was inversely associated with "
+                "mortality and disability.",
+            ),  # lower bound raised
+            (
+                "Up to 4 cups per day is safe in pregnancy.",
+                "Up to 2 cups per day is safe in pregnancy.",
+            ),  # upper bound lowered
+        ],
+    )  # fmt: skip
+    def test_a_narrower_rewrite_is_upgraded_only_with_a_full_recheck(self, claim_text, rewrite):
+        first = self.validate(claim_text, rewrite)
+        assert first.needs_reverification == [(0, 0)]  # sent to the citation-specific check
+        assert rewrite not in " ".join(self.body_texts(first))
+
+        still_partial = self.validate(claim_text, rewrite, Reverification(
+            S.SUPPORTED_BY_CITED_SOURCE, P.PARTIALLY_SUPPORTED, frozenset({CHUNK[1]})))  # fmt: skip
+        assert rewrite not in " ".join(self.body_texts(still_partial))
+        assert still_partial.labelled[Placement.UNRESOLVED][0].text == PARTIAL_PREFIX + rewrite
+
+        upheld = self.validate(claim_text, rewrite, self.FULL)
+        body = {p.text: p for s in upheld.sections for p in s.sentences}
+        assert body[rewrite].markers == ("S1",) and body[rewrite].placement is Placement.BODY
+        assert with_markers(rewrite, ["S1"]) in render_final(upheld).partition("\n---\n")[0]
+
+    # 9 and 10 — failed, missing and negative re-checks keep their distinctions
+    @pytest.mark.parametrize(
+        ("result", "placement"),
+        [
+            (None, Placement.NOT_EVALUATED),  # no re-check result at all
+            (Reverification(S.NOT_EVALUATED, P.NOT_EVALUATED, frozenset()),
+             Placement.NOT_EVALUATED),  # technical failure / budget
+            (Reverification(S.INSUFFICIENT_EVIDENCE, P.NOT_ENOUGH_EVIDENCE, frozenset()),
+             Placement.UNRESOLVED),
+            (Reverification(S.CONTESTED, P.CONTRADICTED, frozenset()), Placement.CONTESTED),
+            (Reverification(S.SUPPORTED_BY_CITED_SOURCE, P.SUPPORTED, frozenset({CHUNK[2]})),
+             Placement.CITATION_NOT_CONFIRMED),  # supported only through an uncited chunk
+        ],
+    )  # fmt: skip
+    def test_a_narrower_rewrite_without_a_full_recheck_is_never_upgraded(self, result, placement):
+        rewrite = "Coffee lowers stroke risk in women."
+        validated = self.validate("Coffee lowers stroke risk.", rewrite, result)
+        assert rewrite not in " ".join(self.body_texts(validated))
+        [placed] = [p for p in validated.labelled[placement] if "C1" in p.claim_aliases]
+        assert placed.text == rewrite and placed.markers == ()
+        assert placed.status is not S.SUPPORTED_BY_CITED_SOURCE or placement is not Placement.BODY

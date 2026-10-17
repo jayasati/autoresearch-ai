@@ -543,3 +543,55 @@ class TestRun1IntegrityEndToEnd:
         assert final.status == "complete"
         body = (final.final_markdown or "").split("---")[0]
         assert "at 2 mmHg" in body
+
+
+class TestP1EndToEnd:
+    """Stage 40, pilot finding P1, through the real finalization path: a partly
+    supported claim whose rewrite drops a restriction is never re-checked and never
+    upgraded, even though the re-check would have supported it."""
+
+    @staticmethod
+    def pool(prompt):  # diabetes fully supported; blood pressure only partly
+        claim = prompt.split("Claim to verify:\n", 1)[1].split("\n", 1)[0]
+        if "diabetes" in claim:
+            return judge(pick="Alpha")(prompt)
+        return judge(verdict="partially_supported", pick="Bravo")(prompt)
+
+    async def test_a_rewrite_dropping_a_restriction_is_held_back(self, service_session):
+        def broaden(text):  # drop "in adults", add a hedge — the P1 shape
+            if "blood pressure" not in text:
+                return text
+            return text.replace(" in adults", "").rstrip(".") + ", with some qualification."
+
+        llm = FinalLLM(pool=self.pool, check=judge(pick="Bravo"), revise=reviser(change=broaden))
+        _, _, verified, final = await full_run(service_session, llm, order=alpha_first)
+        bp = next(r for r in verified.claims if "blood pressure" in r.text)
+        assert bp.pool_status is PoolStatus.PARTIALLY_SUPPORTED
+        rewrite = broaden(bp.text)
+
+        assert final.reverified == {}  # never sent to the re-check that would support it
+        _, _, audit = stored(service_session)
+        finalization = audit.payload["finalization"]
+        assert "reverification" not in audit.payload["budget"]["stages"]
+        [action] = [a for a in finalization["actions"] if a["action"] == "not_narrowed"]
+        assert "population:adults" in action["detail"]
+        assert finalization["placements"][bp.alias] == "unresolved"
+        assert finalization["revision_prompt_version"] == "final-report-structured-v3"
+
+        # The validated body never states the broadened rewrite; it is listed as
+        # unresolved. With only two claims, holding it back loses half the findings, so
+        # the run honestly fails finalization (no report rendered) rather than upgrade
+        # it — the rendered unresolved section is covered by the validator-level tests.
+        assert all(rewrite.rstrip(".") not in e["text"] for e in finalization["body"])
+        listed = [e["text"] for e in finalization["labelled"]["unresolved"]]
+        assert any(rewrite in text for text in listed)
+        assert final.status == "finalization_failed" and final.final_markdown is None
+        assert any("body_loss_ratio" in r for r in final.reasons)
+
+    def test_the_v3_revision_prompt_keeps_restrictions_and_drops_the_example_phrase(self):
+        from app.services.quality.prompts import FINAL_REPORT_PROMPT_VERSION, FINAL_REPORT_SYSTEM
+
+        assert FINAL_REPORT_PROMPT_VERSION == "final-report-structured-v3"
+        assert "with some qualification" not in FINAL_REPORT_SYSTEM
+        assert "Keep every restriction" in FINAL_REPORT_SYSTEM
+        assert "Hedging words alone never narrow" in FINAL_REPORT_SYSTEM

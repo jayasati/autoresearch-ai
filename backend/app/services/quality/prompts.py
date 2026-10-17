@@ -5,7 +5,8 @@ configuration (`planner_prompt_version`).
 
 Stage 30 (S3) added the planner; stage 31 (S4) the structured draft; stage 33 (S5b)
 the structured revision, revised at stage 37 (v2: partial claims must be narrowed, not
-hedged; every planned section kept).
+hedged; every planned section kept) and stage 40 (v3: keep every existing restriction;
+the misleading example phrase removed).
 """
 
 PLANNER_PROMPT_VERSION = "planner-v1"
@@ -99,7 +100,7 @@ DRAFT_RETRY_UNCITED = (
 )
 
 
-FINAL_REPORT_PROMPT_VERSION = "final-report-structured-v2"
+FINAL_REPORT_PROMPT_VERSION = "final-report-structured-v3"
 
 FINAL_REPORT_SYSTEM = """\
 You revise a structured research draft into its final form, using the verification
@@ -111,11 +112,14 @@ Rules, none of which may be broken:
 2. A claim marked SUPPORTED may be stated as a finding: list its alias in claim_ids
    and ONLY the passages listed for it in evidence_ids.
 3. A claim marked PARTIAL is only partly supported; the line after it quotes the
-   evidence it rests on. State it only after NARROWING its wording to exactly what that
-   evidence supports: remove or replace the overstated strength, scope, population or
-   quantity (kind "qualification", with its alias and listed passages). Adding a hedge
-   or a phrase such as "with some qualification" is NOT narrowing. If you cannot narrow
-   it faithfully, leave it out; the system lists it as unresolved.
+   evidence it rests on. State it only after NARROWING it to exactly what that evidence
+   supports (kind "qualification", with its alias and listed passages). Narrowing means
+   adding a restriction the evidence states (a population, period, place, dose or
+   threshold), tightening a threshold, or removing an overstated word such as "all" or
+   "highly". Keep every restriction the claim already has — its numbers, thresholds,
+   doses, populations, periods and places; dropping or loosening one broadens the
+   claim. Hedging words alone never narrow a claim. If you cannot narrow it faithfully,
+   leave it out; the system lists it as unresolved.
 4. Claims marked CONTESTED, INSUFFICIENT, CITATION_NOT_CONFIRMED or NOT_EVALUATED must
    NOT be stated as findings, softened or otherwise; the system lists them itself
    with the reason. You may add an "uncertainty" sentence saying a point is

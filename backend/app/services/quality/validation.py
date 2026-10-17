@@ -24,12 +24,13 @@ repair, move and flag with the original text:
     V9 core coverage                  → every core subquestion without a supported
                                         body sentence is reported unanswered
 
-Partial support (stage 37 policy): a partially supported claim may stand in the body
-only when the revision NARROWED its wording and re-verification against its cited
-passages then found it fully supported. Unchanged wording, or wording that only adds
-a hedge (every content word of the claim still present, no scope or number change),
-is not narrowing: the sentence goes to the unresolved section and is never sent to
-re-verification, so a hedge cannot upgrade a verdict.
+Partial support (stage 37 policy, narrowing test made fail-closed at stage 40): a
+partially supported claim may stand in the body only when the revision DEMONSTRABLY
+narrowed it (`narrowing`: nothing restrictive dropped or loosened, something
+tightened) and re-verification against its cited passages then found the exact
+rewrite fully supported. Unchanged wording, a hedge, a reformulation, or a dropped or
+loosened restriction is not narrowing: the sentence goes to the unresolved section and
+is never sent to re-verification, so it cannot upgrade a verdict.
 
 Approved rules applied here: an unconfirmed citation is never replaced with a
 different source — the sentence moves to a labelled section instead; contested
@@ -280,22 +281,123 @@ _FUNCTION_WORDS = {
     "its", "their", "it", "from", "than", "per",
 }  # fmt: skip
 
+#: Words of strength or universality. Removing one weakens what a claim asserts — the
+#: only word REMOVAL that counts as narrowing; removing any other content word is a
+#: reformulation that is not demonstrably narrower.
+_OVERSTATEMENT = {
+    "all", "every", "always", "any", "entire", "whole", "universally", "completely",
+    "highly", "strongly", "greatly", "substantially", "significantly", "dramatically",
+    "markedly", "definitely", "clearly", "consistently", "invariably",
+}  # fmt: skip
+
+#: A stated bound right before a number: a lower bound ("≥ 3 cups") or an upper bound
+#: ("up to 2 cups"). Only bounds give a threshold change a direction.
+_LOWER_BOUND = re.compile(
+    r"(≥|>=|>|\bat least|\bmore than|\bgreater than|\bover|\bexceeding|\babove)\s*$", re.I
+)
+_UPPER_BOUND = re.compile(
+    r"(≤|<=|<|\bat most|\bup to|\bless than|\bfewer than|\bunder|\bbelow|\bno more than)\s*$",
+    re.I,
+)
+
+
+@dataclass(frozen=True)
+class Narrowing:
+    """Whether a rewrite is DEMONSTRABLY narrower than the claims it states, and why."""
+
+    narrowed: bool
+    reason: str
+    hedge_only: bool = False  # nothing restrictive changed: wording or hedges only
+
+
+def _stem(word: str) -> str:
+    return word[:-1] if len(word) > 3 and word.endswith("s") else word
+
+
+def _content(text: str) -> set[str]:
+    return {_stem(w) for w in _words(text) - _FUNCTION_WORDS}
+
+
+def _bound(text: str, mention) -> str | None:
+    before = text[max(0, mention.start - 16) : mention.start]
+    if _LOWER_BOUND.search(before):
+        return "lower"
+    if _UPPER_BOUND.search(before):
+        return "upper"
+    return None
+
+
+def narrowing(sentence: str, claim_texts: Sequence[str], entities: Sequence[str] = ()) -> Narrowing:
+    """Conservative, fail-closed narrowing test (stage 40, after pilot finding P1).
+
+    Narrower only if NOTHING restrictive was dropped or loosened, and something was
+    tightened. Fails (not demonstrated) when:
+    - negation changed;
+    - an original number is gone, unless replaced, in the same unit, by a stricter bound
+      of the same kind (a lower bound raised, an upper bound lowered); a changed number
+      without a stated bound has no reliable direction;
+    - an original scope restriction (population, period, place, setting, method,
+      denominator, entity) is gone or replaced;
+    - a content word other than an overstatement word ("all", "highly", ...) was removed
+      (a reformulation is not proof of narrowing).
+    Then narrower only with a positive signal: a scope restriction or quantity added, a
+    bound tightened, or an overstatement word removed. Hedges and wording alone never
+    narrow. A narrowed rewrite still needs a full citation-specific re-check."""
+    joined = " ".join(claim_texts)
+    if (_words(sentence) & _NEGATIONS) != (_words(joined) & _NEGATIONS):
+        return Narrowing(False, "negation changed")
+
+    old = extract_quantities(joined, entities)
+    new = extract_quantities(sentence, entities)
+    used: set[int] = set()
+    tightened = False
+    for mention in old:
+        same = [
+            i for i, m in enumerate(new)
+            if i not in used and (m.stated_number, m.unit) == (mention.stated_number, mention.unit)
+        ]  # fmt: skip
+        if same:
+            used.add(same[0])
+            continue
+        candidates = [i for i, m in enumerate(new) if i not in used and m.unit == mention.unit]
+        kind = _bound(joined, mention)
+        if len(candidates) != 1 or kind is None or _bound(sentence, new[candidates[0]]) != kind:
+            return Narrowing(False, f"restriction '{mention.raw}' dropped or changed "
+                                    "without a demonstrably stricter bound")  # fmt: skip
+        replacement = new[candidates[0]]
+        stricter = (
+            replacement.stated_number > mention.stated_number
+            if kind == "lower"
+            else replacement.stated_number < mention.stated_number
+        )
+        if not stricter:
+            return Narrowing(False, f"threshold '{mention.raw}' loosened to '{replacement.raw}'")
+        used.add(candidates[0])
+        tightened = True
+
+    old_scope = context_tokens(joined, entities)
+    new_scope = context_tokens(sentence, entities)
+    if not old_scope <= new_scope:
+        dropped = sorted(old_scope - new_scope)
+        return Narrowing(False, f"scope restriction dropped or replaced: {dropped}")
+
+    removed = _content(joined) - _content(sentence)
+    if removed - _OVERSTATEMENT:
+        return Narrowing(
+            False,
+            f"reworded (removed {sorted(removed - _OVERSTATEMENT)}); not demonstrably narrower",
+            hedge_only=not (new_scope - old_scope) and len(used) == len(new),
+        )
+
+    added_scope = bool(new_scope - old_scope)
+    added_quantity = len(used) < len(new)
+    if tightened or added_scope or added_quantity or removed & _OVERSTATEMENT:
+        return Narrowing(True, "narrowed: nothing restrictive dropped and something tightened")
+    return Narrowing(False, "hedged or reworded only; nothing restrictive changed", hedge_only=True)
+
 
 def narrowed(sentence: str, claim_texts: Sequence[str], entities: Sequence[str] = ()) -> bool:
-    """Whether a rewrite narrowed what the claims assert, rather than only hedging them.
-
-    Narrowing removes or replaces at least one content word of the claims, or changes a
-    stated scope (population, period, place, setting) or number. A rewrite that keeps
-    every content word and adds only qualifying words ("albeit with some
-    qualification") is NOT narrowing. Heuristic, like `detect_meaning_change`: a
-    narrowed rewrite still has to pass re-verification on its cited passages."""
-    joined = " ".join(claim_texts)
-    claim_content = _words(joined) - _FUNCTION_WORDS
-    if not claim_content <= _words(sentence):
-        return True
-    if context_tokens(sentence, entities) != context_tokens(joined, entities):
-        return True
-    return _numbers(sentence, entities) != _numbers(joined, entities)
+    return narrowing(sentence, claim_texts, entities).narrowed
 
 
 # --- the whole pass ------------------------------------------------------------------
@@ -452,12 +554,24 @@ def validate_final(
             continue
         important = info.importance == "high" or info.is_core
         where = place(info.status, partial=False, important=important)
-        labelled.setdefault(where, []).append(PlacedSentence(
-            text=info.text, kind="finding", placement=where, markers=(),
-            claim_aliases=(alias,), status=info.status, origin="restored",
-        ))
-        record("omission_listed", where.value, None, info.text,
-               f"claim {alias} ({info.status.value}) was left out by the revision; listed")
+        labelled.setdefault(where, []).append(
+            PlacedSentence(
+                text=info.text,
+                kind="finding",
+                placement=where,
+                markers=(),
+                claim_aliases=(alias,),
+                status=info.status,
+                origin="restored",
+            )
+        )
+        record(
+            "omission_listed",
+            where.value,
+            None,
+            info.text,
+            f"claim {alias} ({info.status.value}) was left out by the revision; listed",
+        )
 
     # V8 — accounting. Every claim is in the body, in a labelled section, or recorded
     # here as omitted, with why. Nothing is restored to make up the numbers.
@@ -564,15 +678,17 @@ def _place_sentence(
     )
     if changes:
         record("meaning_changed", heading, t_index, sentence.text, ",".join(sorted(changes)))
-        if was_partial and not narrowed(sentence.text, [i.text for i in infos], entities):
-            # A hedge on a partly supported claim is not narrowing, and is never sent to
-            # re-verification: a hedge must not be able to upgrade the verdict.
+        verdict = narrowing(sentence.text, [i.text for i in infos], entities)
+        if was_partial and not verdict.narrowed:
+            # A rewrite of a partly supported claim that is not DEMONSTRABLY narrower
+            # (a hedge, a reformulation, a dropped or loosened restriction) is never sent
+            # to re-verification: it must not be able to upgrade the verdict.
             record(
-                "superficial_hedge",
+                "superficial_hedge" if verdict.hedge_only else "not_narrowed",
                 heading,
                 t_index,
                 sentence.text,
-                "partly supported claim hedged but not narrowed; listed as unresolved",
+                f"partly supported claim not narrowed ({verdict.reason}); listed as unresolved",
             )
             return _partial_unresolved(sentence, kind, claim_aliases, infos, key)
         result = reverified.get(key)
