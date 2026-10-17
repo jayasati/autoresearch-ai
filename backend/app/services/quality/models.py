@@ -272,6 +272,7 @@ ActionName = Literal[
     "untraceable_statement",
     "duplicate_flagged",
     "omission_restored",
+    "omission_listed",
 ]
 
 

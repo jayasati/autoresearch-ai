@@ -128,7 +128,12 @@ def _plain(text: str, *, sentence: bool = False) -> str:
     return cleaned
 
 
-def _validated(report: StructuredReport, plan: PlanResult, warnings: list[str]) -> StructuredReport:
+def _validated(
+    report: StructuredReport, plan: PlanResult, warnings: list[str], *, allow_claims: bool = False
+) -> StructuredReport:
+    """Normalise model output. A draft carries no claim or finding aliases (stripped);
+    a revision (stage 33, S5b) keeps its claim aliases for validation to
+    check. Marker and heading sanitisation applies to both."""
     known = {sq.alias for sq in plan.subquestions}
     sanitized = 0
     sections = []
@@ -141,7 +146,7 @@ def _validated(report: StructuredReport, plan: PlanResult, warnings: list[str]) 
             subquestion = SYNTHESIS
         sentences = []
         for sentence in section.sentences:
-            if sentence.claim_ids or sentence.finding_refs:
+            if not allow_claims and (sentence.claim_ids or sentence.finding_refs):
                 warnings.append("A draft sentence carried claim or finding aliases; stripped.")
                 sentence = sentence.model_copy(update={"claim_ids": [], "finding_refs": []})
             text = _plain(sentence.text, sentence=True)

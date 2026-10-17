@@ -53,6 +53,7 @@ from app.models import (
     CitationCheck,
     Claim,
     ClaimAudit,
+    Conflict,
     DocumentChunk,
     Evidence,
     FinalClaimCheck,
@@ -505,6 +506,67 @@ class QualityStore:
             checks.add(check)
             checks.flush()
             return check.id
+
+    # --- verification state (stage 32, S5a) -------------------------------------------
+
+    def verification_state(self, claim_ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, dict]:
+        """What verification-v2 stored for each claim: its verdict (None if never
+        verified), its enforced, quoted relations by chunk, and its citation ids by
+        marker. Read-only."""
+        with unit_of_work(self._session) as session:
+            state: dict[uuid.UUID, dict] = {
+                claim_id: {"verdict": None, "relations": {}, "citations": {}}
+                for claim_id in claim_ids
+            }
+            if not claim_ids:
+                return state
+            for claim_id, verdict in session.execute(
+                select(VerificationResult.claim_id, VerificationResult.verdict).where(
+                    VerificationResult.claim_id.in_(claim_ids)
+                )
+            ):
+                state[claim_id]["verdict"] = verdict
+            for claim_id, chunk_id, relation, quote in session.execute(
+                select(
+                    Evidence.claim_id,
+                    Evidence.document_chunk_id,
+                    Evidence.relation,
+                    Evidence.quoted_text,
+                ).where(
+                    Evidence.claim_id.in_(claim_ids),
+                    Evidence.relation != EvidenceRelation.NEUTRAL,
+                    Evidence.quoted_text.is_not(None),
+                )
+            ):
+                state[claim_id]["relations"][chunk_id] = (relation, quote)
+            for claim_id, marker, citation_id in session.execute(
+                select(Citation.claim_id, Citation.marker, Citation.id).where(
+                    Citation.claim_id.in_(claim_ids)
+                )
+            ):
+                state[claim_id]["citations"][marker] = citation_id
+            return state
+
+    def conflicts_for_run(self, run_id: uuid.UUID) -> list[dict]:
+        """The run's stored conflicts with the source of each side. Read-only."""
+        with unit_of_work(self._session) as session:
+            rows = session.execute(select(Conflict).where(Conflict.research_run_id == run_id))
+            result = []
+            for conflict in rows.scalars():
+
+                def source_of(evidence: Evidence) -> uuid.UUID | None:
+                    chunk = session.get(DocumentChunk, evidence.document_chunk_id)
+                    return chunk.document.source_id if chunk is not None else None
+
+                result.append(
+                    {
+                        "conflict_type": conflict.conflict_type.value,
+                        "description": conflict.description,
+                        "supporting_source_id": source_of(conflict.evidence_a),
+                        "contradicting_source_id": source_of(conflict.evidence_b),
+                    }
+                )
+            return result
 
     # --- read ----------------------------------------------------------------------
 

@@ -5,6 +5,133 @@ This file is the honest record: it says what is *not* done as plainly as what is
 
 ---
 
+## Stage 33 — Report-quality pipeline v1, S5b: revision, re-verification and finalization — 2026-10-17
+
+The last planned implementation stage before a real experiment. **Still unreachable
+from the app:** `finalize` is behind the same gate (off); no route, script or benchmark
+arm calls the pipeline.
+
+**What was implemented** (details and the three resolved design discrepancies in design
+doc §8 "Implemented at S5b"):
+
+- `finalization.py` — revision only when some claim cannot stand as drafted
+  (`final-report-structured-v1`, budgeted, one retry); V1–V7 validation; re-verification
+  of meaning-changed sentences against exactly their cited passages; a second validation
+  pass; final render with code-owned markers and the legacy References formatter;
+  `final_claim_check`, `claim_audit` placements, terminal audit status; run COMPLETED.
+- `validation.py` — V7 restores only claims no revised sentence states (never an
+  outdated version of a rewritten claim); new V7b lists every non-presentable claim the
+  revision omitted.
+- `prompts.py` (revision prompt), `drafting.py` (sanitiser reused for revisions with
+  claim aliases kept), `verification.py` (conflict contexts as objects), `pipeline.py`
+  (`finalize`).
+
+**Incident, corrected:** a `ruff format` over the whole `quality/` directory reformatted
+the frozen auditor `quantities.py` (hash moved off `128d6a19…`). It was restored byte for
+byte from `HEAD` in its working-copy CRLF form and the hash re-verified (`128d6a19…`);
+only named files are formatted from now on. Its committed blob was never changed.
+
+**Test fixture fixed:** the S4 fake extractor's pattern ran across headings, producing
+claim texts that began with heading text; it now reads body lines only, as a real
+extractor would. All S4/S5a tests pass with it.
+
+**Files changed:** new — `backend/app/services/quality/finalization.py`,
+`backend/tests/unit/test_quality_finalization.py`; modified —
+`backend/app/services/quality/{validation,prompts,drafting,verification,pipeline,models}.py`,
+`backend/tests/unit/test_quality_validation_rendering.py` (V7 expectation updated to the
+new policy, plus a pure-omission test), `backend/tests/unit/test_quality_drafting.py`
+(fixture), `docs/REPORT_QUALITY_PIPELINE.md`, this log. (S5a, uncommitted, is in the same
+working tree.)
+
+**Tests:** 17 new — the full path on fakes from question to persisted final report
+(complete, no revision); unconfirmed citations revised out and listed; number, negation,
+hedge and scope changes each triggering re-verification on the exact cited passage only;
+a rewritten claim supported by its cited passage reaching the body; one supported only
+by an unrelated passage rejected; contested evidence kept visibly contested; unverified
+claims listed and an honest `finalization_failed`; bounded revision calls; invalid
+revision twice; budget exhaustion during revision and during re-verification; invented
+citations rejected; an unexpected error failing the run; a pure omission still restored.
+Scratch-only mutation probes (meaning-change detection disabled; re-verification shown
+all passages) made 7 and 5 tests fail. `pytest` 1117 passed in two consecutive full runs
+(exit 0); `ruff check .` clean; `mypy app` clean (113 files).
+
+**Not done (deliberately):** no route, UI, benchmark arm or run script; no provider calls,
+paid runs or shared-database writes. **The Neon-branch migration round trip remains an
+outstanding gate.** The stage-26 end-to-end run remains missing.
+
+---
+
+## Stage 32 — Report-quality pipeline v1, S5a: verification, citation checks and budgets — 2026-10-17
+
+S5a of `report-quality-v1`. Decisions at the start of the stage: the design's S5 is
+split into **S5a** (verification, citation checking, budgets, records, audit-only
+assessments — this stage) and **S5b** (revision, V1–V7 validation with
+re-verification, finalization); the legacy verifier is **composed, not refactored**;
+citation-check-v1 **reuses the verification-v2 prompt** over the cited passages only
+(D3). **Still unreachable:** `verify_claims` is behind the same gate (off) and nothing
+calls it.
+
+**What was implemented** (details in design doc §8 "Implemented at S5a"):
+
+- `verification.py` — pool verification by calling the legacy
+  `ClaimVerifier._verify_claim` per claim inside a priority-ordered loop (cap,
+  deadline and budget checked between claims; stored verdicts never re-judged);
+  citation-check-v1 against exactly the passages each claim's rendered citation points
+  to; pool reuse only for a verbatim-quoted relation on the exact cited chunk;
+  conservative per-passage outcomes; `not_evaluated` with a reason for anything that
+  could not run; claim audits; quantitative findings, subquestion assessments and
+  conflict contexts (audit-only).
+- `budget.py` — `RunBudget` (attempts, tokens, claims, deadline, reservations,
+  per-stage accounts) and `BudgetedLLM`: every attempt checked before sending and
+  counted, SDK retries off via a settings copy, tokens measured or estimated and
+  labelled; `BudgetInsufficient` preflight.
+- `pipeline.py` — every model call (planner, draft, extractor, verifier, citation
+  check) now goes through the run's budget; `verify_claims` (VERIFYING; revision share
+  reserved; 20% claim reserve; audit stage `verified` with per-claim records, budget
+  accounts, findings and assessments).
+- `store.py` — `verification_state` and `conflicts_for_run` (read-only).
+
+**Files changed:** new — `backend/app/services/quality/{verification,budget}.py`,
+`backend/tests/unit/test_quality_verification.py`; modified —
+`backend/app/services/quality/{pipeline,store}.py`, `docs/REPORT_QUALITY_PIPELINE.md`,
+this log.
+
+**Tests:** 22 new — exact-citation support via the pool shortcut (no extra call);
+support from an unrelated passage rejected (the check prompt holds only the cited
+passage); non-verbatim quotes never establish support; a contradicting cited passage
+makes the claim contested; insufficient pool evidence stays insufficient; malformed
+output twice and provider outages are technical `not_evaluated`; attempt exhaustion
+at the citation check and (via a counted planner retry) at pool verification; the
+deadline; the claim cap; an unexpected failure fails the run; claim-audit and audit
+rows; decided results never overwritten (status machine, verifier and store each
+checked separately); budget unit tests (counting, refusals never sent, measured vs
+estimated tokens, reservations, deadline, SDK retries off, claim reserve, preflight).
+Scratch-only mutation probes — any relation treated as support, the budget check
+disabled, pool support reused from any chunk — each made 5–8 of these tests fail.
+`pytest` 1100 passed in two consecutive full runs (exit 0); `ruff check .` clean;
+`mypy app` clean (112 files).
+
+**Legacy compatibility:** `verifier.py`, `llm/service.py`, the extractor, finalizer,
+orchestrator, research service, benchmark code, routes, migrations and frontend
+unmodified; all their tests pass unchanged; the S1 isolation test passes;
+`test_reevaluation.py` untouched. Quant-audit case file and frozen auditor unchanged.
+
+**Known limitations:** verification is sequential (deterministic budget/deadline
+behaviour, higher latency than the legacy four-way concurrency); tokens of failed
+attempts and of responses without usage are estimates, labelled as such; a claim
+whose verification was refused by the budget keeps its verification-v2 row absent, so
+a later run of the legacy `/verify` endpoint on this run could still verify it (no
+route reaches this pipeline yet); the revision reserve rule (2 × draft output limit)
+and the preflight minimum are provisional; the intermittent ChromaDB failure in
+`test_reevaluation.py` remains a separate open issue (it did not occur in these runs).
+
+**Not done (deliberately):** S5b (revision, validation, re-verification,
+`final_claim_check`, final render, outcome), S6 (routes/UI), S7 (benchmark arm, paid
+runs). **The Neon-branch migration round trip remains an outstanding gate.** The
+stage-26 end-to-end run remains missing.
+
+---
+
 ## Stage 31 — Report-quality pipeline v1, S4: structured draft, claims and alignment — 2026-10-17
 
 S4 of `report-quality-v1` (design §2 stages 10a and 6, plus the D2 alignment).

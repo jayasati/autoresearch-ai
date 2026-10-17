@@ -15,7 +15,9 @@ repair, move and flag with the original text:
                                         nothing is deleted outright
     V5 untraceable statements         → unresolved
     V6 repetition                     → flagged only
-    V7 important verified omissions   → restored as a templated sentence
+    V7 important verified omissions   → restored as a templated sentence (only claims
+                                        no revised sentence states — never an
+                                        outdated version of a rewritten claim)
 
 Approved rules applied here: an unconfirmed citation is never replaced with a
 different source — the sentence moves to a labelled section instead; contested
@@ -312,13 +314,21 @@ def validate_final(
     # V6 — repetition, flagged only.
     _flag_duplicates(sections, config, embed, record)
 
-    # V7 — important, verified claims missing from the body are restored.
-    in_body = {alias for s in sections for p in s.sentences for alias in p.claim_aliases}
+    # V7 — important, verified claims the revision OMITTED are restored. A claim that
+    # some revised sentence still states (wherever that sentence was placed — e.g.
+    # awaiting re-verification after a meaning change) is NOT restored: that would put
+    # back an outdated version of a claim the revision rewrote (S5b policy).
+    referenced = {
+        alias
+        for section in report.sections
+        for sentence in section.sentences
+        for alias in sentence.claim_ids
+    }
     for alias, info in claims.items():
         if (
             info.importance == "high"
             and info.status is ClaimStatus.SUPPORTED_BY_CITED_SOURCE
-            and alias not in in_body
+            and alias not in referenced
         ):
             markers = _markers_for(info.supported_chunks, aliases)
             if not markers:
@@ -347,6 +357,22 @@ def validate_final(
                 info.text,
                 f"high-importance claim {alias} was supported by its cited source but absent",
             )
+
+    # V7b — a claim that cannot stand as a finding (contested, insufficient, citation
+    # not confirmed, not evaluated) and that the revision left out entirely is still
+    # LISTED, with its verified text, where its status puts it: omitting it from the
+    # body is right, making it disappear is not (S5b). Nothing is deleted silently.
+    for alias, info in claims.items():
+        if alias in referenced or info.status is ClaimStatus.SUPPORTED_BY_CITED_SOURCE:
+            continue
+        important = info.importance == "high" or info.is_core
+        where = place(info.status, partial=False, important=important)
+        labelled.setdefault(where, []).append(PlacedSentence(
+            text=info.text, kind="finding", placement=where, markers=(),
+            claim_aliases=(alias,), status=info.status, origin="restored",
+        ))
+        record("omission_listed", where.value, None, info.text,
+               f"claim {alias} ({info.status.value}) was left out by the revision; listed")
 
     return _outcome(
         report.title,

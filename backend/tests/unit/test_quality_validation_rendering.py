@@ -249,11 +249,12 @@ class TestRegressionMeaningChangedDuringRevision:
         body_texts = [p.text for s in validated.sections for p in s.sentences]
         assert revised not in body_texts
         assert validated.labelled[Placement.NOT_EVALUATED][0].text == revised
-        # The verified original is restored to the body instead (V7), with its citation.
+        # The verified original is NOT restored (S5b policy): the revision rewrote this
+        # claim, and putting the outdated version back would misrepresent the report.
         restored = [p for s in validated.sections for p in s.sentences if p.origin == "restored"]
-        assert [(p.text, p.markers) for p in restored] == [(RESTORED_PREFIX + VERIFIED, ("S1",))]
-        # First-pass outcome is provisional and says why; restorations do not reduce
-        # body_loss_ratio (design §5), so a one-finding report fails safe here.
+        assert restored == []
+        # First-pass outcome is provisional and says why; a one-finding report whose
+        # only finding awaits re-verification fails safe here.
         assert validated.status == "finalization_failed"
         assert any("await re-verification" in reason for reason in validated.reasons)
 
@@ -290,6 +291,16 @@ class TestRegressionMeaningChangedDuringRevision:
         body = [p for s in upheld.sections for p in s.sentences]
         assert [(p.text, p.markers) for p in body] == [(changed, ("S1",))]
         assert upheld.status == "complete"
+
+    def test_an_important_verified_claim_the_revision_omitted_is_restored(self):
+        """V7 still restores a pure omission: no revised sentence states the claim."""
+        other = claim("C2", "Tea intake was not linked to stroke.", S.SUPPORTED_BY_CITED_SOURCE,
+                      chunks=[3])
+        rep = report(("Q1", "Diabetes", [said("Tea intake was not linked to stroke.",
+                                              claims=["C2"], evidence=["E3"])]))
+        validated = run(rep, [self.verified, other])
+        restored = [p for s in validated.sections for p in s.sentences if p.origin == "restored"]
+        assert [(p.text, p.markers) for p in restored] == [(RESTORED_PREFIX + VERIFIED, ("S1",))]
 
     def test_a_pure_paraphrase_is_not_reverified(self):
         paraphrase = "In adults, moderate coffee intake may cut type 2 diabetes risk by 15%."

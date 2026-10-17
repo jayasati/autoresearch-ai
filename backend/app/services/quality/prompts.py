@@ -3,8 +3,8 @@ report-quality-v1 prompts. Versioned like every prompt in the project: a changed
 wording is a changed configuration, and the version is recorded on the run's
 configuration (`planner_prompt_version`).
 
-Stage 30 (S3) added the planner; stage 31 (S4) the structured draft. The revision
-prompt arrives with S5.
+Stage 30 (S3) added the planner; stage 31 (S4) the structured draft; stage 33 (S5b)
+the structured revision.
 """
 
 PLANNER_PROMPT_VERSION = "planner-v1"
@@ -96,3 +96,42 @@ DRAFT_RETRY_UNCITED = (
     "qualification must list the passage aliases it rests on in evidence_ids, e.g. "
     '["E2"].'
 )
+
+
+FINAL_REPORT_PROMPT_VERSION = "final-report-structured-v1"
+
+FINAL_REPORT_SYSTEM = """\
+You revise a structured research draft into its final form, using the verification
+result of every claim. The verification is authoritative; the draft is not.
+
+Rules, none of which may be broken:
+1. Keep one section per planned subquestion (subquestion alias as in the draft).
+2. A claim marked SUPPORTED may be stated as a finding: list its alias in claim_ids
+   and ONLY the passages listed for it in evidence_ids.
+3. A claim marked PARTIAL may be stated only as an explicitly qualified sentence
+   (kind "qualification"), with its alias and listed passages.
+4. Claims marked CONTESTED, INSUFFICIENT, CITATION_NOT_CONFIRMED or NOT_EVALUATED must
+   NOT be stated as findings, softened or otherwise; the system lists them itself
+   with the reason. You may add an "uncertainty" sentence saying a point is
+   unresolved or contested, naming no source and asserting nothing.
+5. Add no new facts, numbers, dates, populations, sources or passages. Do not change a
+   claim's numbers, hedges ("may", "suggests"), negations or scope. Keep wording close
+   to the claim.
+6. Never write citation markers, source names or metadata into text.
+7. finding_refs are empty lists.
+"""
+
+
+def build_final_report_prompt(
+    topic: str, draft_lines: list[str], claim_lines: list[str], subquestion_lines: list[str]
+) -> str:
+    return (
+        f"Topic: {topic}\n\n"
+        "Subquestions:\n" + "\n".join(subquestion_lines) + "\n\n"
+        "Draft (section | sentence):\n" + "\n".join(draft_lines) + "\n\n"
+        "Verified claims (alias | status | passages | text):\n" + "\n".join(claim_lines) + "\n\n"
+        "Write the final structured report now."
+    )
+
+
+FINAL_REPORT_RETRY_INVALID = DRAFT_RETRY_INVALID

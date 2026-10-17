@@ -418,6 +418,84 @@ added for one); approved provisional draft budget 1400/2400/4200 output tokens.
   evidence record, structured draft, alias table (now with claims), alignments and
   warnings — none of it in the report text.
 
+### Implemented at S5a (stage 32)
+
+`ReportQualityPipeline.verify_claims` (same gate, same failure policy),
+`app/services/quality/{verification,budget}.py`, two read helpers in the store.
+Decisions taken at the start: S5 split into S5a (this) and S5b (revision,
+validation, finalization); the legacy verifier is composed, not refactored
+(`verifier.py` unmodified); citation-check-v1 reuses the verification-v2 prompt (D3).
+
+- **Pool verification (verification-v2).** The legacy `_verify_claim` per claim —
+  retrieval over the whole run collection, prompt, quote enforcement, downgrade and
+  persistence unchanged — in a sequential, priority-ordered loop (high importance,
+  core subquestion, reading order), so the claim cap, deadline and budget are checked
+  between claims. A claim with a stored verdict is never re-judged.
+- **Citation check (citation-check-v1).** For an aligned claim, the cited passages are
+  exactly the passages its draft sentence names whose source is among the claim's own
+  markers. A verbatim-quoted verification-v2 relation on that exact chunk is reused
+  (the store re-checks the evidence row); otherwise one call judges only the cited
+  passages. Outcome per passage is conservative: `supports` needs a verbatim supporting
+  quote and a `supported` verdict (`partially_supports` with `partially_supported`);
+  `contradicts` needs a verbatim contradicting quote and a contradicted or partial
+  verdict; everything else is `does_not_establish`. Unaligned claims get no citation
+  rows (no chunk is known) and their citation is `not_evaluated(unaligned)`.
+- **Never support by default.** A claim the verifier could not judge (cap, budget,
+  deadline, invalid output twice, provider failure) is `not_evaluated` with its reason;
+  its cited passages are recorded `not_evaluated` with the same reason. The status
+  table then yields `not_evaluated`, never support.
+- **Budget.** One `BudgetedLLM` per run wraps every model call (planner, draft,
+  extractor, verifier, citation check); SDK retries are off (settings copy, `LLMService`
+  unmodified); each attempt, retries included, is checked before sending against
+  attempts, deadline and tokens minus reservations. The revision's share
+  (2 × draft output limit) is reserved before verification, and 20% of the claim cap is
+  held back for S5b re-verification. Tokens are measured from provider usage when
+  reported, otherwise recorded as estimates (characters/4 + output limit) in a separate
+  field. A preflight refuses a budget that cannot fit a minimal run before any row is
+  written. Per-stage accounts are stored in the audit.
+- **Records.** `claim_audit` per claim (pool status and reason, claim status,
+  alignment, priority rank — the store enforces agreement with the stored verdict) and
+  `citation_check` per cited passage; quantitative findings (claim–claim, claim–quote,
+  claim–cited passage), subquestion assessments and conflict contexts in the audit
+  payload only. The run moves to VERIFYING and stays there.
+
+### Implemented at S5b (stage 33)
+
+`ReportQualityPipeline.finalize` (same gate) and `app/services/quality/finalization.py`;
+prompt `final-report-structured-v1`. Three discrepancies between this design and the
+S5b brief were resolved conservatively:
+
+1. **V7 restoration.** §5 restored an important verified claim missing from the body
+   even when the revision had *rewritten* it (and the rewrite was held for
+   re-verification) — restoring an outdated version. V7 now restores only claims no
+   revised sentence states at all. A new **V7b** lists, with its verified text, every
+   non-presentable claim (contested, insufficient, citation not confirmed, not
+   evaluated) the revision left out, so nothing disappears silently.
+2. **Re-verification.** §5 V2 said "pool + citation check". The legacy pool verifier
+   judges only stored claim rows, and writing rows for rewritten sentences would alter
+   the draft-claim metrics. A rewritten sentence is re-verified only against the
+   passages its own final sentence cites (verification-v2 prompt, the citation-check
+   procedure) — strictly more conservative. A sentence citing nothing is
+   `not_enough_evidence` without a call.
+3. **Revision only when necessary.** The revision call is skipped when every claim is
+   already supported by its cited source; the final structure is then the draft tagged
+   with its aligned claims, still fully validated.
+
+- **No loop:** one revision call (+ one retry on invalid output), one re-verification
+  per flagged sentence, a second validation pass that never revises.
+- **Never support by default:** a revision that could not be produced (invalid twice,
+  budget, deadline, provider failure) is `finalization_failed` with the draft kept; a
+  sentence that could not be re-verified (budget, deadline, claim reserve, invalid
+  output, provider failure) stays out of the body as not evaluated.
+- **Budget:** the revision spends its reserved share (then released); re-verification
+  counts against the claim reserve (claim cap minus claims already verified) and the
+  token/attempt/deadline limits like every call.
+- **Persisted:** `final_markdown` (body, labelled sections, evidence gaps, legacy
+  References formatter over the cited sources) only when the outcome is not
+  `finalization_failed`; `final_claim_check` rows (awaiting, then the real result);
+  `claim_audit.final_placement`; audit stage `finalized` with the terminal status,
+  reasons, actions, metrics, revision structure and budget. The run ends COMPLETED.
+
 **Outstanding gate (unchanged since S2):** the migration has not been applied to
 Neon or any PostgreSQL database; the Neon-branch round trip needs the user's
 approval before any run of this pipeline can be persisted there.
@@ -431,7 +509,8 @@ approval before any run of this pipeline can be persisted there.
 | S2 | migration + persistence | none — **done (stage 29)**; Neon-branch round trip pending approval |
 | S3 | planner + per-subquestion retrieval/selection behind the gate, fake providers | none — **done (stage 30)**: stages 1–5, ending at an in-memory evidence set |
 | S4 | structured draft + rendering + alignment wiring | none — **done (stage 31)**: stages 10a, 6 and alignment; run left in DRAFTING |
-| S5 | citation check, budget wrapper, revision, validation, audit (fakes) | none |
+| S5a | pool verification, citation-check-v1, budget wrapper, claim/citation records, quantitative and subquestion/conflict assessment (fakes) | none — **done (stage 32)**; run left in VERIFYING |
+| S5b | revision, V1–V7 validation with re-verification, final_claim_check, final render, outcome and audit finalization (fakes) | none — **done (stage 33)**: full path exercised end to end on fakes |
 | S6 | additive API (jobs, progress, quality) + frontend | none |
 | S7 | opt-in benchmark arm; development evaluation | **requires separate authorization** |
 
@@ -449,8 +528,11 @@ request and recorded as author-labelled, not independent.
 
 Resolved at S2 (2026-10-17): D1 — full design set (one additive migration).
 
-Still open: citation
-check reusing the v2 prompt (D3, recommended); threshold values (D6); per-depth budget values and reserve (D7);
+Resolved at S5a (2026-10-17): S5 split into S5a (verification) and S5b
+(finalization); D3 — citation-check-v1 reuses the verification-v2 prompt over the
+cited passages only; the legacy verifier is composed, not refactored.
+
+Still open: threshold values (D6); per-depth budget values and reserve (D7);
 claim priority order (D8); in-process jobs vs a queue (D9); macro as the primary
 aggregation (D10); authorization and cost approval for E2 and E4 (D11). D4 was
 resolved by the approval: no substitution, labelled section.

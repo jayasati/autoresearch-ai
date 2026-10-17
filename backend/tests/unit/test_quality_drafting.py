@@ -58,9 +58,16 @@ def draft_from_prompt(prompt: str, *, cite=True, extra=None) -> StructuredReport
 
 
 def claims_from_prompt(prompt: str) -> ClaimExtractionModel:
-    report = prompt.split("Report:", 1)[1]
+    # Body lines only (headings are not claims), one claim per cited sentence — as a real
+    # extractor would. (Fixed in S5b: the earlier pattern ran across heading lines.)
+    report = prompt.split("Report:", 1)[1].split("Extract the claims now.")[0]
+    body = " ".join(
+        line
+        for line in report.splitlines()
+        if line.strip() and not line.lstrip().startswith(("#", "-", "---"))
+    )
     claims = []
-    for sentence, markers in re.findall(r"([A-Z][^.\[]+?) ((?:\[S\d+\])+)\.", report):
+    for sentence, markers in re.findall(r"([A-Z][^.\[]*?) ((?:\[S\d+\])+)\.", body):
         claims.append(
             {
                 "claim_text": sentence.strip() + ".",
